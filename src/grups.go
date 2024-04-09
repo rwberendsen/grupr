@@ -11,17 +11,17 @@ type Grups struct {
 }
 
 type Product struct {
-	Id             string      `yaml:"id"`
-	Envs           []string    `yaml:"envs"`
-	Objects        []string    `yaml:"objects"`
-	ObjectsExclude []string    `yaml:"objects_exclude"`
-	Interfaces     []Interface `yaml:"interfaces"`
+	Id             string
+	DTAPs          []string    `yaml:",flow,omitempty"`
+	Objects        []string    `yaml:",omitempty"`
+	ObjectsExclude []string    `yaml:"objects_exclude,omitempty"`
+	Interfaces     []Interface `yaml:",omitempty"`
 }
 
 type Interface struct {
-	Id             string   `yaml:"id"`
-	Objects        []string `yaml:"objects"`
-	ObjectsExclude []string `yaml:"objects_exclude"`
+	Id             string
+	Objects        []string
+	ObjectsExclude []string `yaml:"objects_exclude,omitempty"`
 }
 
 func getGrups(data []byte) (*Grups, error) {
@@ -32,4 +32,12 @@ func getGrups(data []byte) (*Grups, error) {
 		return nil, err
 	}
 	return &grups, nil
+}
+
+func (grups *Grups) String() string {
+	data, err := yaml.Marshal(grups)
+	if err != nil {
+		panic("grups could not be marshalled")
+	}
+	return string(data)
 }

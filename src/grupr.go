@@ -1,11 +1,21 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"log"
 	"os"
+	"text/template"
 )
+
+func getEnv(key string) (string, error) {
+	val, ok := os.LookupEnv(key)
+	if !ok {
+		return "", fmt.Errorf("environment variable not found: %s", key)
+	}
+	return val, nil
+}
 
 func getGrupsFromPath(path string) (*Grups, error) {
 	data, err := os.ReadFile(path)
@@ -13,7 +23,16 @@ func getGrupsFromPath(path string) (*Grups, error) {
 		err = fmt.Errorf("reading file: %s", err)
 		return nil, err
 	}
-	grups, err := getGrups(data)
+	tmpl, err := template.New("grups").Funcs(template.FuncMap{"getEnv": getEnv}).Parse(string(data))
+	if err != nil {
+		return nil, fmt.Errorf("parsing template: %s", err)
+	}
+	var rendered bytes.Buffer
+	if err := tmpl.Execute(&rendered, nil); err != nil {
+		err = fmt.Errorf("rendering template: %s", err)
+		return nil, err
+	}
+	grups, err := getGrups(rendered.Bytes())
 	if err != nil {
 		err = fmt.Errorf("getting grups: %s", err)
 		return nil, err
