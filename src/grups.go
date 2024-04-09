@@ -12,10 +12,16 @@ type Grups struct {
 
 type Product struct {
 	Id             string
-	DTAPs          []string    `yaml:",flow,omitempty"`
-	Objects        []string    `yaml:",omitempty"`
-	ObjectsExclude []string    `yaml:"objects_exclude,omitempty"`
-	Interfaces     []Interface `yaml:",omitempty"`
+	DTAPs          []string           `yaml:",flow,omitempty"`
+	Objects        []string           `yaml:",omitempty"`
+	ObjectsExclude []string           `yaml:"objects_exclude,omitempty"`
+	Interfaces     []Interface        `yaml:",omitempty"`
+	Consumes       []ProductInterface `yaml:",omitempty"`
+}
+
+type ProductInterface struct {
+	ProductId   string `yaml:"product_id"`
+	InterfaceId string `yaml:"interface_id"`
 }
 
 type Interface struct {
