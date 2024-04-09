@@ -1,10 +1,7 @@
 package main
 
 import (
-	"flag"
 	"fmt"
-	"io/ioutil"
-	"log"
 
 	"gopkg.in/yaml.v3"
 )
@@ -27,20 +24,12 @@ type Interface struct {
 	ObjectsExclude []string `yaml:"objects_exclude"`
 }
 
-func main() {
-	flag.Parse()
-	if len(flag.Args()) != 1 {
-		log.Fatalf("command line arguments not equal to one")
-	}
-	fmt.Printf("args: %v\n", flag.Args())
-	data, err := ioutil.ReadFile(flag.Arg(0))
-	if err != nil {
-		log.Fatalf("main: %v", err)
-	}
+func getGrups(data []byte) (*Grups, error) {
 	grups := Grups{}
-	err = yaml.Unmarshal([]byte(data), &grups)
+	err := yaml.Unmarshal(data, &grups)
 	if err != nil {
-		log.Fatalf("main: %v", err)
+		err = fmt.Errorf("unmarshalling groups: %s", err)
+		return nil, err
 	}
-	fmt.Printf("--- grups:\n%v\n\n", grups)
+	return &grups, nil
 }
