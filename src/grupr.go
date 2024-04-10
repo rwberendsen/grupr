@@ -20,8 +20,7 @@ func getEnv(key string) (string, error) {
 func getGrupsFromPath(path string) (*Grups, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		err = fmt.Errorf("reading file: %s", err)
-		return nil, err
+		return nil, fmt.Errorf("reading file: %s", err)
 	}
 	tmpl, err := template.New("grups").Funcs(template.FuncMap{"getEnv": getEnv}).Parse(string(data))
 	if err != nil {
@@ -29,13 +28,14 @@ func getGrupsFromPath(path string) (*Grups, error) {
 	}
 	var rendered bytes.Buffer
 	if err := tmpl.Execute(&rendered, nil); err != nil {
-		err = fmt.Errorf("rendering template: %s", err)
-		return nil, err
+		return nil, fmt.Errorf("rendering template: %s", err)
 	}
 	grups, err := getGrups(rendered.Bytes())
 	if err != nil {
-		err = fmt.Errorf("getting grups: %s", err)
-		return nil, err
+		return nil, fmt.Errorf("getting grups: %s", err)
+	}
+	if err := grups.validate(); err != nil {
+		return nil, fmt.Errorf("validating grups: %s", err)
 	}
 	return grups, nil
 }
