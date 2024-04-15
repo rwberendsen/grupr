@@ -19,16 +19,22 @@ type Product struct {
 	ObjectsExclude []string             `yaml:"objects_exclude,omitempty"`
 	Interfaces     map[string]Interface `yaml:",omitempty"`
 	Consumes       []ProductInterface   `yaml:",omitempty"`
+	objects        []ObjExpr            // parsed object expressions
+	objectsExclude []ObjExpr            // parsed object expressions
 }
 
 type ProductInterface struct {
-	Product   string `yaml:"product"`
-	Interface string `yaml:"interface"`
+	Product        string    `yaml:"product"`
+	Interface      string    `yaml:"interface"`
+	objects        []ObjExpr // parsed object expressions
+	objectsExclude []ObjExpr // parsed object expressions
 }
 
 type Interface struct {
 	Objects        []string
-	ObjectsExclude []string `yaml:"objects_exclude,omitempty"`
+	ObjectsExclude []string  `yaml:"objects_exclude,omitempty"`
+	objects        []ObjExpr // parsed object expressions
+	objectsExclude []ObjExpr // parsed object expressions
 }
 
 func getGrups(data []byte) (*Grups, error) {
@@ -62,9 +68,12 @@ func (g *Grups) validate() error {
 }
 
 func (p *Product) validate(g *Grups, pkey string) error {
-	for k, _ := range p.Interfaces {
+	for k, v := range p.Interfaces {
 		if !validId.MatchString(k) {
 			return fmt.Errorf("invalid interface id")
+		}
+		if err := v.validate(); err != nil {
+			return err
 		}
 	}
 	for _, i := range p.Consumes {
@@ -76,6 +85,38 @@ func (p *Product) validate(g *Grups, pkey string) error {
 		} else if _, ok := q.Interfaces[i.Interface]; !ok {
 			return fmt.Errorf("consumed interface not found")
 		}
+	}
+	for _, obj_expr := range p.Objects {
+		parsed, err := parse_obj_expr(obj_expr)
+		if err != nil {
+			return fmt.Errorf("parsing obj expr: %", err)
+		}
+		p.objects = append(p.objects, parsed)
+	}
+	for _, obj_expr := range p.ObjectsExclude {
+		parsed, err := parse_obj_expr(obj_expr)
+		if err != nil {
+			return fmt.Errorf("parsing obj expr: %", err)
+		}
+		p.objectsExclude = append(p.objectsExclude, parsed)
+	}
+	return nil
+}
+
+func (i *Interface) validate() error {
+	for _, obj_expr := range i.Objects {
+		parsed, err := parse_obj_expr(obj_expr)
+		if err != nil {
+			return fmt.Errorf("parsing obj expr: %", err)
+		}
+		i.objects = append(i.objects, parsed)
+	}
+	for _, obj_expr := range i.ObjectsExclude {
+		parsed, err := parse_obj_expr(obj_expr)
+		if err != nil {
+			return fmt.Errorf("parsing obj expr: %", err)
+		}
+		i.objectsExclude = append(i.objectsExclude, parsed)
 	}
 	return nil
 }
