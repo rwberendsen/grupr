@@ -4,7 +4,6 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
-	"log"
 	"regexp"
 	"strings"
 )
@@ -28,7 +27,6 @@ type IdentifierExpr struct {
 }
 
 func parse_obj_expr(s string) (ObjExpr, error) {
-	log.Printf("s: %s", s)
 	var empty ObjExpr // for return statements that have an error
 	if strings.ContainsRune(s, '\n') {
 		return empty, fmt.Errorf("object expression has newline")
@@ -48,19 +46,19 @@ func parse_obj_expr(s string) (ObjExpr, error) {
 		objExpr[i].s = substr
 		_, start := r.FieldPos(i)
 		start = start - 1 // FieldPos columns start numbering from 1
-		end := start + len(substr)
-		if start != 0 && s[start-1] != '.' {
-			// this must have been a quoted field
-			if s[start-1] != '"' || end == len(s) || s[end] != '"' {
-				log.Printf("start: %d", start)
-				log.Printf("s[start-1]: %c", s[start-1])
-				log.Printf("end: %d", end)
-				log.Printf("susbstr: %s", substr)
-				panic("did not find start of line, delimiter, or quote at start of parsed CSV field")
+		if s[start] == '"' {
+			// this is a quoted field
+			end := start + 1 + len(substr)
+			if end == len(s) || s[end] != '"' {
+				panic("did not find quote at end of parsed quoted CSV field")
 			}
 			objExpr[i].is_quoted = true
-		} else if end != len(s) && s[end] != '.' {
-			panic("unquoted field not ending with end of line or period")
+		} else {
+			// this is an unquoted field
+			end := start + len(substr)
+			if end != len(s) && s[end] != '.' {
+				panic("unquoted field not ending with end of line or period")
+			}
 		}
 	}
 	// validate identifier expressions
