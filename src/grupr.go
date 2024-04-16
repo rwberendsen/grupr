@@ -41,8 +41,8 @@ func getGrupsFromPath(path string) (*Grups, error) {
 }
 
 func main() {
-	flag.Parse()
 	oldFlag := flag.String("o", "", "old YAML, if any")
+	flag.Parse()
 	if len(flag.Args()) != 1 {
 		log.Fatalf("need one argument with path to YAML")
 	}
