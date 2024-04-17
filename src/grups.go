@@ -23,11 +23,15 @@ type Product struct {
 	Interfaces map[string]*Interface `yaml:",omitempty"`
 	Consumes   []ProductInterface    `yaml:",omitempty"`
 
-	// lowercased fields are added during validation
+	// fields added by validation
 	dtaps          map[string]bool
 	objects        map[ObjExpr]bool
 	objectsExclude map[ObjExpr]bool
 	consumes       map[ProductInterface]bool
+
+	// fields added by querying Snowflake
+	matched        map[Obj]bool
+	matchedExclude map[Obj]bool
 }
 
 type ProductInterface struct {

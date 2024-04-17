@@ -65,4 +65,10 @@ func main() {
 
 	grupsDiff := getGrupsDiff(oldGrups, newGrups)
 	fmt.Printf("--- grupsDiff:\n%v\n\n", grupsDiff)
+
+	// now we can work with the diff: created, deleted, updated.
+	// e.g., first created.
+	// we can get all tables / views from snowflake, and start
+	// expanding the object (exclude) expressions to sets of matching tables.
+	querySnowflake(grupsDiff)
 }
