@@ -25,13 +25,13 @@ type Product struct {
 
 	// fields added by validation
 	dtaps          map[string]bool
-	objects        map[ObjExpr]bool
-	objectsExclude map[ObjExpr]bool
+	exprs        map[expr]bool
+	exprsExclude  map[expr]bool
 	consumes       map[ProductInterface]bool
 
 	// fields added by querying Snowflake
-	matched        map[Obj]bool
-	matchedExclude map[Obj]bool
+	matched        map[dbObj]bool
+	matchedExclude map[dbObj]bool
 }
 
 type ProductInterface struct {
@@ -44,19 +44,23 @@ type Interface struct {
 	ObjectsExclude []string `yaml:"objects_exclude,omitempty"`
 
 	// lowercased fields are added during validation
-	objects        map[ObjExpr]bool
-	objectsExclude map[ObjExpr]bool
+	exprs        map[expr]bool
+	exprsExclude  map[expr]bool
+	
+	// fields added by querying Snowflake
+	matched        map[dbObj]bool
+	matchedExclude map[dbObj]bool
 }
 
-type GrupsDiff struct {
-	Created map[string]*Product
-	Deleted map[string]*Product
-	Updated map[string]ProductDiff
+type grupsDiff struct {
+	created map[string]*Product
+	deleted map[string]*Product
+	updated map[string]productDiff
 }
 
-type ProductDiff struct {
-	Old *Product
-	New *Product
+type productDiff struct {
+	old *Product
+	new *Product
 }
 
 func getGrups(data []byte) (*Grups, error) {
@@ -77,7 +81,7 @@ func (grups *Grups) String() string {
 	return string(data)
 }
 
-func (grupsDiff *GrupsDiff) String() string {
+func (grupsDiff *grupsDiff) String() string {
 	data, err := yaml.Marshal(grupsDiff)
 	if err != nil {
 		panic("grupsDiff could not be marshalled")
@@ -125,62 +129,62 @@ func (p *Product) validate(g *Grups, pkey string) error {
 		}
 		p.consumes[i] = true
 	}
-	p.objects = make(map[ObjExpr]bool)
+	p.exprs = make(map[expr]bool)
 	for _, obj_expr := range p.Objects {
 		parsed, err := parse_obj_expr(obj_expr)
 		if err != nil {
 			return fmt.Errorf("parsing obj expr: %", err)
 		}
-		p.objects[parsed] = true
+		p.exprs[parsed] = true
 	}
-	p.objectsExclude = make(map[ObjExpr]bool)
+	p.exprsExclude  = make(map[expr]bool)
 	for _, obj_expr := range p.ObjectsExclude {
 		parsed, err := parse_obj_expr(obj_expr)
 		if err != nil {
 			return fmt.Errorf("parsing obj expr: %", err)
 		}
-		p.objectsExclude[parsed] = true
+		p.exprsExclude [parsed] = true
 	}
 	return nil
 }
 
 func (i *Interface) validate() error {
-	i.objects = make(map[ObjExpr]bool)
+	i.exprs = make(map[expr]bool)
 	for _, obj_expr := range i.Objects {
 		parsed, err := parse_obj_expr(obj_expr)
 		if err != nil {
 			return fmt.Errorf("parsing obj expr: %", err)
 		}
-		i.objects[parsed] = true
+		i.exprs[parsed] = true
 	}
-	i.objectsExclude = make(map[ObjExpr]bool)
+	i.exprsExclude  = make(map[expr]bool)
 	for _, obj_expr := range i.ObjectsExclude {
 		parsed, err := parse_obj_expr(obj_expr)
 		if err != nil {
 			return fmt.Errorf("parsing obj expr: %", err)
 		}
-		i.objectsExclude[parsed] = true
+		i.exprsExclude [parsed] = true
 	}
 	return nil
 }
 
-func getGrupsDiff(old *Grups, new *Grups) *GrupsDiff {
+func getGrupsDiff(old *Grups, new *Grups) *grupsDiff {
 	if old == nil {
-		return &GrupsDiff{new.Products, nil, nil}
+		return &grupsDiff{new.Products, nil, nil}
 	}
-	diff := GrupsDiff{make(map[string]*Product), make(map[string]*Product), make(map[string]ProductDiff)}
+	diff := grupsDiff{make(map[string]*Product), make(map[string]*Product), make(map[string]productDiff)}
 	for k_old, v_old := range old.Products {
 		v_new, ok := new.Products[k_old]
 		if !ok {
-			diff.Deleted[k_old] = v_old
+			diff.deleted[k_old] = v_old
 		} else if equal := v_old.equals(v_new); !equal {
-			diff.Updated[k_old] = ProductDiff{v_old, v_new}
+			diff.updated[k_old] = productDiff{v_old, v_new}
 		}
 	}
 	for k_new, v_new := range new.Products {
 		_, ok := old.Products[k_new]
 		if !ok {
-			diff.Created[k_new] = v_new
+			diff.created[k_new] = v_new
 		}
 	}
 	return &diff
@@ -190,10 +194,10 @@ func (p *Product) equals(o *Product) bool {
 	if equal := maps.Equal(p.dtaps, o.dtaps); !equal {
 		return false
 	}
-	if equal := maps.Equal(p.objects, o.objects); !equal {
+	if equal := maps.Equal(p.exprs, o.exprs); !equal {
 		return false
 	}
-	if equal := maps.Equal(p.objectsExclude, o.objectsExclude); !equal {
+	if equal := maps.Equal(p.exprsExclude , o.exprsExclude ); !equal {
 		return false
 	}
 	// interfaces
@@ -220,10 +224,10 @@ func (p *Product) equals(o *Product) bool {
 }
 
 func (i *Interface) equals(j *Interface) bool {
-	if equal := maps.Equal(i.objects, j.objects); !equal {
+	if equal := maps.Equal(i.exprs, j.exprs); !equal {
 		return false
 	}
-	if equal := maps.Equal(i.objectsExclude, j.objectsExclude); !equal {
+	if equal := maps.Equal(i.exprsExclude , j.exprsExclude ); !equal {
 		return false
 	}
 	return true
