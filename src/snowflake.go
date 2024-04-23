@@ -46,6 +46,214 @@ type dbObj struct {
 	// with types separated by semicolons or something
 }
 
+
+// caching objects in Snowflake locally
+type accountCache struct {
+	dbs map[string]*dbCache
+	dbNames map[string]bool
+}
+
+type dbCache struct {
+	dbName string
+	schemas map[string]*schemaCache
+	schemaNames map[string]bool
+}
+
+type schemaCache struct {
+	dbName string
+	schemaName string
+	tableNames map[string]bool
+	viewNames map[string]bool
+}
+
+func (c *accountCache) addDBs() {
+	rows, err := db.Query(`SELECT database_name FROM snowflake.information_schema.databases`)
+	if err != nil {
+		log.Fatalf("querying snowflake: %s", err)
+	}
+	c.dbs = make(map[string]*dbCache)
+	c.dbNames = make(map[string]bool)
+	for rows.Next() {
+		var dbName string
+		if err = rows.Scan(&dbName); err != nil {
+			log.Fatalf("error scanning row: %s", err)
+		}
+		c.dbs[dbName] = &dbCache{nil}
+		c.dbNames[dbName] = true
+	}
+	if err = rows.Err(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func (c *accountCache) getDBs() map[string]*dbCache {
+	if c.dbs == nil {
+		c.addDBs()
+	}
+	return c.dbs
+}
+
+func (c *accountCache) getDBnames() map[string]bool {
+	if c.dbNames == nil {
+		c.addDBs()
+	}
+	return c.dbNames
+}
+
+func (c *dbCache) addSchemas() {
+	rows, err := db.Query(fmt.Sprintf(`SELECT schema_name FROM IDENTIFIER('"%s".information_schema.schemata')`, escapeIdentifier(c.dbName)))
+	if err != nil {
+		log.Fatalf("querying snowflake: %s", err)
+	}
+	c.schemas = make(map[string]*schemaCache)
+	c.schemaNames = make(map[string]bool)
+	for rows.Next() {
+		var schemaName string
+		if err = rows.Scan(&schemaName); err != nil {
+			log.Fatalf("error scanning row: %s", err)
+		}
+		c.schemas[schemaName] = &schemaCache{nil}
+		c.schemaNames[schemaName] = true
+	}
+	if err = rows.Err(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func (c *dbCache) getSchemas() map[string]*schemaCache {
+	if c.schemas == nil {
+		c.addSchemas()
+	}
+	return c.schemas
+}
+
+func (c *dbCache) getSchemaNames() map[string]bool {
+	if c.schemaNames == nil {
+		c.addSchemas()
+	}
+	return c.schemaNames
+}
+
+func (c *schemaCache) addTables() {
+	rows, err := db.Query(fmt.Sprintf(`SELECT table_name FROM "%s".information_schema.tables WHERE table_schema = '%s'`,
+					  escapeIdentifier(c.dbName), escapeString(c.schemaName)))
+	if err != nil {
+		log.Fatalf("querying snowflake: %s", err)
+	}
+	c.tableNames = make(map[string]bool)
+	for rows.Next() {
+		var tableName string
+		if err = rows.Scan(&tableName); err != nil {
+			log.Fatalf("error scanning row: %s", err)
+		}
+		c.tableNames[tableName] = true
+	}
+	if err = rows.Err(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func (c *schemaCache) getTableNames() map[string]bool {
+	if c.tableNames == nil {
+		c.addTables()
+	}
+	return c.tableNames
+}
+
+func (c *schemaCache) addViews() {
+	rows, err := db.Query(fmt.Sprintf(`SELECT table_name FROM "%s".information_schema.views WHERE table_schema = '%s'`,
+					  escapeIdentifier(c.dbName), escapeString(c.schemaName)))
+	if err != nil {
+		log.Fatalf("querying snowflake: %s", err)
+	}
+	c.viewNames = make(map[string]bool)
+	for rows.Next() {
+		var viewName string
+		if err = rows.Scan(&viewName); err != nil {
+			log.Fatalf("error scanning row: %s", err)
+		}
+		c.tableNames[viewName] = true
+	}
+	if err = rows.Err(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func (c *schemaCache) getViewNames() map[string]bool {
+	if c.viewNames == nil {
+		c.addViews()
+	}
+	return c.viewNames
+}
+
+// couple of simple data structures to hold matched objects in account
+type accountObjs struct {
+	dbs = map[string]dbObjs
+}
+
+type dbObjs struct {
+	schemas = map[string]schemaObjs
+}
+
+type schemaObjs struct {
+	tables = map[string]bool
+	views = map[string]bool
+}
+
+func (lhs accountObjs) subtract(rhs accountObjs) accountObjs {
+	res = accountObjs{make(map[string]dbObjs)}
+	for k, v := range lhs.dbs {
+		v2, ok := rhs.dbs[k]
+		if !ok {
+			res.dbs[k] = v
+		} else {
+			dbObjs := v.subtract(v2)
+			if len(dbObjs) > 0 {
+				res.dbs[k] = dbObjs
+			}
+		}
+	}
+	return res
+}
+
+func (lhs dbObjs) subtract(rhs dbObjs) dbObjs {
+	res = dbObjs{make(map[string]schemaObjs)}
+	for k, v := range lhs.schemas {
+		v2, ok := rhs.schemas[k]
+		if !ok {
+			res.schemas[k] = v
+		} else {
+			schemaObjs := v.subtract(v2)
+			if len(schemaObjs) > 0 {
+				res.schemas[k] = schemaObjs
+			}
+		}
+	}
+	return res
+}
+
+func (lhs schemaObjs) subtract(rhs schemaObjs) schemaObjs {
+	res = schemaObjs{make(map[string]bool), make(map[string]bool)}
+	for k, v := range lhs.tables {
+		v2, ok := rhs.tables[k]
+		if !ok {
+			res.tables[k] = v
+		}
+	}
+	for k, v := range lhs.views {
+		v2, ok := rhs.views[k]
+		if !ok {
+			res.views[k] = v
+		}
+	}
+	return res
+} 
+
+func (old accountObjs) actions(new accountObjs) actions {
+}
+
+// actions holds what to do based on a grupsDiff
+
 type expr [3]exprPart
 type exprPart struct {
 	s         string
@@ -247,6 +455,15 @@ func match(e expr, accountNode *node) map[dbObj]bool {
 				cachedSchemas[k.schema] = true
 			}
 			matchedSchemas = matchUnquoted(e[schema], cachedSchemas)
+		}
+		for schema, _ := range matchedSchemas {
+			schemaObj := dbObj{db, schema, "", schema}
+			schemaNode := dbNode.chld[schemaObj]
+			if schemaNode.chld == nil {
+				addTables(schemaNode, schemaObj)
+				addViews(schemaNode, schemaObj)
+			}
+			var matchedObjects map[string]bool // ...
 		}
 	}
 	return m
