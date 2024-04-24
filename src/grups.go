@@ -30,8 +30,9 @@ type Product struct {
 	consumes       map[ProductInterface]bool
 
 	// fields added by querying Snowflake
-	matched        map[dbObj]bool
-	matchedExclude map[dbObj]bool
+	matchedInclude    accountObjs
+	matchedExclude    accountObjs
+	matched		accountObjs
 }
 
 type ProductInterface struct {

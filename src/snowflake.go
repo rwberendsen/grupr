@@ -188,16 +188,16 @@ func (c *schemaCache) getViewNames() map[string]bool {
 
 // couple of simple data structures to hold matched objects in account
 type accountObjs struct {
-	dbs = map[string]dbObjs
+	dbs map[string]dbObjs
 }
 
 type dbObjs struct {
-	schemas = map[string]schemaObjs
+	schemas map[string]schemaObjs
 }
 
 type schemaObjs struct {
-	tables = map[string]bool
-	views = map[string]bool
+	tables map[string]bool
+	views map[string]bool
 }
 
 func (lhs accountObjs) subtract(rhs accountObjs) accountObjs {
@@ -342,128 +342,29 @@ func escapeString(s string) string {
 	return strings.ReplaceAll(s, "'", "\\'")
 }
 
-func addDBs(node *node) {
-	rows, err := db.Query(`SELECT database_name FROM snowflake.information_schema.databases`)
-	if err != nil {
-		log.Fatalf("querying snowflake: %s", err)
-	}
-	node.chld = make(map[dbObj]node)
-	for rows.Next() {
-		var dbName string
-		if err = rows.Scan(&dbName); err != nil {
-			log.Fatalf("error scanning row: %s", err)
-		}
-		node.chld[dbObj{dbName, "", "", database}] = node{nil}
-	}
-	if err = rows.Err(); err != nil {
-		log.Fatal(err)
-	}
-}
-
-func addSchemas(node *node, parent dbObj) {
-	rows, err := db.Query(fmt.Sprintf(`SELECT schema_name FROM IDENTIFIER('"%s".information_schema.schemata')`, escapeQuotes(parent.db)))
-	if err != nil {
-		log.Fatalf("querying snowflake: %s", err)
-	}
-	node.chld = make(map[dbObj]node)
-	for rows.Next() {
-		var schemaName string
-		if err = rows.Scan(&schemaName); err != nil {
-			log.Fatalf("error scanning row: %s", err)
-		}
-		node.chld[dbObj{parent.db, schemaName, "", schema}] = node{nil}
-	}
-	if err = rows.Err(); err != nil {
-		log.Fatal(err)
-	}
-}
-
-func addTables(node *node, parent dbObj) {
-	rows, err := db.Query(fmt.Sprintf(`SELECT table_name FROM "%s".information_schema.tables WHERE table_schema = '%s'`, escapeIdentifier(parent.db), escapeString(parent.schema)))
-	if err != nil {
-		log.Fatalf("querying snowflake: %s", err)
-	}
-	if node.chld == nil {
-		node.chld = make(map[dbObj]node)
-	}
-	for rows.Next() {
-		var tableName string
-		if err = rows.Scan(&tableName); err != nil {
-			log.Fatalf("error scanning row: %s", err)
-		}
-		node.chld[dbObj{parent.db, parent.schema, tableName, table}] = node{nil}
-	}
-	if err = rows.Err(); err != nil {
-		log.Fatal(err)
-	}
-}
-
-func addViews(node *node, parent dbObj) {
-	rows, err := db.Query(fmt.Sprintf(`SELECT table_name FROM "%s".information_schema.views WHERE table_schema = '%s'`, escapeIdentifier(parent.db), escapeString(parent.schema)))
-	if err != nil {
-		log.Fatalf("querying snowflake: %s", err)
-	}
-	if node.chld == nil {
-		node.chld = make(map[dbObj]node)
-	}
-	for rows.Next() {
-		var viewName string
-		if err = rows.Scan(&viewName); err != nil {
-			log.Fatalf("error scanning row: %s", err)
-		}
-		node.chld[dbObj{parent.db, parent.schema, viewName, view}] = node{nil}
-	}
-	if err = rows.Err(); err != nil {
-		log.Fatal(err)
-	}
-}
-
-func matchUnquoted(s string, l map[string]bool) map[string]bool {
-	return l
-}
-
-func match(e expr, accountNode *node) map[dbObj]bool {
-	m := make(map[dbObj]bool)
-	var matchedDBs map[string]bool
-	if e[database].is_quoted {
-		_, ok := accountNode.chld[dbObj{e[database].s, "", "", database}]
+func matchPart(e exprPart, l map[string]bool) map[string]bool {
+	r := map[string]bool{}
+	if e.is_quoted {
+		_, ok := l[e.s]
 		if ok {
-			matchedDBs = map[string]bool{e[database].s: true,}
+			r[e.s] = true
 		}
-	} else {
-		cachedDBs := make(map[string]bool)
-		for k, _ := range accountNode.chld {
-			cachedDBs[k.db] = true
-		}
-		matchedDBs = matchUnquoted(e[database], cachedDBs) 
-	}
+		return r
+	} 
+	// implement match unquoted with wildcard
+	return r
+}
+
+func match(e expr, c *accountCache, o *accountObjs) map[dbObj]bool {
+	matchedDBs := matchPart(e[database], c.getDBnames())
 	for db, _ := range matchedDBs {
-		dbObj := dbObj{db, "", "", database}
-		dbNode := accountNode.chld[dbObj]
-		if dbNode.chld == nil {
-			addSchemas(dbNode, dbObj)
-		}
-		var matchedSchemas map[string]bool
-		if e[schema].is_quoted {
-			_, ok := dbNode.chld[dbObj{db, e[schema].s, "", schema}]
-			if ok {
-				matchedSchemas = map[string]bool{e[schema].s: true]
-			}
-		} else {
-			cachedSchemas := make(map[string]bool)
-			for k, _ := range dbNode.chld {
-				cachedSchemas[k.schema] = true
-			}
-			matchedSchemas = matchUnquoted(e[schema], cachedSchemas)
-		}
+		matchedSchemas := matchPart(e[schema], c.getDBnames()[db].getSchemaNames())
 		for schema, _ := range matchedSchemas {
-			schemaObj := dbObj{db, schema, "", schema}
-			schemaNode := dbNode.chld[schemaObj]
-			if schemaNode.chld == nil {
-				addTables(schemaNode, schemaObj)
-				addViews(schemaNode, schemaObj)
-			}
-			var matchedObjects map[string]bool // ...
+			matchedTables := matchPart(e[table], c.getDBnames()[db].getSchemaNames()[schema].getTableNames())	
+			matchedViews := matchPart(e[table], c.getDBnames()[db].getSchemaNames()[schema].getViewNames())	
+			for t, _ := range matchedTables {
+				o.dbs[db].schemas[schema].tables[t] = true // does not quite work yet cause need to initialize stuff
+			}	
 		}
 	}
 	return m
@@ -477,17 +378,16 @@ func querySnowflake(g *grupsDiff) {
 	// for deleted products we don't need to know the objects for now
 
 	// as we match databases and schema's, we build up a local cache of the DB tree.
-	var accountNode := node{nil}
-	addDBs(&accountNode)
+	c := &accountCache{nil, nil}
+	_ = c.getDBnames()
 	for _, p := range g.created {
-		p.matched = make(map[dbObj]bool)
 		for e, _ := range p.exprs {
-			for o, _ :=  range match(e, &accountNode) {
+			for o, _ :=  range match(e, c, p) {
 				p.matched[o] = true
 			}
 		}
 		p.matchedExclude = make(map[dbObj]bool)
-		for e, _ := range p.objectsExclude {
+		for e, _ := range p.exprsExclude {
 			for o, _ :=  range match(e, &accountNode) {
 				p.matchedExclude[o] = true
 			}
