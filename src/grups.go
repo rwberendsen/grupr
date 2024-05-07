@@ -2,9 +2,9 @@ package main
 
 import (
 	"fmt"
-	"maps"
 	"regexp"
 
+	"golang.org/x/exp/maps"
 	"gopkg.in/yaml.v3"
 )
 
@@ -24,15 +24,15 @@ type Product struct {
 	Consumes   []ProductInterface    `yaml:",omitempty"`
 
 	// fields added by validation
-	dtaps          map[string]bool
+	dtaps        map[string]bool
 	exprs        map[expr]bool
-	exprsExclude  map[expr]bool
-	consumes       map[ProductInterface]bool
+	exprsExclude map[expr]bool
+	consumes     map[ProductInterface]bool
 
 	// fields added by querying Snowflake
-	matchedInclude    accountObjs
-	matchedExclude    accountObjs
-	matched		accountObjs
+	matchedInclude accountObjs
+	matchedExclude accountObjs
+	matched        accountObjs
 }
 
 type ProductInterface struct {
@@ -46,8 +46,8 @@ type Interface struct {
 
 	// lowercased fields are added during validation
 	exprs        map[expr]bool
-	exprsExclude  map[expr]bool
-	
+	exprsExclude map[expr]bool
+
 	// fields added by querying Snowflake
 	matched        map[dbObj]bool
 	matchedExclude map[dbObj]bool
@@ -138,13 +138,13 @@ func (p *Product) validate(g *Grups, pkey string) error {
 		}
 		p.exprs[parsed] = true
 	}
-	p.exprsExclude  = make(map[expr]bool)
+	p.exprsExclude = make(map[expr]bool)
 	for _, obj_expr := range p.ObjectsExclude {
 		parsed, err := parse_obj_expr(obj_expr)
 		if err != nil {
 			return fmt.Errorf("parsing obj expr: %", err)
 		}
-		p.exprsExclude [parsed] = true
+		p.exprsExclude[parsed] = true
 	}
 	return nil
 }
@@ -158,13 +158,13 @@ func (i *Interface) validate() error {
 		}
 		i.exprs[parsed] = true
 	}
-	i.exprsExclude  = make(map[expr]bool)
+	i.exprsExclude = make(map[expr]bool)
 	for _, obj_expr := range i.ObjectsExclude {
 		parsed, err := parse_obj_expr(obj_expr)
 		if err != nil {
 			return fmt.Errorf("parsing obj expr: %", err)
 		}
-		i.exprsExclude [parsed] = true
+		i.exprsExclude[parsed] = true
 	}
 	return nil
 }
@@ -198,7 +198,7 @@ func (p *Product) equals(o *Product) bool {
 	if equal := maps.Equal(p.exprs, o.exprs); !equal {
 		return false
 	}
-	if equal := maps.Equal(p.exprsExclude , o.exprsExclude ); !equal {
+	if equal := maps.Equal(p.exprsExclude, o.exprsExclude); !equal {
 		return false
 	}
 	// interfaces
@@ -228,7 +228,7 @@ func (i *Interface) equals(j *Interface) bool {
 	if equal := maps.Equal(i.exprs, j.exprs); !equal {
 		return false
 	}
-	if equal := maps.Equal(i.exprsExclude , j.exprsExclude ); !equal {
+	if equal := maps.Equal(i.exprsExclude, j.exprsExclude); !equal {
 		return false
 	}
 	return true

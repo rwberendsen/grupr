@@ -16,44 +16,44 @@ import (
 var validUnquotedExpr *regexp.Regexp = regexp.MustCompile(`^[a-z_][a-z0-9_$]{0,254}\*?$`) // lowercase identifier chars + optional wildcard suffix
 var validQuotedExpr *regexp.Regexp = regexp.MustCompile(`.{0,255}`)
 
-
 // currently supported object types
 type dbType int
+
 const (
 	database
 	schema
 	table
 	view
 )
+
 var dbTypes = [5]string{"DATABASE", "SCHEMA", "TABLE", "VIEW"}
 var dbTypeCast = map[string]dbType{
 	"DATABASE": database,
-	"SCHEMA": schema,
-	"TABLE": table,
-	"VIEW":  view,
+	"SCHEMA":   schema,
+	"TABLE":    table,
+	"VIEW":     view,
 }
-
 
 // caching objects in Snowflake locally
 type accountCache struct {
-	dbs map[string]*dbCache
+	dbs     map[string]*dbCache
 	dbNames map[string]bool
 }
 
 type dbCache struct {
-	dbName string
-	schemas map[string]*schemaCache
+	dbName      string
+	schemas     map[string]*schemaCache
 	schemaNames map[string]bool
 }
 
 type schemaCache struct {
-	dbName string
+	dbName     string
 	schemaName string
 	// note that if during run time a table is removed, and a view is
 	// created with the same name or vice versa then tableNames and
 	// viewNames can contain duplicate keys wrt each other
 	tableNames map[string]bool
-	viewNames map[string]bool
+	viewNames  map[string]bool
 }
 
 func (c *accountCache) addDBs() {
@@ -122,7 +122,7 @@ func (c *dbCache) getSchemaNames() map[string]bool {
 
 func (c *schemaCache) addTables() {
 	rows, err := db.Query(fmt.Sprintf(`SELECT table_name FROM "%s".information_schema.tables WHERE table_schema = '%s'`,
-					  escapeIdentifier(c.dbName), escapeString(c.schemaName)))
+		escapeIdentifier(c.dbName), escapeString(c.schemaName)))
 	if err != nil {
 		log.Fatalf("querying snowflake: %s", err)
 	}
@@ -147,7 +147,7 @@ func (c *schemaCache) getTableNames() map[string]bool {
 
 func (c *schemaCache) addViews() {
 	rows, err := db.Query(fmt.Sprintf(`SELECT table_name FROM "%s".information_schema.views WHERE table_schema = '%s'`,
-					  escapeIdentifier(c.dbName), escapeString(c.schemaName)))
+		escapeIdentifier(c.dbName), escapeString(c.schemaName)))
 	if err != nil {
 		log.Fatalf("querying snowflake: %s", err)
 	}
@@ -184,11 +184,11 @@ type schemaObjs struct {
 	// contain the same keys (i.e., if during runtime a table was removed
 	// and a view with the same name created)
 	tables map[string]bool
-	views map[string]bool
+	views  map[string]bool
 }
 
 func (o accountObjs) addObject(db string, schema string, obj string, t dbType) accountObjs {
-        dbObjs, ok := o.dbs[db]
+	dbObjs, ok := o.dbs[db]
 	if !ok {
 		o.dbs[db] = dbObjs{map[string]schemaObjs{}}
 	}
@@ -245,28 +245,40 @@ func (lhs schemaObjs) subtract(rhs schemaObjs) schemaObjs {
 		}
 	}
 	return res
-} 
+}
 
 func (lhs accountObjs) add(rhs accountObjs) accountObjs {
 	for k, v := range rhs.dbs {
-		if v2, ok := lhs.dbs[k]; !ok { lhs.dbs[k] = v } else { lhs.dbs[k] = lhs.dbs[k].add(rhs.dbs[k]) }
+		if v2, ok := lhs.dbs[k]; !ok {
+			lhs.dbs[k] = v
+		} else {
+			lhs.dbs[k] = lhs.dbs[k].add(rhs.dbs[k])
+		}
 	}
 	return lhs
 }
 
 func (lhs dbObjs) add(rhs dbObjs) dbObjs {
 	for k, v := range rhs.schemas {
-		if v2, ok := lhs.schemas[k]; !ok { lhs.schemas[k] = v } else { lhs.schemas[k] = lhs.schemas[k].add(rhs.schemas[k]) }
+		if v2, ok := lhs.schemas[k]; !ok {
+			lhs.schemas[k] = v
+		} else {
+			lhs.schemas[k] = lhs.schemas[k].add(rhs.schemas[k])
+		}
 	}
 	return lhs
 }
 
 func (lhs schemaObjs) add(rhs schemaObjs) schemaObjs {
 	for k, _ := range rhs.tables {
-		if _, ok := lhs.tables[k]; !ok { lhs.tables[k] = true }
+		if _, ok := lhs.tables[k]; !ok {
+			lhs.tables[k] = true
+		}
 	}
 	for k, _ := range rhs.views {
-		if _, ok := lhs.views[k]; !ok { lhs.views[k] = true }
+		if _, ok := lhs.views[k]; !ok {
+			lhs.views[k] = true
+		}
 	}
 }
 
@@ -364,7 +376,8 @@ func escapeString(s string) string {
 }
 
 func escapeRegExp(s string) string {
-	return strings.ReplaceAll(s, "$", "\$")
+	s = strings.ReplaceAll(s, "$", "\\$")   // escape dollar sign, which can be used in Snowflake identifiers
+	return strings.ReplaceAll(s, "*", ".*") // transform the wildcard suffix into a zero or more regular expression
 }
 
 func matchPart(e exprPart, l map[string]bool) map[string]bool {
@@ -374,9 +387,9 @@ func matchPart(e exprPart, l map[string]bool) map[string]bool {
 			r[e.s] = true
 		}
 		return r
-	} 
+	}
 	// implement match unquoted with optional suffix wildcard
-	// note that we match case insensitive, so `mytable` would match all of 
+	// note that we match case insensitive, so `mytable` would match all of
 	// "mytable", "MyTable", "MYTABLE", etc.
 	var validMatchingExpression *regexp.Regexp = regexp.MustCompile("(?i)" + e.s)
 	for k, _ := range l {
@@ -388,15 +401,19 @@ func matchPart(e exprPart, l map[string]bool) map[string]bool {
 }
 
 func match(e expr, c *accountCache) {
-	o := accountObjs{map[string]dbObjs{})
+	o := accountObjs{map[string]dbObjs{}}
 	matchedDBs := matchPart(e[database], c.getDBnames())
 	for db, _ := range matchedDBs {
 		matchedSchemas := matchPart(e[schema], c.getDBnames()[db].getSchemaNames())
 		for schema, _ := range matchedSchemas {
-			matchedTables := matchPart(e[table], c.getDBnames()[db].getSchemaNames()[schema].getTableNames())	
-			matchedViews := matchPart(e[table], c.getDBnames()[db].getSchemaNames()[schema].getViewNames())	
-			for t, _ := range matchedTables { o = o.addObject(db, schema, t, table) }	
-			for v, _ := range matchedViews { o = o.addObject(db, schema, v, view) }	
+			matchedTables := matchPart(e[table], c.getDBnames()[db].getSchemaNames()[schema].getTableNames())
+			matchedViews := matchPart(e[table], c.getDBnames()[db].getSchemaNames()[schema].getViewNames())
+			for t, _ := range matchedTables {
+				o = o.addObject(db, schema, t, table)
+			}
+			for v, _ := range matchedViews {
+				o = o.addObject(db, schema, v, view)
+			}
 		}
 	}
 	return o
@@ -423,4 +440,3 @@ func querySnowflake(g *grupsDiff) {
 		p.matched = p.matchedInclude.subtract(p.matchedExclude)
 	}
 }
-
