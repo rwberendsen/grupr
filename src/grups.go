@@ -49,8 +49,9 @@ type Interface struct {
 	exprsExclude map[expr]bool
 
 	// fields added by querying Snowflake
-	matched        map[dbObj]bool
-	matchedExclude map[dbObj]bool
+	matchedInclude        accountObjs
+	matchedExclude 		accountObjs
+	matched			accountObjs
 }
 
 type grupsDiff struct {

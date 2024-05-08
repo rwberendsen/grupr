@@ -20,7 +20,7 @@ var validQuotedExpr *regexp.Regexp = regexp.MustCompile(`.{0,255}`)
 type dbType int
 
 const (
-	database
+	database = iota
 	schema
 	table
 	view
@@ -188,12 +188,10 @@ type schemaObjs struct {
 }
 
 func (o accountObjs) addObject(db string, schema string, obj string, t dbType) accountObjs {
-	dbObjs, ok := o.dbs[db]
-	if !ok {
+	if _, ok := o.dbs[db]; !ok {
 		o.dbs[db] = dbObjs{map[string]schemaObjs{}}
 	}
-	schemaObjs, ok := o.dbs[db].schemas[schema]
-	if !ok {
+	if _ , ok := o.dbs[db].schemas[schema]; !ok {
 		o.dbs[db].schemas[schema] = schemaObjs{map[string]bool{}, map[string]bool{}}
 	}
 	if t == table {
@@ -205,51 +203,51 @@ func (o accountObjs) addObject(db string, schema string, obj string, t dbType) a
 }
 
 func (lhs accountObjs) subtract(rhs accountObjs) accountObjs {
-	res = accountObjs{map[string]dbObjs{}}
+	r := accountObjs{map[string]dbObjs{}}
 	for k, v := range lhs.dbs {
 		if v2, ok := rhs.dbs[k]; !ok {
-			res.dbs[k] = v
+			r.dbs[k] = v
 		} else {
-			if dbObjs := v.subtract(v2); len(dbObjs) > 0 {
-				res.dbs[k] = dbObjs
+			if dbObjs := v.subtract(v2); len(dbObjs.schemas) > 0 {
+				r.dbs[k] = dbObjs
 			}
 		}
 	}
-	return res
+	return r
 }
 
 func (lhs dbObjs) subtract(rhs dbObjs) dbObjs {
-	res = dbObjs{map[string]schemaObjs{}}
+	r := dbObjs{map[string]schemaObjs{}}
 	for k, v := range lhs.schemas {
 		if v2, ok := rhs.schemas[k]; !ok {
-			res.schemas[k] = v
+			r.schemas[k] = v
 		} else {
-			if schemaObjs := v.subtract(v2); len(schemaObjs) > 0 {
-				res.schemas[k] = schemaObjs
+			if schemaObjs := v.subtract(v2); len(schemaObjs.tables) > 0 || len(schemaObjs.views) > 0 {
+				r.schemas[k] = schemaObjs
 			}
 		}
 	}
-	return res
+	return r
 }
 
 func (lhs schemaObjs) subtract(rhs schemaObjs) schemaObjs {
-	res = schemaObjs{map[string]bool{}, map[string]bool{}}
+	r := schemaObjs{map[string]bool{}, map[string]bool{}}
 	for k, _ := range lhs.tables {
 		if _, ok := rhs.tables[k]; !ok {
-			res.tables[k] = true
+			r.tables[k] = true
 		}
 	}
 	for k, _ := range lhs.views {
 		if _, ok := rhs.views[k]; !ok {
-			res.views[k] = true
+			r.views[k] = true
 		}
 	}
-	return res
+	return r
 }
 
 func (lhs accountObjs) add(rhs accountObjs) accountObjs {
 	for k, v := range rhs.dbs {
-		if v2, ok := lhs.dbs[k]; !ok {
+		if _, ok := lhs.dbs[k]; !ok {
 			lhs.dbs[k] = v
 		} else {
 			lhs.dbs[k] = lhs.dbs[k].add(rhs.dbs[k])
@@ -260,7 +258,7 @@ func (lhs accountObjs) add(rhs accountObjs) accountObjs {
 
 func (lhs dbObjs) add(rhs dbObjs) dbObjs {
 	for k, v := range rhs.schemas {
-		if v2, ok := lhs.schemas[k]; !ok {
+		if _, ok := lhs.schemas[k]; !ok {
 			lhs.schemas[k] = v
 		} else {
 			lhs.schemas[k] = lhs.schemas[k].add(rhs.schemas[k])
@@ -280,12 +278,8 @@ func (lhs schemaObjs) add(rhs schemaObjs) schemaObjs {
 			lhs.views[k] = true
 		}
 	}
+	return lhs
 }
-
-func (old accountObjs) actions(new accountObjs) actions {
-}
-
-// actions holds what to do based on a grupsDiff
 
 type expr [3]exprPart
 type exprPart struct {
@@ -393,21 +387,21 @@ func matchPart(e exprPart, l map[string]bool) map[string]bool {
 	// "mytable", "MyTable", "MYTABLE", etc.
 	var validMatchingExpression *regexp.Regexp = regexp.MustCompile("(?i)" + e.s)
 	for k, _ := range l {
-		if validMatchingExpression.MatchString(l) {
+		if validMatchingExpression.MatchString(k) {
 			r[k] = true
 		}
 	}
 	return r
 }
 
-func match(e expr, c *accountCache) {
+func match(e expr, c *accountCache) accountObjs {
 	o := accountObjs{map[string]dbObjs{}}
 	matchedDBs := matchPart(e[database], c.getDBnames())
 	for db, _ := range matchedDBs {
-		matchedSchemas := matchPart(e[schema], c.getDBnames()[db].getSchemaNames())
+		matchedSchemas := matchPart(e[schema], c.getDBs()[db].getSchemaNames())
 		for schema, _ := range matchedSchemas {
-			matchedTables := matchPart(e[table], c.getDBnames()[db].getSchemaNames()[schema].getTableNames())
-			matchedViews := matchPart(e[table], c.getDBnames()[db].getSchemaNames()[schema].getViewNames())
+			matchedTables := matchPart(e[table], c.getDBs()[db].getSchemas()[schema].getTableNames())
+			matchedViews := matchPart(e[table], c.getDBs()[db].getSchemas()[schema].getViewNames())
 			for t, _ := range matchedTables {
 				o = o.addObject(db, schema, t, table)
 			}
