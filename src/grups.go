@@ -108,10 +108,13 @@ func (g *Grups) validate() error {
 }
 
 func (p *Product) validate(g *Grups, pkey string) error {
-	p.dtaps = make(map[string]bool)
+	p.dtaps = map[string]bool{}
 	for _, i := range p.DTAPs {
 		if !validId.MatchString(i) {
 			return fmt.Errorf("invalid dtap")
+		}
+		if _, ok := p.dtaps[i]; ok {
+			return fmt.Errorf("duplicate dtap")
 		}
 		p.dtaps[i] = true
 	}
@@ -123,7 +126,7 @@ func (p *Product) validate(g *Grups, pkey string) error {
 			return err
 		}
 	}
-	p.consumes = make(map[ProductInterface]bool)
+	p.consumes = map[ProductInterface]bool{}
 	for _, i := range p.Consumes {
 		if i.Product == pkey {
 			return fmt.Errorf("consuming interface from own product")
@@ -133,43 +136,70 @@ func (p *Product) validate(g *Grups, pkey string) error {
 		} else if _, ok := q.Interfaces[i.Interface]; !ok {
 			return fmt.Errorf("consumed interface not found")
 		}
+		if _, ok := p.consumes[i]; ok {
+			return fmt.Errorf("duplicate consumed interface id")
+		}
 		p.consumes[i] = true
 	}
-	p.exprs = make(map[expr]bool)
-	for _, obj_expr := range p.Objects {
-		parsed, err := parse_obj_expr(obj_expr)
+	p.exprs = map[expr]bool{}
+	for _, objExpr := range p.Objects {
+		parsed, err := parseObjExpr(objExpr)
 		if err != nil {
 			return fmt.Errorf("parsing obj expr: %", err)
+		}
+		if _, ok := p.exprs[parsed]; ok {
+			return fmt.Errorf("duplicate expr")
 		}
 		p.exprs[parsed] = true
 	}
-	p.exprsExclude = make(map[expr]bool)
-	for _, obj_expr := range p.ObjectsExclude {
-		parsed, err := parse_obj_expr(obj_expr)
+	if ok := allDisjoint(p.exprs); !ok {
+		return fmt.Errorf("non disjoint set of exprs")
+	}
+	p.exprsExclude = map[expr]bool{}
+	for _, objExpr := range p.ObjectsExclude {
+		parsed, err := parseObjExpr(objExpr)
 		if err != nil {
 			return fmt.Errorf("parsing obj expr: %", err)
 		}
+		if _, ok := p.exprsExclude[parsed]; ok {
+			return fmt.Errorf("duplicate expr")
+		}
 		p.exprsExclude[parsed] = true
+	}
+	if ok := allDisjoint(p.exprsExclude); !ok {
+		return fmt.Errorf("non disjoint set of exprs")
 	}
 	return nil
 }
 
 func (i *Interface) validate() error {
-	i.exprs = make(map[expr]bool)
-	for _, obj_expr := range i.Objects {
-		parsed, err := parse_obj_expr(obj_expr)
+	i.exprs = map[expr]bool{}
+	for _, objExpr := range i.Objects {
+		parsed, err := parseObjExpr(objExpr)
 		if err != nil {
 			return fmt.Errorf("parsing obj expr: %", err)
+		}
+		if _, ok := i.exprs[parsed]; ok {
+			return fmt.Errorf("duplicate expr")
 		}
 		i.exprs[parsed] = true
 	}
-	i.exprsExclude = make(map[expr]bool)
-	for _, obj_expr := range i.ObjectsExclude {
-		parsed, err := parse_obj_expr(obj_expr)
+	if ok := allDisjoint(i.exprs); !ok {
+		return fmt.Errorf("non disjoint set of exprs")
+	}
+	i.exprsExclude = map[expr]bool{}
+	for _, objExpr := range i.ObjectsExclude {
+		parsed, err := parseObjExpr(objExpr)
 		if err != nil {
 			return fmt.Errorf("parsing obj expr: %", err)
 		}
+		if _, ok := i.exprsExclude[parsed]; ok {
+			return fmt.Errorf("duplicate expr")
+		}
 		i.exprsExclude[parsed] = true
+	}
+	if ok := allDisjoint(i.exprsExclude); !ok {
+		return fmt.Errorf("non disjoint set of exprs")
 	}
 	return nil
 }
@@ -178,7 +208,7 @@ func getGrupsDiff(old *Grups, new *Grups) *grupsDiff {
 	if old == nil {
 		return &grupsDiff{new.Products, nil, nil}
 	}
-	diff := grupsDiff{make(map[string]*Product), make(map[string]*Product), make(map[string]productDiff)}
+	diff := grupsDiff{map[string]*Product{}, map[string]*Product{}, map[string]productDiff{}}
 	for k_old, v_old := range old.Products {
 		v_new, ok := new.Products[k_old]
 		if !ok {

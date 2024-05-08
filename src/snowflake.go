@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	_ "github.com/snowflakedb/gosnowflake"
+	"golang.org/x/exp/maps"
 )
 
 var validUnquotedExpr *regexp.Regexp = regexp.MustCompile(`^[a-z_][a-z0-9_$]{0,254}\*?$`) // lowercase identifier chars + optional wildcard suffix
@@ -297,12 +298,18 @@ func (e exprPart) matchAll() bool {
 }
 
 func (lhs expr) subsetOf(rhs expr) bool {
-	// return true if rhs can match at least all object that lhs can match
-	return false
-	// TODO implement this function
+	// return true if rhs can match at least all objects that lhs can match
+	if !lhs[_database].subsetOf(rhs[_database]) {
+		return false
+	}
+	if !lhs[_schema].subsetOf(rhs[_schema]) {
+		return false
+	}
+	return lhs[_table].subsetOf(rhs[_table])
 }
 
 func (lhs exprPart) subsetOf(rhs exprPart) bool {
+	// return true if rhs can match at least all objects that lhs can match
 	if lhs.is_quoted && rhs.is_quoted {
 		return lhs.s == rhs.s // also return true if improper subset
 	}
@@ -342,7 +349,44 @@ func (lhs exprPart) subsetOf(rhs exprPart) bool {
 	// ab	abc*	!subset
 	// a*	*	subset
 	// *	a*	!subset
+}
 
+func allDisjoint(m map[expr]bool) bool {
+	keys := maps.Keys(m)
+	if len(keys) < 2 {
+		return true
+	}
+	for i := 0; i < len(keys)-1; i++ {
+		for j := i + 1; j < len(keys); j++ {
+			if !keys[i].disjoint(keys[j]) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func (lhs expr) disjoint(rhs expr) bool {
+	if lhs[_database].disjoint(rhs[_database]) {
+		return true
+	}
+	if lhs[_schema].disjoint(rhs[_schema]) {
+		return true
+	}
+	return lhs[_table].disjoint(rhs[_table])
+	// TODO implement tests
+	// *.*.*	whatever	!disjoint
+	// a.*.*	b.*.*		disjoint
+	// a.*.c	a.b.c		!disjoint
+	// a.*.c	a.b.d		disjoint
+	// ...
+}
+
+func (lhs exprPart) disjoint(rhs exprPart) bool {
+	// return true if no object can be matched by both lhs and rhs
+	return !lhs.subsetOf(rhs) && !rhs.subsetOf(lhs)
+	// we can't have an intersection with both sets also still having
+	// a non empty complement cause we only allow a suffix wildcard
 }
 
 var db *sql.DB
@@ -367,7 +411,7 @@ func init() {
 	}
 }
 
-func parse_obj_expr(s string) (expr, error) {
+func parseObjExpr(s string) (expr, error) {
 	var empty expr // for return statements that have an error
 	if strings.ContainsRune(s, '\n') {
 		return empty, fmt.Errorf("object expression has newline")
