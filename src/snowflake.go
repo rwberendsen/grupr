@@ -20,18 +20,18 @@ var validQuotedExpr *regexp.Regexp = regexp.MustCompile(`.{0,255}`)
 type dbType int
 
 const (
-	database = iota
-	schema
-	table
-	view
+	_database = iota
+	_schema
+	_table
+	_view
 )
 
 var dbTypes = [5]string{"DATABASE", "SCHEMA", "TABLE", "VIEW"}
 var dbTypeCast = map[string]dbType{
-	"DATABASE": database,
-	"SCHEMA":   schema,
-	"TABLE":    table,
-	"VIEW":     view,
+	"DATABASE": _database,
+	"SCHEMA":   _schema,
+	"TABLE":    _table,
+	"VIEW":     _view,
 }
 
 // caching objects in Snowflake locally
@@ -176,27 +176,30 @@ type accountObjs struct {
 }
 
 type dbObjs struct {
-	schemas map[string]schemaObjs
+	schemas  map[string]schemaObjs
+	matchAll bool
 }
 
 type schemaObjs struct {
 	// note that in case of drift during runtime tables and views may
 	// contain the same keys (i.e., if during runtime a table was removed
 	// and a view with the same name created)
-	tables map[string]bool
-	views  map[string]bool
+	tables   map[string]bool
+	views    map[string]bool
+	matchAll bool
 }
 
-func (o accountObjs) addObject(db string, schema string, obj string, t dbType) accountObjs {
+func (o accountObjs) addObject(db string, schema string, obj string, t dbType,
+	matchAllSchemas bool, matchAllTables bool) accountObjs {
 	if _, ok := o.dbs[db]; !ok {
-		o.dbs[db] = dbObjs{map[string]schemaObjs{}}
+		o.dbs[db] = dbObjs{map[string]schemaObjs{}, matchAllSchemas}
 	}
-	if _ , ok := o.dbs[db].schemas[schema]; !ok {
-		o.dbs[db].schemas[schema] = schemaObjs{map[string]bool{}, map[string]bool{}}
+	if _, ok := o.dbs[db].schemas[schema]; !ok {
+		o.dbs[db].schemas[schema] = schemaObjs{map[string]bool{}, map[string]bool{}, matchAllTables}
 	}
-	if t == table {
+	if t == _table {
 		o.dbs[db].schemas[schema].tables[obj] = true
-	} else if t == view {
+	} else if t == _view {
 		o.dbs[db].schemas[schema].views[obj] = true
 	}
 	return o
@@ -217,7 +220,7 @@ func (lhs accountObjs) subtract(rhs accountObjs) accountObjs {
 }
 
 func (lhs dbObjs) subtract(rhs dbObjs) dbObjs {
-	r := dbObjs{map[string]schemaObjs{}}
+	r := dbObjs{map[string]schemaObjs{}, false}
 	for k, v := range lhs.schemas {
 		if v2, ok := rhs.schemas[k]; !ok {
 			r.schemas[k] = v
@@ -231,7 +234,7 @@ func (lhs dbObjs) subtract(rhs dbObjs) dbObjs {
 }
 
 func (lhs schemaObjs) subtract(rhs schemaObjs) schemaObjs {
-	r := schemaObjs{map[string]bool{}, map[string]bool{}}
+	r := schemaObjs{map[string]bool{}, map[string]bool{}, false}
 	for k, _ := range lhs.tables {
 		if _, ok := rhs.tables[k]; !ok {
 			r.tables[k] = true
@@ -257,6 +260,7 @@ func (lhs accountObjs) add(rhs accountObjs) accountObjs {
 }
 
 func (lhs dbObjs) add(rhs dbObjs) dbObjs {
+	lhs.matchAll = lhs.matchAll || rhs.matchAll
 	for k, v := range rhs.schemas {
 		if _, ok := lhs.schemas[k]; !ok {
 			lhs.schemas[k] = v
@@ -268,6 +272,7 @@ func (lhs dbObjs) add(rhs dbObjs) dbObjs {
 }
 
 func (lhs schemaObjs) add(rhs schemaObjs) schemaObjs {
+	lhs.matchAll = lhs.matchAll || rhs.matchAll
 	for k, _ := range rhs.tables {
 		if _, ok := lhs.tables[k]; !ok {
 			lhs.tables[k] = true
@@ -285,6 +290,10 @@ type expr [3]exprPart
 type exprPart struct {
 	s         string
 	is_quoted bool
+}
+
+func (e exprPart) matchAll() bool {
+	return !e.is_quoted && e.s == "*"
 }
 
 var db *sql.DB
@@ -369,9 +378,11 @@ func escapeString(s string) string {
 	return strings.ReplaceAll(s, "'", "\\'")
 }
 
-func escapeRegExp(s string) string {
-	s = strings.ReplaceAll(s, "$", "\\$")   // escape dollar sign, which can be used in Snowflake identifiers
-	return strings.ReplaceAll(s, "*", ".*") // transform the wildcard suffix into a zero or more regular expression
+func createRegexp(s string) *regexp.Regexp {
+	s = strings.ReplaceAll(s, "$", "\\$") // escape dollar sign, which can be used in Snowflake identifiers
+	s = strings.ReplaceAll(s, "*", ".*")  // transform the wildcard suffix into a zero or more regular expression
+	s = "(?i)" + s                        // match case insensitive
+	return regexp.MustCompile(s)
 }
 
 func matchPart(e exprPart, l map[string]bool) map[string]bool {
@@ -385,7 +396,7 @@ func matchPart(e exprPart, l map[string]bool) map[string]bool {
 	// implement match unquoted with optional suffix wildcard
 	// note that we match case insensitive, so `mytable` would match all of
 	// "mytable", "MyTable", "MYTABLE", etc.
-	var validMatchingExpression *regexp.Regexp = regexp.MustCompile("(?i)" + e.s)
+	var validMatchingExpression *regexp.Regexp = createRegexp(e.s)
 	for k, _ := range l {
 		if validMatchingExpression.MatchString(k) {
 			r[k] = true
@@ -396,17 +407,17 @@ func matchPart(e exprPart, l map[string]bool) map[string]bool {
 
 func match(e expr, c *accountCache) accountObjs {
 	o := accountObjs{map[string]dbObjs{}}
-	matchedDBs := matchPart(e[database], c.getDBnames())
+	matchedDBs := matchPart(e[_database], c.getDBnames())
 	for db, _ := range matchedDBs {
-		matchedSchemas := matchPart(e[schema], c.getDBs()[db].getSchemaNames())
+		matchedSchemas := matchPart(e[_schema], c.getDBs()[db].getSchemaNames())
 		for schema, _ := range matchedSchemas {
-			matchedTables := matchPart(e[table], c.getDBs()[db].getSchemas()[schema].getTableNames())
-			matchedViews := matchPart(e[table], c.getDBs()[db].getSchemas()[schema].getViewNames())
+			matchedTables := matchPart(e[_table], c.getDBs()[db].getSchemas()[schema].getTableNames())
+			matchedViews := matchPart(e[_table], c.getDBs()[db].getSchemas()[schema].getViewNames())
 			for t, _ := range matchedTables {
-				o = o.addObject(db, schema, t, table)
+				o = o.addObject(db, schema, t, _table, e[_schema].matchAll(), e[_table].matchAll())
 			}
 			for v, _ := range matchedViews {
-				o = o.addObject(db, schema, v, view)
+				o = o.addObject(db, schema, v, _view, e[_schema].matchAll(), e[_table].matchAll())
 			}
 		}
 	}
