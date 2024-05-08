@@ -100,6 +100,10 @@ func (g *Grups) validate() error {
 			return err
 		}
 	}
+	// TODO validate consistency accross products, e.g., each object is allowed
+	// to be matched by one expression only, accross products;
+	// although within a product, an object may be matched both as part of the
+	// project itself and as part of one or more interfaces
 	return nil
 }
 

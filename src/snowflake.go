@@ -296,6 +296,55 @@ func (e exprPart) matchAll() bool {
 	return !e.is_quoted && e.s == "*"
 }
 
+func (lhs expr) subsetOf(rhs expr) bool {
+	// return true if rhs can match at least all object that lhs can match
+	return false
+	// TODO implement this function
+}
+
+func (lhs exprPart) subsetOf(rhs exprPart) bool {
+	if lhs.is_quoted && rhs.is_quoted {
+		return lhs.s == rhs.s // also return true if improper subset
+	}
+	if !lhs.is_quoted && rhs.is_quoted {
+		return false // unqoted will always match more objects than quoted
+	}
+	if lhs.is_quoted && !rhs.is_quoted {
+		re := createRegexpIdentifier(rhs.s)
+		return re.MatchString(lhs.s)
+	}
+	// !lhs.isquoted && !rhs.is_quoted
+	if lhs.s == rhs.s {
+		return true
+	}
+	if !strings.ContainsRune(lhs.s, '*') && !strings.ContainsRune(rhs.s, '*') {
+		return false
+	}
+	// strings are not equal and at least one of them contains a wildcard suffix
+	if !strings.ContainsRune(rhs.s, '*') {
+		return false
+	}
+	// rhs.s contains a wildcard suffix; lhs.s may or may not contain one
+	if !strings.ContainsRune(lhs.s, '*') {
+		if len(lhs.s) < len(rhs.s)-1 {
+			return false
+		}
+		return lhs.s[0:len(rhs.s)-1] == rhs.s[0:len(rhs.s)-1]
+	}
+	// both lhs.s and rhs.s contain a wildcard suffix
+	return strings.HasPrefix(lhs.s[0:len(lhs.s)-1], rhs.s[0:len(rhs.s)-1])
+	// TODO implement tests, e.g.:
+	// abc	abc*	subset
+	// abc	ab*	subset
+	// abc*	abc	!subset
+	// abc*	ab*	subset
+	// ab*	abc*	!subset
+	// ab	abc*	!subset
+	// a*	*	subset
+	// *	a*	!subset
+
+}
+
 var db *sql.DB
 
 func getEnvOrDie(key string) string {
@@ -378,10 +427,10 @@ func escapeString(s string) string {
 	return strings.ReplaceAll(s, "'", "\\'")
 }
 
-func createRegexp(s string) *regexp.Regexp {
+func createRegexpIdentifier(s string) *regexp.Regexp {
 	s = strings.ReplaceAll(s, "$", "\\$") // escape dollar sign, which can be used in Snowflake identifiers
 	s = strings.ReplaceAll(s, "*", ".*")  // transform the wildcard suffix into a zero or more regular expression
-	s = "(?i)" + s                        // match case insensitive
+	s = "(?i)^" + s + "$"                 // match case insensitive; match complete identifier
 	return regexp.MustCompile(s)
 }
 
@@ -396,9 +445,9 @@ func matchPart(e exprPart, l map[string]bool) map[string]bool {
 	// implement match unquoted with optional suffix wildcard
 	// note that we match case insensitive, so `mytable` would match all of
 	// "mytable", "MyTable", "MYTABLE", etc.
-	var validMatchingExpression *regexp.Regexp = createRegexp(e.s)
+	re := createRegexpIdentifier(e.s)
 	for k, _ := range l {
-		if validMatchingExpression.MatchString(k) {
+		if re.MatchString(k) {
 			r[k] = true
 		}
 	}
