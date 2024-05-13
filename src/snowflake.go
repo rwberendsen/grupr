@@ -190,19 +190,28 @@ type schemaObjs struct {
 	matchAll bool
 }
 
-func (o accountObjs) addObject(db string, schema string, obj string, t dbType,
-	matchAllSchemas bool, matchAllTables bool) accountObjs {
+func (o accountObjs) addDB(db string, matchAllSchemas bool) accountObjs {
 	if _, ok := o.dbs[db]; !ok {
 		o.dbs[db] = dbObjs{map[string]schemaObjs{}, matchAllSchemas}
 	}
+	return o
+}
+
+func (o accountObjs) addSchema(db string, schema string, matchAllTables bool) accountObjs {
 	if _, ok := o.dbs[db].schemas[schema]; !ok {
 		o.dbs[db].schemas[schema] = schemaObjs{map[string]bool{}, map[string]bool{}, matchAllTables}
 	}
+	return o
+}
+
+func (o accountObjs) addObject(db string, schema string, obj string, t dbType) accountObjs {
 	if t == _table {
 		o.dbs[db].schemas[schema].tables[obj] = true
-	} else if t == _view {
-		o.dbs[db].schemas[schema].views[obj] = true
 	}
+	if t != _view {
+		panic("unsupported dbType value")
+	}
+	o.dbs[db].schemas[schema].views[obj] = true
 	return o
 }
 
@@ -502,15 +511,17 @@ func match(e expr, c *accountCache) accountObjs {
 	o := accountObjs{map[string]dbObjs{}}
 	matchedDBs := matchPart(e[_database], c.getDBnames())
 	for db, _ := range matchedDBs {
+		o = o.addDB(db, e[_schema].matchAll())
 		matchedSchemas := matchPart(e[_schema], c.getDBs()[db].getSchemaNames())
 		for schema, _ := range matchedSchemas {
+			o = o.addSchema(db, schema, e[_table].matchAll())
 			matchedTables := matchPart(e[_table], c.getDBs()[db].getSchemas()[schema].getTableNames())
 			matchedViews := matchPart(e[_table], c.getDBs()[db].getSchemas()[schema].getViewNames())
 			for t, _ := range matchedTables {
-				o = o.addObject(db, schema, t, _table, e[_schema].matchAll(), e[_table].matchAll())
+				o = o.addObject(db, schema, t, _table)
 			}
 			for v, _ := range matchedViews {
-				o = o.addObject(db, schema, v, _view, e[_schema].matchAll(), e[_table].matchAll())
+				o = o.addObject(db, schema, v, _view)
 			}
 		}
 	}
