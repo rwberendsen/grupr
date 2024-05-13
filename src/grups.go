@@ -100,11 +100,30 @@ func (g *Grups) validate() error {
 			return err
 		}
 	}
-	// TODO validate consistency accross products, e.g., each object is allowed
-	// to be matched by one expression only, accross products;
-	// although within a product, an object may be matched both as part of the
-	// project itself and as part of one or more interfaces
+	if err := g.allDisjoint(); err != nil {
+		return err
+	}
 	return nil
+}
+
+func (g *Grups) allDisjoint() error {
+	keys := maps.Keys(g.Products)
+	if len(keys) < 2 {
+		return nil
+	}
+	for i := 0; i < len(keys)-1; i++ {
+		for j := i + 1; j < len(keys); j++ {
+			if !g.Products[keys[i]].disjoint(g.Products[keys[j]]) {
+				return fmt.Errorf("overlapping products '%s' and '%s'", keys[i], keys[j])
+			}
+		}
+	}
+	return nil
+}
+
+func (p *Product) disjoint(o *Product) bool {
+	return true
+	// TODO implement
 }
 
 func (p *Product) validate(g *Grups, pkey string) error {
