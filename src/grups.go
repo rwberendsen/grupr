@@ -24,10 +24,9 @@ type Product struct {
 	Consumes   []ProductInterface    `yaml:",omitempty"`
 
 	// fields added by validation
-	dtaps        map[string]bool
-	exprs        map[expr]bool
-	exprsExclude map[expr]bool
-	consumes     map[ProductInterface]bool
+	dtaps    map[string]bool
+	matcher  matcher
+	consumes map[ProductInterface]bool
 
 	// fields added by querying Snowflake
 	matchedInclude accountObjs
@@ -45,8 +44,7 @@ type Interface struct {
 	ObjectsExclude []string `yaml:"objects_exclude,omitempty"`
 
 	// lowercased fields are added during validation
-	exprs        map[expr]bool
-	exprsExclude map[expr]bool
+	matcher matcher
 
 	// fields added by querying Snowflake
 	matchedInclude accountObjs
@@ -141,7 +139,7 @@ func (p *Product) validate(g *Grups, pkey string) error {
 		if !validId.MatchString(k) {
 			return fmt.Errorf("invalid interface id")
 		}
-		if err := v.validate(); err != nil {
+		if err := v.validate(pkey, k); err != nil {
 			return err
 		}
 	}
@@ -160,65 +158,19 @@ func (p *Product) validate(g *Grups, pkey string) error {
 		}
 		p.consumes[i] = true
 	}
-	p.exprs = map[expr]bool{}
-	for _, objExpr := range p.Objects {
-		parsed, err := parseObjExpr(objExpr)
-		if err != nil {
-			return fmt.Errorf("parsing obj expr: %", err)
-		}
-		if _, ok := p.exprs[parsed]; ok {
-			return fmt.Errorf("duplicate expr")
-		}
-		p.exprs[parsed] = true
-	}
-	if ok := allDisjoint(p.exprs); !ok {
-		return fmt.Errorf("non disjoint set of exprs")
-	}
-	p.exprsExclude = map[expr]bool{}
-	for _, objExpr := range p.ObjectsExclude {
-		parsed, err := parseObjExpr(objExpr)
-		if err != nil {
-			return fmt.Errorf("parsing obj expr: %", err)
-		}
-		if _, ok := p.exprsExclude[parsed]; ok {
-			return fmt.Errorf("duplicate expr")
-		}
-		p.exprsExclude[parsed] = true
-	}
-	if ok := allDisjoint(p.exprsExclude); !ok {
-		return fmt.Errorf("non disjoint set of exprs")
+	if m, err := p.matcher.parse(p.Objects, p.ObjectsExclude); err != nil {
+		return fmt.Errorf("invalid object matching expressions in product %s: %s", pkey, err)
+	} else {
+		p.matcher = m
 	}
 	return nil
 }
 
-func (i *Interface) validate() error {
-	i.exprs = map[expr]bool{}
-	for _, objExpr := range i.Objects {
-		parsed, err := parseObjExpr(objExpr)
-		if err != nil {
-			return fmt.Errorf("parsing obj expr: %", err)
-		}
-		if _, ok := i.exprs[parsed]; ok {
-			return fmt.Errorf("duplicate expr")
-		}
-		i.exprs[parsed] = true
-	}
-	if ok := allDisjoint(i.exprs); !ok {
-		return fmt.Errorf("non disjoint set of exprs")
-	}
-	i.exprsExclude = map[expr]bool{}
-	for _, objExpr := range i.ObjectsExclude {
-		parsed, err := parseObjExpr(objExpr)
-		if err != nil {
-			return fmt.Errorf("parsing obj expr: %", err)
-		}
-		if _, ok := i.exprsExclude[parsed]; ok {
-			return fmt.Errorf("duplicate expr")
-		}
-		i.exprsExclude[parsed] = true
-	}
-	if ok := allDisjoint(i.exprsExclude); !ok {
-		return fmt.Errorf("non disjoint set of exprs")
+func (i *Interface) validate(pkey string, ikey string) error {
+	if m, err := i.matcher.parse(i.Objects, i.ObjectsExclude); err != nil {
+		return fmt.Errorf("invalid object matching expressions in product %s, interface %s: %s", pkey, ikey, err)
+	} else {
+		i.matcher = m
 	}
 	return nil
 }
@@ -249,10 +201,7 @@ func (p *Product) equals(o *Product) bool {
 	if equal := maps.Equal(p.dtaps, o.dtaps); !equal {
 		return false
 	}
-	if equal := maps.Equal(p.exprs, o.exprs); !equal {
-		return false
-	}
-	if equal := maps.Equal(p.exprsExclude, o.exprsExclude); !equal {
+	if equal := p.matcher.equals(o.matcher); !equal {
 		return false
 	}
 	// interfaces
@@ -279,11 +228,5 @@ func (p *Product) equals(o *Product) bool {
 }
 
 func (i *Interface) equals(j *Interface) bool {
-	if equal := maps.Equal(i.exprs, j.exprs); !equal {
-		return false
-	}
-	if equal := maps.Equal(i.exprsExclude, j.exprsExclude); !equal {
-		return false
-	}
-	return true
+	return i.matcher.equals(j.matcher)
 }
