@@ -1,16 +1,17 @@
 package semantics
 
-type Product struct {
-	// fields added by validation
-	dtaps    map[string]bool
-	matcher  matcher
-	interfaces map[string]Interface
-	consumes map[syntax.ProductInterface]bool
+import (
+	"fmt"
 
-	// fields added by querying Snowflake
-	matchedInclude accountObjs
-	matchedExclude accountObjs
-	matched        accountObjs
+	"golang.org/x/exp/maps"
+	"github.com/rwberendsen/grupr/internal/syntax"
+)
+
+type Product struct {
+	DTAPs    map[string]bool
+	Matcher  matcher
+	Interfaces map[string]Interface
+	Consumes map[syntax.ProductInterface]bool
 }
 
 func (p Product) disjoint(o Product) bool {
@@ -20,48 +21,48 @@ func (p Product) disjoint(o Product) bool {
 
 func newProduct(p syntax.Product) (Product, error) {
 	r := Product{
-		dtaps: map[string]bool{},
-		interfaces: map[string]Interface{},
-		consumes: map[syntax.ProductInterface]bool{}
+		DTAPs: map[string]bool{},
+		Interfaces: map[string]Interface{},
+		Consumes: map[syntax.ProductInterface]bool{}
 	}
 	for _, i := range p.DTAPs {
 		if !validId.MatchString(i) {
 			return fmt.Errorf("invalid dtap")
 		}
-		if _, ok := p.dtaps[i]; ok {
+		if _, ok := r.DTAPs[i]; ok {
 			return fmt.Errorf("duplicate dtap")
 		}
-		p.dtaps[i] = true
+		r.DTAPs[i] = true
+	}
+	if m, err := newMatcher(p.Objects, p.ObjectsExclude); err != nil {
+		return fmt.Errorf("invalid object matching expressions: %s", err)
+	} else {
+		r.Matcher = m
 	}
 	for k, v := range p.Interfaces {
 		if !validId.MatchString(k) {
-			return fmt.Errorf("invalid interface id")
+			return fmt.Errorf("invalid interface id: '%s'", k)
 		}
-		i, err := newInterface(v)
-		if err := v.validate(pkey, k); err != nil {
-			return err
+		if i, err := newInterface(v); err != nil {
+			return fmt.Errorf("invalid interface '%s': %s", k, err)
+		} else {
+			r.Interfaces[k] = i
 		}
 	}
-	p.consumes = map[ProductInterface]bool{}
 	for _, i := range p.Consumes {
-		if _, ok := p.consumes[i]; ok {
+		if _, ok := r.Consumes[i]; ok {
 			return fmt.Errorf("duplicate consumed interface id")
 		}
-		p.consumes[i] = true
-	}
-	if m, err := newMatcher(p.Objects, p.ObjectsExclude); err != nil {
-		return fmt.Errorf("invalid object matching expressions in product %s: %s", pkey, err)
-	} else {
-		p.matcher = m
+		r.Consumes[i] = true
 	}
 	return nil
 }
 
-func (p *Product) equals(o *Product) bool {
-	if equal := maps.Equal(p.dtaps, o.dtaps); !equal {
+func (p Product) equals(o Product) bool {
+	if equal := maps.Equal(p.DTAPs, o.DTAPs); !equal {
 		return false
 	}
-	if equal := p.matcher.equals(o.matcher); !equal {
+	if equal := p.Matcher.equals(o.Matcher); !equal {
 		return false
 	}
 	// interfaces
@@ -81,7 +82,7 @@ func (p *Product) equals(o *Product) bool {
 		}
 	}
 	// consumes
-	if equal := maps.Equal(p.consumes, o.consumes); !equal {
+	if equal := maps.Equal(p.Consumes, o.Consumes); !equal {
 		return false
 	}
 	return true

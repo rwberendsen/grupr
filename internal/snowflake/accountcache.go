@@ -1,5 +1,11 @@
 package snowflake
 
+import (
+	"fmt"
+	"log"
+	"strings"
+)
+
 // caching objects in Snowflake locally
 type accountCache struct {
 	dbs     map[string]*dbCache

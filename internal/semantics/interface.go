@@ -1,24 +1,22 @@
 package semantics
 
-type Interface struct {
-	// lowercased fields are added during validation
-	matcher matcher
+import (
+	"fmt"
+)
 
-	// fields added by querying Snowflake
-	matchedInclude accountObjs
-	matchedExclude accountObjs
-	matched        accountObjs
+type Interface struct {
+	Matcher matcher
 }
 
-func (i *Interface) validate(pkey string, ikey string) error {
-	if m, err := i.matcher.parse(i.Objects, i.ObjectsExclude); err != nil {
-		return fmt.Errorf("invalid object matching expressions in product %s, interface %s: %s", pkey, ikey, err)
+func (i Interface) validate() error {
+	if m, err := newMatcher(i.Objects, i.ObjectsExclude); err != nil {
+		return fmt.Errorf("invalid object matching expressions: %s", err)
 	} else {
-		i.matcher = m
+		i.Matcher = m
 	}
 	return nil
 }
 
-func (i *Interface) equals(j *Interface) bool {
-	return i.matcher.equals(j.matcher)
+func (i Interface) equals(j Interface) bool {
+	return i.Matcher.equals(j.Matcher)
 }

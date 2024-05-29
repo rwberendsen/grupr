@@ -1,5 +1,13 @@
 package semantics
 
+import (
+	"fmt"
+	"regexp"
+
+	"golang.org/x/exp/maps"
+	"github.com/rwberendsen/grupr/internal/syntax"
+)
+
 var validId *regexp.Regexp = regexp.MustCompile(`^[a-z_][a-z0-9_]*$`)
 
 type Grups struct {

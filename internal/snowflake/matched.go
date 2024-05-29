@@ -1,3 +1,26 @@
+package snowflake
+
+import (
+	"github.com/rwberendsen/grupr/internal/semantics"
+)
+
+type Matched struct {
+	Objects accountObjs
+	include accountObjs
+	exclude accountObjs
+}
+
+func newMatched(m semantics.Matcher, c *accountCache) Matched {
+	r := Matched{}
+	for e, _ := range m.Include {
+		r.include = r.include.add(match(e, c))
+	}
+	for e, _ := range m.Exclude {
+		r.exclude = r.Exclude.add(match(e, c))
+	}
+	r.Objects = r.include.subtract(r.exclude)
+	return r
+}
 
 func matchPart(e semantics.ExprPart, l map[string]bool) map[string]bool {
 	r := map[string]bool{}

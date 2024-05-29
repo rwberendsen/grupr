@@ -1,8 +1,12 @@
 package snowflake
 
+import (
+	"github.com/rwberendsen/grupr/internal/semantics"
+)
+
 type GrupsDiff struct {
 	Created map[string]Product
-	Deleted map[string]Product
+	Deleted map[string]bool
 	Updated map[string]ProductDiff
 }
 
@@ -17,20 +21,13 @@ func NewGrupsDiff(g semantics.GrupsDiff) GrupsDiff {
 	// as we match databases and schema's, we build up a local cache of the DB tree.
 	c := &accountCache{map[string]*dbCache{}, map[string]bool{}}
 	for k, v := range g.Created {
-		r.Created[k] = newProduct(v.Matcher, c)
-		p.matchedInclude = accountObjs{}
-		for e, _ := range p.exprs {
-			p.matchedInclude = p.matchedInclude.add(match(e, c))
-		}
-		p.matchedExclude = accountObjs{}
-		for e, _ := range p.exprsExclude {
-			p.matchedExclude = p.matchedExclude.add(match(e, c))
-		}
-		p.matched = p.matchedInclude.subtract(p.matchedExclude)
+		r.Created[k] = newProduct(v, c)
 	}
-}
-
-type ProductDiff struct {
-	Old Product
-	New Product
+	for k, _ := range g.Deleted {
+		r.Deleted[k] = true
+	}
+	for k, v := range g.Updated {
+		r.Updated[k] = newProductDiff(v, c)
+	}
+	return r
 }

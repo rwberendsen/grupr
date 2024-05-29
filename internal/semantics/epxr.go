@@ -1,5 +1,15 @@
 package semantics
 
+import (
+	"encoding/csv"
+	"fmt"
+	"io"
+	"regexp"
+	"strings"
+
+	"golang.org/x/exp/maps"
+)
+
 type Expr [3]exprPart
 type ExprPart struct {
 	S         string
