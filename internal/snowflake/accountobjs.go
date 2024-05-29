@@ -1,4 +1,4 @@
-package state
+package snowflake
 
 // couple of simple data structures to hold matched objects in account
 type accountObjs struct {
@@ -36,13 +36,12 @@ func (o accountObjs) addSchema(db string, schema string, matchAllTables bool) ac
 	return o
 }
 
-func (o accountObjs) addObject(db string, schema string, obj string, t dbType) accountObjs {
-	if t == _table {
-		o.dbs[db].schemas[schema].tables[obj] = true
-	}
-	if t != _view {
-		panic("unsupported dbType value")
-	}
+func (o accountObjs) addTable(db string, schema string, obj string) accountObjs {
+	o.dbs[db].schemas[schema].tables[obj] = true
+	return o
+}
+
+func (o accountObjs) addView(db string, schema string, obj string) accountObjs {
 	o.dbs[db].schemas[schema].views[obj] = true
 	return o
 }

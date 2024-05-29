@@ -49,7 +49,7 @@ func newProduct(p syntax.Product) (Product, error) {
 		}
 		p.consumes[i] = true
 	}
-	if m, err := p.matcher.parse(p.Objects, p.ObjectsExclude); err != nil {
+	if m, err := newMatcher(p.Objects, p.ObjectsExclude); err != nil {
 		return fmt.Errorf("invalid object matching expressions in product %s: %s", pkey, err)
 	} else {
 		p.matcher = m

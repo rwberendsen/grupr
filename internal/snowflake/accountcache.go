@@ -1,4 +1,4 @@
-package state
+package snowflake
 
 // caching objects in Snowflake locally
 type accountCache struct {
@@ -20,6 +20,14 @@ type schemaCache struct {
 	// viewNames can contain duplicate keys wrt each other
 	tableNames map[string]bool
 	viewNames  map[string]bool
+}
+
+func escapeIdentifier(s string) string {
+	return strings.ReplaceAll(s, "\"", "\"\"")
+}
+
+func escapeString(s string) string {
+	return strings.ReplaceAll(s, "'", "\\'")
 }
 
 func (c *accountCache) addDBs() {

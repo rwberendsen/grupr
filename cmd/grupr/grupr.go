@@ -10,7 +10,7 @@ import (
 
 	"github.com/rwberendsen/grupr/internal/syntax"
 	"github.com/rwberendsen/grupr/internal/semantics"
-	"github.com/rwberendsen/grupr/internal/state"
+	"github.com/rwberendsen/grupr/internal/snowflake"
 )
 
 func getEnv(key string) (string, error) {
@@ -69,12 +69,12 @@ func main() {
 		fmt.Printf("--- oldGrups:\n%v\n\n", oldGrups)
 	}
 
-	grupsDiff := getGrupsDiff(oldGrups, newGrups)
+	grupsDiff := semantics.NewGrupsDiff(oldGrups, newGrups)
 	fmt.Printf("--- grupsDiff:\n%v\n\n", grupsDiff)
 
 	// now we can work with the diff: created, deleted, updated.
 	// e.g., first created.
 	// we can get all tables / views from snowflake, and start
 	// expanding the object (exclude) expressions to sets of matching tables.
-	querySnowflake(grupsDiff)
+	snowflakeGrupsDiff := snowlfake.NewGrupsDiff(grupsDiff)
 }

@@ -1,15 +1,30 @@
 package semantics
 
-type expr [3]exprPart
-type exprPart struct {
-	s         string
-	is_quoted bool
+type Expr [3]exprPart
+type ExprPart struct {
+	S         string
+	Is_quoted bool
+}
+type Part int
+const (
+	Database Part = iota
+	Schema
+	Table
+)
+
+func CreateRegexpIdentifier(s string) *regexp.Regexp {
+	s = strings.ReplaceAll(s, "$", "\\$") // escape dollar sign, which can be used in Snowflake identifiers
+	s = strings.ReplaceAll(s, "*", ".*")  // transform the wildcard suffix into a zero or more regular expression
+	s = "(?i)^" + s + "$"                 // match case insensitive; match complete identifier
+	return regexp.MustCompile(s)
 }
 
-
-func (e exprPart) matchAll() bool {
+func (e exprPart) MatchAll() bool {
 	return !e.is_quoted && e.s == "*"
 }
+
+var validUnquotedExpr *regexp.Regexp = regexp.MustCompile(`^[a-z_][a-z0-9_$]{0,254}\*?$`) // lowercase identifier chars + optional wildcard suffix
+var validQuotedExpr *regexp.Regexp = regexp.MustCompile(`.{0,255}`)
 
 func (lhs expr) subsetOf(rhs expr) bool {
 	// return true if rhs can match at least all objects that lhs can match
@@ -31,7 +46,7 @@ func (lhs exprPart) subsetOf(rhs exprPart) bool {
 		return false // unqoted will always match more objects than quoted
 	}
 	if lhs.is_quoted && !rhs.is_quoted {
-		re := createRegexpIdentifier(rhs.s)
+		re := CreateRegexpIdentifier(rhs.s)
 		return re.MatchString(lhs.s)
 	}
 	// !lhs.isquoted && !rhs.is_quoted

@@ -1,43 +1,42 @@
 package semantics
 
-type matcher struct {
-	include map[expr]bool
-	exclude map[expr]bool
+type Matcher struct {
+	Include map[Expr]bool
+	Exclude map[Expr]bool
 }
 
-func (m matcher) parse(include []string, exclude []string) (matcher, error) {
-	m.include = map[expr]bool{}
+func newMatcher(include []string, exclude []string) (Matcher, error) {
+	m := Matcher{map[Expr]bool{}, map[Expr]bool{}}
 	for _, objExpr := range include {
 		parsed, err := parseObjExpr(objExpr)
 		if err != nil {
 			return m, fmt.Errorf("parsing obj expr: %s", err)
 		}
-		if _, ok := m.include[parsed]; ok {
+		if _, ok := m.Include[parsed]; ok {
 			return m, fmt.Errorf("duplicate include expr")
 		}
-		m.include[parsed] = true
+		m.Include[parsed] = true
 	}
-	if ok := m.include.allDisjoint(); !ok {
+	if ok := m.Include.allDisjoint(); !ok {
 		return m, fmt.Errorf("non disjoint set of include exprs")
 	}
-	m.exclude = map[expr]bool{}
 	for _, objExpr := range exclude {
 		parsed, err := parseObjExpr(objExpr)
 		if err != nil {
 			return m, fmt.Errorf("parsing obj expr: %s", err)
 		}
-		if _, ok := m.exclude[parsed]; ok {
+		if _, ok := m.Exclude[parsed]; ok {
 			return m, fmt.Errorf("duplicate exclude expr")
 		}
-		m.exclude[parsed] = true
+		m.Exclude[parsed] = true
 	}
-	if ok := m.exclude.allDisjoint(); !ok {
+	if ok := m.Exclude.allDisjoint(); !ok {
 		return m, fmt.Errorf("non disjoint set of exclude exprs")
 	}
 	// check that every expr in exclude is a strict subset of an expression in include
-	for i, _ := range m.exclude {
+	for i, _ := range m.Exclude {
 		hasStrictSuperset := false
-		for j, _ := range m.include {
+		for j, _ := range m.Include {
 			if i.subsetOf(j) && !j.isSubsetOf(i) {
 				hasStrictSuperset = true
 			}
@@ -46,8 +45,9 @@ func (m matcher) parse(include []string, exclude []string) (matcher, error) {
 			return m, fmt.Errorf("exclude expr without strict superset include expr")
 		}
 	}
+	return m, nil
 }
 
-func (lhs matcher) equals(rhs matcher) bool {
-	return maps.Equals(lhs.include, rhs.include) && maps.Equals(lhs.exclude, rhs.exclude)
+func (lhs Matcher) equals(rhs Matcher) bool {
+	return maps.Equals(lhs.Include, rhs.Include) && maps.Equals(lhs.Exclude, rhs.Exclude)
 }
