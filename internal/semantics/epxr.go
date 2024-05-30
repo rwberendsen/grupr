@@ -35,7 +35,7 @@ func (e ExprPart) MatchAll() bool {
 	return !e.Is_quoted && e.S == "*"
 }
 
-var validUnquotedExpr *regexp.Regexp = regexp.MustCompile(`^[a-z_][a-z0-9_$]{0,254}\*?$`) // lowercase identifier chars + optional wildcard suffix
+var validUnquotedExpr *regexp.Regexp = regexp.MustCompile(`^[a-z_][a-z0-9_$]{0,254}[*]?$`) // lowercase identifier chars + optional wildcard suffix
 var validQuotedExpr *regexp.Regexp = regexp.MustCompile(`.{0,255}`)
 
 func (lhs Expr) subsetOfExprs(rhs Exprs) bool {
@@ -176,8 +176,8 @@ func parseObjExpr(s string) (Expr, error) {
 	}
 	// validate identifier expressions
 	for _, exprPart := range expr {
-		if !exprPart.Is_quoted && !validUnquotedExpr.MatchString(exprPart.S) {
-			return empty, fmt.Errorf("not a valid unquoted identifier matching expression")
+		if !exprPart.Is_quoted && !validUnquotedExpr.MatchString(exprPart.S) && exprPart.S != "*" {
+			return empty, fmt.Errorf("not a valid unquoted identifier matching expression: %s", exprPart.S)
 		}
 		if exprPart.Is_quoted && !validQuotedExpr.MatchString(exprPart.S) {
 			return empty, fmt.Errorf("not a valid quoted identifier matching expression")
