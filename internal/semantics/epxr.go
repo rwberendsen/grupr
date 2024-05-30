@@ -35,11 +35,12 @@ func (e ExprPart) MatchAll() bool {
 	return !e.Is_quoted && e.S == "*"
 }
 
-var validUnquotedExpr *regexp.Regexp = regexp.MustCompile(`^[a-z_][a-z0-9_$]{0,254}[*]?$`) // lowercase identifier chars + optional wildcard suffix
+var validUnquotedExpr *regexp.Regexp = regexp.MustCompile(`^[a-z_{][a-z0-9_${},]{0,254}[*]?$`) // lowercase identifier chars + optional wildcard suffix
+var validOrOperandChar *regexp.Regexp = regexp.MustCompile(`^[a-z0-9_$]$`)
 var validQuotedExpr *regexp.Regexp = regexp.MustCompile(`.{0,255}`)
 
 func (lhs Expr) subsetOfExprs(rhs Exprs) bool {
-	for r, _ := range rhs {
+	for r := range rhs {
 		if lhs.subsetOf(r) {
 			return true
 		}
@@ -139,19 +140,74 @@ func (lhs ExprPart) disjoint(rhs ExprPart) bool {
 	// a non empty complement cause we only allow a suffix wildcard
 }
 
-func parseObjExpr(s string) (Expr, error) {
-	var empty Expr // for return statements that have an error
+func validateOr(s string) bool {
+	// WIP TODO segments := [][]string{} // build up segments while validating and return them for easier processing
+	insideOr := false
+	operands := map[string]bool{}
+	current_operand := ""
+	for _, r := range s {
+		if !insideOr {
+			if r == ',' || r == '}' {
+				return false
+			}
+			if r == '{' {
+				insideOr = true
+			}
+			continue
+		}
+		if r == ',' || r == '}' {
+			if _, ok := operands[current_operand]; ok {
+				return false
+			}
+			operands[current_operand] = true
+			current_operand = ""
+			if r == '}' {
+				operands = map[string]bool{}
+				insideOr = false
+			}
+			continue // empty operand is okay
+		}
+		if !validOrOperandChar.MatchString(string(r)) {
+			return false
+		}
+		current_operand += string(r)
+	}
+	return !insideOr
+}
+
+func validateExprPart(p ExprPart) bool {
+	if p.Is_quoted {
+		return validQuotedExpr.MatchString(p.S)
+	}
+	if !validUnquotedExpr.MatchString(p.S) {
+		return p.S == "*"
+	}
+	if strings.ContainsAny(p.S, "{,}") {
+		return validateOr(p.S)
+	}
+	return true
+}
+
+func explodeOr(e Expr) (Exprs, error) {
+	// TODO implement explosion
+	return Exprs{e: true}, nil
+}
+
+func parseObjExpr(s string) (Exprs, error) {
+	var exprs Exprs // for return statements that have an error
+	// WIP TODO idea is to allow {a,b} OR bits in an expr, and to have this function return multiple epxrs, in this
+	// case, e.g., a.{b,c}.d would return {a.b.d, a.c.d} and downstream no logic has to be changed
 	if strings.ContainsRune(s, '\n') {
-		return empty, fmt.Errorf("object expression has newline")
+		return exprs, fmt.Errorf("object expression has newline")
 	}
 	r := csv.NewReader(strings.NewReader(s)) // encoding/csv can conveniently handle quoted parts
 	r.Comma = '.'
 	record, err := r.Read()
 	if err != nil {
-		return empty, fmt.Errorf("reading csv: %s", err)
+		return exprs, fmt.Errorf("reading csv: %s", err)
 	}
 	if len(record) != 3 {
-		return empty, fmt.Errorf("object expression does not have three parts")
+		return exprs, fmt.Errorf("object expression does not have three parts")
 	}
 	var expr Expr
 	// figure out which parts were quoted, if any
@@ -176,11 +232,8 @@ func parseObjExpr(s string) (Expr, error) {
 	}
 	// validate identifier expressions
 	for _, exprPart := range expr {
-		if !exprPart.Is_quoted && !validUnquotedExpr.MatchString(exprPart.S) && exprPart.S != "*" {
-			return empty, fmt.Errorf("not a valid unquoted identifier matching expression: %s", exprPart.S)
-		}
-		if exprPart.Is_quoted && !validQuotedExpr.MatchString(exprPart.S) {
-			return empty, fmt.Errorf("not a valid quoted identifier matching expression")
+		if !validateExprPart(exprPart) {
+			return exprs, fmt.Errorf("invalid expr part: %s", exprPart.S)
 		}
 	}
 	// expecting only one line, just checking there was not more
@@ -188,5 +241,12 @@ func parseObjExpr(s string) (Expr, error) {
 	if err != io.EOF {
 		panic("parsing obj expr did not result in single result")
 	}
-	return expr, nil
+	// explode {a,b} expressions, into the Cartesian product of all of them
+	// after exploding, there can still be duplicates, e.g., consider '{,a}{,a}',
+	// which explodes to [,a,a,aa]; in this case explodeOr will give an error
+	if exprs, err = explodeOr(expr); err != nil {
+		return exprs, fmt.Errorf("exploding expr %s: %s", expr, err)
+	} else {
+		return exprs, nil
+	}
 }

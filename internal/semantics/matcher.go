@@ -14,27 +14,31 @@ type Matcher struct {
 func newMatcher(include []string, exclude []string) (Matcher, error) {
 	m := Matcher{Exprs{}, Exprs{}}
 	for _, objExpr := range include {
-		parsed, err := parseObjExpr(objExpr)
+		exprs, err := parseObjExpr(objExpr)
 		if err != nil {
 			return m, fmt.Errorf("parsing obj expr: %s", err)
 		}
-		if _, ok := m.Include[parsed]; ok {
-			return m, fmt.Errorf("duplicate include expr")
+		for e := range exprs {
+			if _, ok := m.Include[e]; ok {
+				return m, fmt.Errorf("duplicate include expr")
+			}
+			m.Include[e] = true
 		}
-		m.Include[parsed] = true
 	}
 	if ok := m.Include.allDisjoint(); !ok {
 		return m, fmt.Errorf("non disjoint set of include exprs")
 	}
 	for _, objExpr := range exclude {
-		parsed, err := parseObjExpr(objExpr)
+		exprs, err := parseObjExpr(objExpr)
 		if err != nil {
 			return m, fmt.Errorf("parsing obj expr: %s", err)
 		}
-		if _, ok := m.Exclude[parsed]; ok {
-			return m, fmt.Errorf("duplicate exclude expr")
+		for e := range exprs {
+			if _, ok := m.Exclude[e]; ok {
+				return m, fmt.Errorf("duplicate exclude expr")
+			}
+			m.Exclude[e] = true
 		}
-		m.Exclude[parsed] = true
 	}
 	if ok := m.Exclude.allDisjoint(); !ok {
 		return m, fmt.Errorf("non disjoint set of exclude exprs")
