@@ -4,8 +4,8 @@ import (
 	"github.com/rwberendsen/grupr/internal/semantics"
 )
 
-type Product {
-	Matched Matched
+type Product struct {
+	Matched    Matched
 	Interfaces map[string]Interface
 }
 

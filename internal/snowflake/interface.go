@@ -4,7 +4,7 @@ import (
 	"github.com/rwberendsen/grupr/internal/semantics"
 )
 
-type Interface {
+type Interface struct {
 	Matched Matched
 }
 

@@ -2,9 +2,7 @@ package syntax
 
 import (
 	"fmt"
-	"regexp"
 
-	"golang.org/x/exp/maps"
 	"gopkg.in/yaml.v3"
 )
 
@@ -13,11 +11,11 @@ type Grups struct {
 }
 
 type Product struct {
-	DTAPs          []string `yaml:",flow,omitempty"`
-	Objects        []string `yaml:",omitempty"`
-	ObjectsExclude []string `yaml:"objects_exclude,omitempty"`
-	Interfaces 	map[string]Interface `yaml:",omitempty"`
-	Consumes   []ProductInterface    `yaml:",omitempty"`
+	DTAPs          []string             `yaml:",flow,omitempty"`
+	Objects        []string             `yaml:",omitempty"`
+	ObjectsExclude []string             `yaml:"objects_exclude,omitempty"`
+	Interfaces     map[string]Interface `yaml:",omitempty"`
+	Consumes       []ProductInterface   `yaml:",omitempty"`
 }
 
 type ProductInterface struct {
@@ -34,8 +32,7 @@ func NewGrups(data []byte) (Grups, error) {
 	grups := Grups{}
 	err := yaml.Unmarshal(data, &grups)
 	if err != nil {
-		err = fmt.Errorf("unmarshalling groups: %s", err)
-		return nil, err
+		return grups, fmt.Errorf("unmarshalling groups: %s", err)
 	}
 	return grups, nil
 }

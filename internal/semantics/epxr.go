@@ -10,12 +10,14 @@ import (
 	"golang.org/x/exp/maps"
 )
 
-type Expr [3]exprPart
+type Exprs map[Expr]bool
+type Expr [3]ExprPart
 type ExprPart struct {
 	S         string
 	Is_quoted bool
 }
 type Part int
+
 const (
 	Database Part = iota
 	Schema
@@ -29,56 +31,65 @@ func CreateRegexpIdentifier(s string) *regexp.Regexp {
 	return regexp.MustCompile(s)
 }
 
-func (e exprPart) MatchAll() bool {
-	return !e.is_quoted && e.s == "*"
+func (e ExprPart) MatchAll() bool {
+	return !e.Is_quoted && e.S == "*"
 }
 
 var validUnquotedExpr *regexp.Regexp = regexp.MustCompile(`^[a-z_][a-z0-9_$]{0,254}\*?$`) // lowercase identifier chars + optional wildcard suffix
 var validQuotedExpr *regexp.Regexp = regexp.MustCompile(`.{0,255}`)
 
-func (lhs expr) subsetOf(rhs expr) bool {
-	// return true if rhs can match at least all objects that lhs can match
-	if !lhs[_database].subsetOf(rhs[_database]) {
-		return false
+func (lhs Expr) subsetOfExprs(rhs Exprs) bool {
+	for r, _ := range rhs {
+		if lhs.subsetOf(r) {
+			return true
+		}
 	}
-	if !lhs[_schema].subsetOf(rhs[_schema]) {
-		return false
-	}
-	return lhs[_table].subsetOf(rhs[_table])
+	return false
 }
 
-func (lhs exprPart) subsetOf(rhs exprPart) bool {
+func (lhs Expr) subsetOf(rhs Expr) bool {
 	// return true if rhs can match at least all objects that lhs can match
-	if lhs.is_quoted && rhs.is_quoted {
-		return lhs.s == rhs.s // also return true if improper subset
+	if !lhs[Database].subsetOf(rhs[Database]) {
+		return false
 	}
-	if !lhs.is_quoted && rhs.is_quoted {
+	if !lhs[Schema].subsetOf(rhs[Schema]) {
+		return false
+	}
+	return lhs[Table].subsetOf(rhs[Table])
+}
+
+func (lhs ExprPart) subsetOf(rhs ExprPart) bool {
+	// return true if rhs can match at least all objects that lhs can match
+	if lhs.Is_quoted && rhs.Is_quoted {
+		return lhs.S == rhs.S // also return true if improper subset
+	}
+	if !lhs.Is_quoted && rhs.Is_quoted {
 		return false // unqoted will always match more objects than quoted
 	}
-	if lhs.is_quoted && !rhs.is_quoted {
-		re := CreateRegexpIdentifier(rhs.s)
-		return re.MatchString(lhs.s)
+	if lhs.Is_quoted && !rhs.Is_quoted {
+		re := CreateRegexpIdentifier(rhs.S)
+		return re.MatchString(lhs.S)
 	}
-	// !lhs.isquoted && !rhs.is_quoted
-	if lhs.s == rhs.s {
+	// !lhs.Isquoted && !rhs.Is_quoted
+	if lhs.S == rhs.S {
 		return true
 	}
-	if !strings.ContainsRune(lhs.s, '*') && !strings.ContainsRune(rhs.s, '*') {
+	if !strings.ContainsRune(lhs.S, '*') && !strings.ContainsRune(rhs.S, '*') {
 		return false
 	}
 	// strings are not equal and at least one of them contains a wildcard suffix
-	if !strings.ContainsRune(rhs.s, '*') {
+	if !strings.ContainsRune(rhs.S, '*') {
 		return false
 	}
 	// rhs.s contains a wildcard suffix; lhs.s may or may not contain one
-	if !strings.ContainsRune(lhs.s, '*') {
-		if len(lhs.s) < len(rhs.s)-1 {
+	if !strings.ContainsRune(lhs.S, '*') {
+		if len(lhs.S) < len(rhs.S)-1 {
 			return false
 		}
-		return lhs.s[0:len(rhs.s)-1] == rhs.s[0:len(rhs.s)-1]
+		return lhs.S[0:len(rhs.S)-1] == rhs.S[0:len(rhs.S)-1]
 	}
 	// both lhs.s and rhs.s contain a wildcard suffix
-	return strings.HasPrefix(lhs.s[0:len(lhs.s)-1], rhs.s[0:len(rhs.s)-1])
+	return strings.HasPrefix(lhs.S[0:len(lhs.S)-1], rhs.S[0:len(rhs.S)-1])
 	// TODO implement tests, e.g.:
 	// abc	abc*	subset
 	// abc	ab*	subset
@@ -90,7 +101,7 @@ func (lhs exprPart) subsetOf(rhs exprPart) bool {
 	// *	a*	!subset
 }
 
-func (m map[expr]bool) allDisjoint() bool {
+func (m Exprs) allDisjoint() bool {
 	keys := maps.Keys(m)
 	if len(keys) < 2 {
 		return true
@@ -105,14 +116,14 @@ func (m map[expr]bool) allDisjoint() bool {
 	return true
 }
 
-func (lhs expr) disjoint(rhs expr) bool {
-	if lhs[_database].disjoint(rhs[_database]) {
+func (lhs Expr) disjoint(rhs Expr) bool {
+	if lhs[Database].disjoint(rhs[Database]) {
 		return true
 	}
-	if lhs[_schema].disjoint(rhs[_schema]) {
+	if lhs[Schema].disjoint(rhs[Schema]) {
 		return true
 	}
-	return lhs[_table].disjoint(rhs[_table])
+	return lhs[Table].disjoint(rhs[Table])
 	// TODO implement tests
 	// *.*.*	whatever	!disjoint
 	// a.*.*	b.*.*		disjoint
@@ -121,15 +132,15 @@ func (lhs expr) disjoint(rhs expr) bool {
 	// ...
 }
 
-func (lhs exprPart) disjoint(rhs exprPart) bool {
+func (lhs ExprPart) disjoint(rhs ExprPart) bool {
 	// return true if no object can be matched by both lhs and rhs
 	return !lhs.subsetOf(rhs) && !rhs.subsetOf(lhs)
 	// we can't have an intersection with both sets also still having
 	// a non empty complement cause we only allow a suffix wildcard
 }
 
-func parseObjExpr(s string) (expr, error) {
-	var empty expr // for return statements that have an error
+func parseObjExpr(s string) (Expr, error) {
+	var empty Expr // for return statements that have an error
 	if strings.ContainsRune(s, '\n') {
 		return empty, fmt.Errorf("object expression has newline")
 	}
@@ -142,10 +153,10 @@ func parseObjExpr(s string) (expr, error) {
 	if len(record) != 3 {
 		return empty, fmt.Errorf("object expression does not have three parts")
 	}
-	var expr expr
+	var expr Expr
 	// figure out which parts were quoted, if any
 	for i, substr := range record {
-		expr[i].s = substr
+		expr[i].S = substr
 		_, start := r.FieldPos(i)
 		start = start - 1 // FieldPos columns start numbering from 1
 		if s[start] == '"' {
@@ -154,7 +165,7 @@ func parseObjExpr(s string) (expr, error) {
 			if end == len(s) || s[end] != '"' {
 				panic("did not find quote at end of parsed quoted CSV field")
 			}
-			expr[i].is_quoted = true
+			expr[i].Is_quoted = true
 		} else {
 			// this is an unquoted field
 			end := start + len(substr)
@@ -165,10 +176,10 @@ func parseObjExpr(s string) (expr, error) {
 	}
 	// validate identifier expressions
 	for _, exprPart := range expr {
-		if !exprPart.is_quoted && !validUnquotedExpr.MatchString(exprPart.s) {
+		if !exprPart.Is_quoted && !validUnquotedExpr.MatchString(exprPart.S) {
 			return empty, fmt.Errorf("not a valid unquoted identifier matching expression")
 		}
-		if exprPart.is_quoted && !validQuotedExpr.MatchString(exprPart.s) {
+		if exprPart.Is_quoted && !validQuotedExpr.MatchString(exprPart.S) {
 			return empty, fmt.Errorf("not a valid quoted identifier matching expression")
 		}
 	}

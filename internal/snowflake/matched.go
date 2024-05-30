@@ -16,7 +16,7 @@ func newMatched(m semantics.Matcher, c *accountCache) Matched {
 		r.include = r.include.add(match(e, c))
 	}
 	for e, _ := range m.Exclude {
-		r.exclude = r.Exclude.add(match(e, c))
+		r.exclude = r.exclude.add(match(e, c))
 	}
 	r.Objects = r.include.subtract(r.exclude)
 	return r

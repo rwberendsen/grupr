@@ -7,12 +7,12 @@ import (
 )
 
 type Matcher struct {
-	Include map[Expr]bool
-	Exclude map[Expr]bool
+	Include Exprs
+	Exclude Exprs
 }
 
 func newMatcher(include []string, exclude []string) (Matcher, error) {
-	m := Matcher{map[Expr]bool{}, map[Expr]bool{}}
+	m := Matcher{Exprs{}, Exprs{}}
 	for _, objExpr := range include {
 		parsed, err := parseObjExpr(objExpr)
 		if err != nil {
@@ -43,7 +43,7 @@ func newMatcher(include []string, exclude []string) (Matcher, error) {
 	for i, _ := range m.Exclude {
 		hasStrictSuperset := false
 		for j, _ := range m.Include {
-			if i.subsetOf(j) && !j.isSubsetOf(i) {
+			if i.subsetOf(j) && !j.subsetOf(i) {
 				hasStrictSuperset = true
 			}
 		}
@@ -55,5 +55,18 @@ func newMatcher(include []string, exclude []string) (Matcher, error) {
 }
 
 func (lhs Matcher) equals(rhs Matcher) bool {
-	return maps.Equals(lhs.Include, rhs.Include) && maps.Equals(lhs.Exclude, rhs.Exclude)
+	return maps.Equal(lhs.Include, rhs.Include) && maps.Equal(lhs.Exclude, rhs.Exclude)
+}
+
+func (lhs Matcher) disjoint(rhs Matcher) bool {
+	for l, _ := range lhs.Include {
+		for r, _ := range rhs.Include {
+			if !l.disjoint(r) {
+				if !l.subsetOfExprs(rhs.Exclude) && !r.subsetOfExprs(lhs.Exclude) {
+					return false
+				}
+			}
+		}
+	}
+	return true
 }

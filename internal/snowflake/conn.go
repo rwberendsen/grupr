@@ -2,17 +2,10 @@ package snowflake
 
 import (
 	"database/sql"
-	"encoding/csv"
-	"fmt"
-	"io"
 	"log"
 	"os"
-	"regexp"
-	"strings"
 
 	_ "github.com/snowflakedb/gosnowflake"
-	"golang.org/x/exp/maps"
-	"github.com/rwberendsen/grupr/internal/semantics"
 )
 
 var db *sql.DB
@@ -36,6 +29,3 @@ func init() {
 		log.Fatalf("open db: %s", err)
 	}
 }
-
-
-

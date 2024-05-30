@@ -2,19 +2,20 @@ package semantics
 
 import (
 	"fmt"
+
+	"github.com/rwberendsen/grupr/internal/syntax"
 )
 
 type Interface struct {
-	Matcher matcher
+	Matcher Matcher
 }
 
-func (i Interface) validate() error {
+func newInterface(i syntax.Interface) (Interface, error) {
 	if m, err := newMatcher(i.Objects, i.ObjectsExclude); err != nil {
-		return fmt.Errorf("invalid object matching expressions: %s", err)
+		return Interface{}, fmt.Errorf("invalid object matching expressions: %s", err)
 	} else {
-		i.Matcher = m
+		return Interface{m}, nil
 	}
-	return nil
 }
 
 func (i Interface) equals(j Interface) bool {

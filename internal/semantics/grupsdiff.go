@@ -11,15 +11,15 @@ func NewGrupsDiff(old Grups, new Grups) GrupsDiff {
 	for k_old, v_old := range old.Products {
 		v_new, ok := new.Products[k_old]
 		if !ok {
-			diff.deleted[k_old] = v_old
+			diff.Deleted[k_old] = v_old
 		} else if equal := v_old.equals(v_new); !equal {
-			diff.updated[k_old] = ProductDiff{v_old, v_new}
+			diff.Updated[k_old] = ProductDiff{v_old, v_new}
 		}
 	}
 	for k_new, v_new := range new.Products {
 		_, ok := old.Products[k_new]
 		if !ok {
-			diff.created[k_new] = v_new
+			diff.Created[k_new] = v_new
 		}
 	}
 	return diff

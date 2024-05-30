@@ -8,9 +8,8 @@ import (
 	"os"
 	"text/template"
 
-	"github.com/rwberendsen/grupr/internal/syntax"
 	"github.com/rwberendsen/grupr/internal/semantics"
-	"github.com/rwberendsen/grupr/internal/snowflake"
+	"github.com/rwberendsen/grupr/internal/syntax"
 )
 
 func getEnv(key string) (string, error) {
@@ -22,7 +21,7 @@ func getEnv(key string) (string, error) {
 }
 
 func getGrupsFromPath(path string) (semantics.Grups, error) {
-	r = semantics.Grups{}
+	r := semantics.Grups{}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return r, fmt.Errorf("reading file: %s", err)
@@ -60,7 +59,7 @@ func main() {
 	}
 	fmt.Printf("--- newGrups:\n%v\n\n", newGrups)
 
-	var oldGrups *Grups
+	var oldGrups semantics.Grups
 	if *oldFlag != "" {
 		oldGrups, err = getGrupsFromPath(*oldFlag)
 		if err != nil {
@@ -76,5 +75,5 @@ func main() {
 	// e.g., first created.
 	// we can get all tables / views from snowflake, and start
 	// expanding the object (exclude) expressions to sets of matching tables.
-	snowflakeGrupsDiff := snowlfake.NewGrupsDiff(grupsDiff)
+	//snowflakeGrupsDiff := snowflake.NewGrupsDiff(grupsDiff)
 }

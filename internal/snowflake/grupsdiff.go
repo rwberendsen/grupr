@@ -11,7 +11,7 @@ type GrupsDiff struct {
 }
 
 func NewGrupsDiff(g semantics.GrupsDiff) GrupsDiff {
-	r := GrupsDiff{map[string]Product{}, map[string]Product{}, map[string]ProductDiff{}}
+	r := GrupsDiff{map[string]Product{}, map[string]bool{}, map[string]ProductDiff{}}
 	// walk over g, and enrich:
 	// - created products and their interfaces with the exprs they consist of
 	// - for updated products, both the old and new versions with the objects they consist of

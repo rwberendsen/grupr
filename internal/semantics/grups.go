@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"regexp"
 
-	"golang.org/x/exp/maps"
 	"github.com/rwberendsen/grupr/internal/syntax"
+	"golang.org/x/exp/maps"
 )
 
 var validId *regexp.Regexp = regexp.MustCompile(`^[a-z_][a-z0-9_]*$`)
@@ -14,14 +14,14 @@ type Grups struct {
 	Products map[string]Product
 }
 
-func NewGrups(g syntax.Grups) (Grups, err) {
+func NewGrups(g syntax.Grups) (Grups, error) {
 	r := Grups{map[string]Product{}}
 	for k, v := range g.Products {
 		if !validId.MatchString(k) {
 			return r, fmt.Errorf("invalid product id: %s", k)
 		}
 		if p, err := newProduct(v); err != nil {
-			return r, fmt.Errorf("invalid product '%s': %s", k, err) 
+			return r, fmt.Errorf("invalid product '%s': %s", k, err)
 		} else {
 			r.Products[k] = p
 		}
@@ -31,12 +31,13 @@ func NewGrups(g syntax.Grups) (Grups, err) {
 	}
 	if err := r.allDisjoint(); err != nil {
 		return r, err
+	}
 	return r, nil
 }
 
 func (g Grups) allConsumedOk() error {
 	for pid, p := range g.Products {
-		for pi, _ := range p.consumes {
+		for pi, _ := range p.Consumes {
 			if pi.Product == pid {
 				return fmt.Errorf("consuming interface '%s' from own product '%s'", pi.Interface, pi.Product)
 			}
@@ -64,4 +65,3 @@ func (g Grups) allDisjoint() error {
 	}
 	return nil
 }
-
