@@ -8,7 +8,7 @@ import (
 	"golang.org/x/exp/maps"
 )
 
-var validId *regexp.Regexp = regexp.MustCompile(`^[a-z_][a-z0-9_]*$`)
+var validId *regexp.Regexp = regexp.MustCompile(`^[a-z0-9_]+$`)
 
 type Grups struct {
 	Products map[string]Product

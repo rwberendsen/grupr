@@ -12,6 +12,7 @@ type Grups struct {
 
 type Product struct {
 	DTAPs          []string             `yaml:",flow,omitempty"`
+	UserGroups     []string             `yaml:",flow,omitempty"`
 	Objects        []string             `yaml:",omitempty"`
 	ObjectsExclude []string             `yaml:"objects_exclude,omitempty"`
 	Interfaces     map[string]Interface `yaml:",omitempty"`

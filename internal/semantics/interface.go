@@ -10,8 +10,8 @@ type Interface struct {
 	Matcher Matcher
 }
 
-func newInterface(i syntax.Interface) (Interface, error) {
-	if m, err := newMatcher(i.Objects, i.ObjectsExclude); err != nil {
+func newInterface(i syntax.Interface, DTAPs map[string]bool, UserGroups map[string]bool) (Interface, error) {
+	if m, err := newMatcher(i.Objects, i.ObjectsExclude, DTAPs, UserGroups); err != nil {
 		return Interface{}, fmt.Errorf("invalid object matching expressions: %s", err)
 	} else {
 		return Interface{m}, nil

@@ -2,13 +2,17 @@ package semantics
 
 import (
 	"fmt"
+	"regexp"
 
 	"github.com/rwberendsen/grupr/internal/syntax"
 	"golang.org/x/exp/maps"
 )
 
+var validTemplate *regexp.Regexp = regexp.MustCompile(`^[A-Za-z0-9_]+$`) // empty DTAP string or UserGroup string not supported
+
 type Product struct {
 	DTAPs      map[string]bool
+	UserGroups map[string]bool
 	Matcher    Matcher
 	Interfaces map[string]Interface
 	Consumes   map[syntax.ProductInterface]bool
@@ -37,11 +41,12 @@ func (lhs Product) disjoint(rhs Product) bool {
 func newProduct(p syntax.Product) (Product, error) {
 	r := Product{
 		DTAPs:      map[string]bool{},
+		UserGroups: map[string]bool{},
 		Interfaces: map[string]Interface{},
 		Consumes:   map[syntax.ProductInterface]bool{},
 	}
 	for _, i := range p.DTAPs {
-		if !validId.MatchString(i) {
+		if !validTemplate.MatchString(i) {
 			return r, fmt.Errorf("invalid dtap")
 		}
 		if _, ok := r.DTAPs[i]; ok {
@@ -49,7 +54,15 @@ func newProduct(p syntax.Product) (Product, error) {
 		}
 		r.DTAPs[i] = true
 	}
-	if m, err := newMatcher(p.Objects, p.ObjectsExclude); err != nil {
+	for _, i := range p.UserGroups {
+		if !validTemplate.MatchString(i) {
+			return r, fmt.Errorf("invalid user group")
+		}
+		if _, ok := r.UserGroups[i]; ok {
+			return r, fmt.Errorf("duplicate user group")
+		}
+	}
+	if m, err := newMatcher(p.Objects, p.ObjectsExclude, r.DTAPs, r.UserGroups); err != nil {
 		return r, fmt.Errorf("invalid object matching expressions: %s", err)
 	} else {
 		r.Matcher = m
@@ -58,7 +71,7 @@ func newProduct(p syntax.Product) (Product, error) {
 		if !validId.MatchString(k) {
 			return r, fmt.Errorf("invalid interface id: '%s'", k)
 		}
-		if i, err := newInterface(v); err != nil {
+		if i, err := newInterface(v, r.DTAPs, r.UserGroups); err != nil {
 			return r, fmt.Errorf("invalid interface '%s': %s", k, err)
 		} else {
 			r.Interfaces[k] = i

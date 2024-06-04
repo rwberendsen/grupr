@@ -5,20 +5,17 @@ import (
 )
 
 type Matched struct {
-	Objects accountObjs
-	include accountObjs
-	exclude accountObjs
+	objects map[semantics.Expr]accountObjs
 }
 
 func newMatched(m semantics.Matcher, c *accountCache) Matched {
 	r := Matched{}
-	for e, _ := range m.Include {
-		r.include = r.include.add(match(e, c))
+	for k := range m.Include {
+		r.objects[k] = match(k, c)
 	}
-	for e, _ := range m.Exclude {
-		r.exclude = r.exclude.add(match(e, c))
+	for k := range m.Exclude {
+		r.objects[m.Superset[k]] = r.objects[m.Superset[k]].subtract(match(k, c))
 	}
-	r.Objects = r.include.subtract(r.exclude)
 	return r
 }
 
