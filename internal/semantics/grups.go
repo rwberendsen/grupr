@@ -6,6 +6,7 @@ import (
 
 	"github.com/rwberendsen/grupr/internal/syntax"
 	"golang.org/x/exp/maps"
+	"gopkg.in/yaml.v3"
 )
 
 var validId *regexp.Regexp = regexp.MustCompile(`^[a-z0-9_]+$`)
@@ -64,4 +65,12 @@ func (g Grups) allDisjoint() error {
 		}
 	}
 	return nil
+}
+
+func (grups Grups) String() string {
+	data, err := yaml.Marshal(grups)
+	if err != nil {
+		panic("grups could not be marshalled")
+	}
+	return string(data)
 }

@@ -11,11 +11,11 @@ import (
 var validTemplate *regexp.Regexp = regexp.MustCompile(`^[A-Za-z0-9_]+$`) // empty DTAP string or UserGroup string not supported
 
 type Product struct {
-	DTAPs      map[string]bool
-	UserGroups map[string]bool
+	DTAPs      map[string]bool `yaml:"dtaps,flow,omitempty"`
+	UserGroups map[string]bool `yaml:"user_groups,flow,omitempty"`
 	Matcher    Matcher
-	Interfaces map[string]Interface
-	Consumes   map[syntax.ProductInterface]bool
+	Interfaces map[string]Interface             `yaml:",omitempty"`
+	Consumes   map[syntax.ProductInterface]bool `yaml:",omitempty"`
 }
 
 func (lhs Product) disjoint(rhs Product) bool {

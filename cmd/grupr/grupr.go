@@ -40,7 +40,7 @@ func getGrupsFromPath(path string) (semantics.Grups, error) {
 	}
 	r, err = semantics.NewGrups(grups)
 	if err != nil {
-		return r, fmt.Errorf("semantic errog: %s", err)
+		return r, fmt.Errorf("semantic error: %s", err)
 	}
 	return r, nil
 }

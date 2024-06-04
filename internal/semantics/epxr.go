@@ -13,8 +13,8 @@ import (
 type Exprs map[Expr]ExprAttr
 type Expr [3]ExprPart
 type ExprAttr struct {
-	DTAP      string
-	UserGroup string
+	DTAP      string `yaml:"dtap,omitempty"`
+	UserGroup string `yaml:"dtap,omitempty`
 }
 type Part int
 
@@ -171,7 +171,6 @@ func newExpr(s string) (Expr, error) {
 	if len(record) != 3 {
 		return r, fmt.Errorf("object expression does not have three parts")
 	}
-	var expr Expr
 	// figure out which parts were quoted, if any
 	for i, substr := range record {
 		_, start := reader.FieldPos(i)
@@ -182,19 +181,19 @@ func newExpr(s string) (Expr, error) {
 			if end == len(s) || s[end] != '"' {
 				panic("did not find quote at end of parsed quoted CSV field")
 			}
-			expr[i].Is_quoted = true
-			expr[i].S = substr
+			r[i].Is_quoted = true
+			r[i].S = substr
 		} else {
 			// this is an unquoted field
 			end := start + len(substr)
 			if end != len(s) && s[end] != '.' {
 				panic("unquoted field not ending with end of line or period")
 			}
-			expr[i].S = strings.ToLower(substr) // unquoted identifiers match in a case insensitive way
+			r[i].S = strings.ToLower(substr) // unquoted identifiers match in a case insensitive way
 		}
 	}
 	// validate identifier expressions
-	for _, exprPart := range expr {
+	for _, exprPart := range r {
 		if !validateExprPart(exprPart) {
 			return r, fmt.Errorf("invalid expr part: %s", exprPart.S)
 		}

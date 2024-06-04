@@ -11,8 +11,8 @@ type Grups struct {
 }
 
 type Product struct {
-	DTAPs          []string             `yaml:",flow,omitempty"`
-	UserGroups     []string             `yaml:",flow,omitempty"`
+	DTAPs          []string             `yaml:"dtaps,flow,omitempty"`
+	UserGroups     []string             `yaml:"user_groups,flow,omitempty"`
 	Objects        []string             `yaml:",omitempty"`
 	ObjectsExclude []string             `yaml:"objects_exclude,omitempty"`
 	Interfaces     map[string]Interface `yaml:",omitempty"`
@@ -38,7 +38,7 @@ func NewGrups(data []byte) (Grups, error) {
 	return grups, nil
 }
 
-func (grups *Grups) String() string {
+func (grups Grups) String() string {
 	data, err := yaml.Marshal(grups)
 	if err != nil {
 		panic("grups could not be marshalled")

@@ -1,9 +1,11 @@
 package semantics
 
+import "gopkg.in/yaml.v3"
+
 type GrupsDiff struct {
-	Created map[string]Product
-	Deleted map[string]Product
-	Updated map[string]ProductDiff
+	Created map[string]Product     `yaml:",omitempty"`
+	Deleted map[string]Product     `yaml:",omitempty"`
+	Updated map[string]ProductDiff `yaml:",omitempty"`
 }
 
 func NewGrupsDiff(old Grups, new Grups) GrupsDiff {
@@ -28,4 +30,12 @@ func NewGrupsDiff(old Grups, new Grups) GrupsDiff {
 type ProductDiff struct {
 	Old Product
 	New Product
+}
+
+func (g GrupsDiff) String() string {
+	data, err := yaml.Marshal(g)
+	if err != nil {
+		panic("grups could not be marshalled")
+	}
+	return string(data)
 }

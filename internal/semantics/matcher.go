@@ -8,8 +8,8 @@ import (
 
 type Matcher struct {
 	Include  Exprs
-	Exclude  Exprs
-	Superset map[Expr]Expr
+	Exclude  Exprs         `yaml:",omitempty"`
+	Superset map[Expr]Expr `yaml:",omitempty"`
 }
 
 func newMatcher(include []string, exclude []string, DTAPs map[string]bool, UserGroups map[string]bool) (Matcher, error) {
@@ -21,7 +21,7 @@ func newMatcher(include []string, exclude []string, DTAPs map[string]bool, UserG
 		}
 		for e, ea := range exprs {
 			if _, ok := m.Include[e]; ok {
-				return m, fmt.Errorf("duplicate include expr")
+				return m, fmt.Errorf("duplicate include expr: '%s', with attributes: '%s'", e, ea)
 			}
 			m.Include[e] = ea
 		}
