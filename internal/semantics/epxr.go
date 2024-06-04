@@ -14,7 +14,7 @@ type Exprs map[Expr]ExprAttr
 type Expr [3]ExprPart
 type ExprAttr struct {
 	DTAP      string `yaml:"dtap,omitempty"`
-	UserGroup string `yaml:"dtap,omitempty`
+	UserGroup string `yaml:"user_group,omitempty"`
 }
 type Part int
 
@@ -45,7 +45,7 @@ func (e ExprPart) MatchAll() bool {
 	return !e.Is_quoted && e.S == "*"
 }
 
-var validUnquotedExpr *regexp.Regexp = regexp.MustCompile(`^[a-z_{][a-z0-9_${},]{0,254}[*]?$`) // identifier chars + optional wildcard suffix
+var validUnquotedExpr *regexp.Regexp = regexp.MustCompile(`^[a-z_][a-z0-9_$]{0,254}[*]?$`) // identifier chars + optional wildcard suffix
 var validOrOperandChar *regexp.Regexp = regexp.MustCompile(`^[a-z0-9_$]$`)
 var validQuotedExpr *regexp.Regexp = regexp.MustCompile(`.{0,255}`)
 

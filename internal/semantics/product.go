@@ -61,6 +61,7 @@ func newProduct(p syntax.Product) (Product, error) {
 		if _, ok := r.UserGroups[i]; ok {
 			return r, fmt.Errorf("duplicate user group")
 		}
+		r.UserGroups[i] = true
 	}
 	if m, err := newMatcher(p.Objects, p.ObjectsExclude, r.DTAPs, r.UserGroups); err != nil {
 		return r, fmt.Errorf("invalid object matching expressions: %s", err)
