@@ -210,28 +210,31 @@ func newExprs(s string, DTAPs map[string]bool, UserGroups map[string]bool) (Expr
 	if strings.ContainsRune(s, '\n') {
 		return exprs, fmt.Errorf("object expression has newline")
 	}
-	l := map[string]ExprAttr{}
+	dtapExpanded := map[string]ExprAttr{}
 	if strings.Contains(s, DTAPTemplate) {
 		if len(DTAPs) == 0 {
 			return exprs, fmt.Errorf("expanding dtaps in '%s': no dtaps found", s)
 		}
 		for d := range DTAPs {
-			dtap_expanded := strings.ReplaceAll(s, DTAPTemplate, d)
-			if strings.Contains(dtap_expanded, UserGroupTemplate) {
-				if len(UserGroups) == 0 {
-					fmt.Errorf("expanding user groups in '%s': no user groups found")
-				}
-				for u := range UserGroups {
-					l[strings.ReplaceAll(dtap_expanded, UserGroupTemplate, u)] = ExprAttr{d, u}
-				}
-			} else {
-				l[dtap_expanded] = ExprAttr{d, ""}
-			}
+			dtapExpanded[strings.ReplaceAll(s, DTAPTemplate, d)] = ExprAttr{d, ""}
 		}
 	} else {
-		l[s] = ExprAttr{"", ""}
+		dtapExpanded[s] = ExprAttr{"", ""}
 	}
-	for k, v := range l {
+	userGroupExpanded := map[string]ExprAttr{}
+	for k, v := range dtapExpanded {
+		if strings.Contains(k, UserGroupTemplate) {
+			if len(UserGroups) == 0 {
+				return exprs, fmt.Errorf("expanding user groups in '%s': no user groups found", k)
+			}
+			for u := range UserGroups {
+				userGroupExpanded[strings.ReplaceAll(k, UserGroupTemplate, u)] = ExprAttr{v.DTAP, u}
+			}
+		} else {
+			userGroupExpanded[k] = ExprAttr{v.DTAP, ""}
+		}
+	}
+	for k, v := range userGroupExpanded {
 		expr, err := newExpr(k)
 		if err != nil {
 			return exprs, err
