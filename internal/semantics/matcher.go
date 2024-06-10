@@ -21,7 +21,7 @@ func newMatcher(include []string, exclude []string, DTAPs map[string]bool, UserG
 		}
 		for e, ea := range exprs {
 			if _, ok := m.Include[e]; ok {
-				return m, fmt.Errorf("duplicate include expr: '%s', with attributes: '%s'", e, ea)
+				return m, fmt.Errorf("duplicate include expr: '%v', with attributes: '%v'", e, ea)
 			}
 			m.Include[e] = ea
 		}
@@ -65,8 +65,8 @@ func (lhs Matcher) equals(rhs Matcher) bool {
 }
 
 func (lhs Matcher) disjoint(rhs Matcher) bool {
-	for l, _ := range lhs.Include {
-		for r, _ := range rhs.Include {
+	for l := range lhs.Include {
+		for r := range rhs.Include {
 			if !l.disjoint(r) {
 				if !l.subsetOfExprs(rhs.Exclude) && !r.subsetOfExprs(lhs.Exclude) {
 					return false

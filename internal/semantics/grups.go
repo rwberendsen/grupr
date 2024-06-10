@@ -38,7 +38,7 @@ func NewGrups(g syntax.Grups) (Grups, error) {
 
 func (g Grups) allConsumedOk() error {
 	for pid, p := range g.Products {
-		for pi, _ := range p.Consumes {
+		for pi := range p.Consumes {
 			if pi.Product == pid {
 				return fmt.Errorf("consuming interface '%s' from own product '%s'", pi.Interface, pi.Product)
 			}

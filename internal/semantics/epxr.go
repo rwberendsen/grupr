@@ -46,7 +46,6 @@ func (e ExprPart) MatchAll() bool {
 }
 
 var validUnquotedExpr *regexp.Regexp = regexp.MustCompile(`^[a-z_][a-z0-9_$]{0,254}[*]?$`) // identifier chars + optional wildcard suffix
-var validOrOperandChar *regexp.Regexp = regexp.MustCompile(`^[a-z0-9_$]$`)
 var validQuotedExpr *regexp.Regexp = regexp.MustCompile(`.{0,255}`)
 
 func (lhs Expr) subsetOfExprs(rhs Exprs) bool {

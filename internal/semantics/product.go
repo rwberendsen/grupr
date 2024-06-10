@@ -104,7 +104,7 @@ func (p Product) equals(o Product) bool {
 			return false
 		}
 	}
-	for k_o, _ := range o.Interfaces {
+	for k_o := range o.Interfaces {
 		_, ok := p.Interfaces[k_o]
 		if !ok {
 			return false
