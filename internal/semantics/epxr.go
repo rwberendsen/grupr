@@ -204,7 +204,7 @@ func newExpr(s string) (Expr, error) {
 	return r, nil
 }
 
-func newExprs(s string, DTAPs map[string]bool, UserGroups map[string]bool) (Exprs, error) {
+func newExprs(s string, DTAPs map[string]KindOfData, UserGroups map[string]bool) (Exprs, error) {
 	exprs := Exprs{}
 	if strings.ContainsRune(s, '\n') {
 		return exprs, fmt.Errorf("object expression has newline")

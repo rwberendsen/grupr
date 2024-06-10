@@ -10,9 +10,24 @@ import (
 
 var validTemplate *regexp.Regexp = regexp.MustCompile(`^[A-Za-z0-9_]+$`) // empty DTAP string or UserGroup string not supported
 
+type KindOfData int
+
+const (
+	Real KindOfData = iota
+	Fake
+	Pseudo
+)
+
+var kindsOfData map[string]KindOfData = map[string]KindOfData{"real": Real, "fake": Fake, "pseudo": Pseudo}
+
+func (k KindOfData) String() string {
+	printKindOfData := map[KindOfData]string{Real: "real", Fake: "fake", Pseudo: "pseudo"}
+	return printKindOfData[k]
+}
+
 type Product struct {
-	DTAPs      map[string]bool `yaml:"dtaps,flow,omitempty"`
-	UserGroups map[string]bool `yaml:"user_groups,flow,omitempty"`
+	DTAPs      map[string]KindOfData `yaml:"dtaps,flow,omitempty"`
+	UserGroups map[string]bool       `yaml:"user_groups,flow,omitempty"`
 	Matcher    Matcher
 	Interfaces map[string]Interface             `yaml:",omitempty"`
 	Consumes   map[syntax.ProductInterface]bool `yaml:",omitempty"`
@@ -40,19 +55,19 @@ func (lhs Product) disjoint(rhs Product) bool {
 
 func newProduct(p syntax.Product) (Product, error) {
 	r := Product{
-		DTAPs:      map[string]bool{},
+		DTAPs:      map[string]KindOfData{},
 		UserGroups: map[string]bool{},
 		Interfaces: map[string]Interface{},
 		Consumes:   map[syntax.ProductInterface]bool{},
 	}
-	for _, i := range p.DTAPs {
-		if !validTemplate.MatchString(i) {
+	for k, v := range p.DTAPs {
+		if !validTemplate.MatchString(k) {
 			return r, fmt.Errorf("invalid dtap")
 		}
-		if _, ok := r.DTAPs[i]; ok {
-			return r, fmt.Errorf("duplicate dtap")
+		if _, ok := kindsOfData[v]; !ok {
+			return r, fmt.Errorf("invalid kind of data")
 		}
-		r.DTAPs[i] = true
+		r.DTAPs[k] = kindsOfData[v]
 	}
 	for _, i := range p.UserGroups {
 		if !validTemplate.MatchString(i) {

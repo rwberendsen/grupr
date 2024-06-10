@@ -12,7 +12,7 @@ type Matcher struct {
 	Superset map[Expr]Expr `yaml:",omitempty"`
 }
 
-func newMatcher(include []string, exclude []string, DTAPs map[string]bool, UserGroups map[string]bool) (Matcher, error) {
+func newMatcher(include []string, exclude []string, DTAPs map[string]KindOfData, UserGroups map[string]bool) (Matcher, error) {
 	m := Matcher{Exprs{}, Exprs{}, map[Expr]Expr{}}
 	for _, objExpr := range include {
 		exprs, err := newExprs(objExpr, DTAPs, UserGroups)
