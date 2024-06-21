@@ -9,6 +9,7 @@ import (
 	"text/template"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
+	"github.com/rwberendsen/grupr/internal/snowflake"
 	"github.com/rwberendsen/grupr/internal/syntax"
 )
 
@@ -75,5 +76,6 @@ func main() {
 	// e.g., first created.
 	// we can get all tables / views from snowflake, and start
 	// expanding the object (exclude) expressions to sets of matching tables.
-	//snowflakeGrupsDiff := snowflake.NewGrupsDiff(grupsDiff)
+	snowflakeGrupsDiff := snowflake.NewGrupsDiff(grupsDiff)
+	fmt.Printf("%v", snowflakeGrupsDiff)
 }

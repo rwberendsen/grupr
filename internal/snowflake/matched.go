@@ -9,7 +9,7 @@ type Matched struct {
 }
 
 func newMatched(m semantics.Matcher, c *accountCache) Matched {
-	r := Matched{}
+	r := Matched{map[semantics.Expr]accountObjs{}}
 	for k := range m.Include {
 		r.objects[k] = match(k, c)
 	}
