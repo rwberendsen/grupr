@@ -5,30 +5,51 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"log"
+	"net/http"
 
 	"github.com/rwberendsen/grupr/internal/runtime"
 
-	_ "github.com/snowflakedb/gosnowflake"
+	"github.com/snowflakedb/gosnowflake"
 )
 
 var db *sql.DB
+
+type loggingTransport struct{}
+
+func (t *loggingTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	log.Printf("----REQUEST START:")
+	log.Printf("%v", r)
+	log.Printf("----REQUEST END:")
+	res, err := gosnowflake.SnowflakeTransport.RoundTrip(r)
+	log.Printf("----RESPONSE START:")
+	log.Printf("%v", res)
+	log.Printf("----RESPONSE END:")
+	return res, err
+}
 
 func init() {
 	user := runtime.GetEnvOrDie("SNOWFLAKE_USER")
 	account := runtime.GetEnvOrDie("SNOWFLAKE_ACCOUNT")
 	keyPath := runtime.GetEnvOrDie("SNOWFLAKE_ACCOUNT_RSA_KEY")
 	dbName := runtime.GetEnvOrDie("SNOWFLAKE_DB")
+	region := runtime.GetEnvOrDie("SNOWFLAKE_REGION")
 
 	rsaKey, err := getPrivateRSAKey(keyPath)
 	if err != nil {
 		log.Fatalf("getting rsa key: %v", err)
 	}
-	dsn := user + "@" + account + "/" + dbName
-	dsn = appendPrivateKeyString(dsn, rsaKey)
-	db, err = sql.Open("snowflake", dsn)
-	if err != nil {
-		log.Fatalf("open db: %s", err)
+	cnf := &gosnowflake.Config{
+		Account:       account,
+		User:          user,
+		Database:      dbName,
+		Region:        region,
+		Authenticator: gosnowflake.AuthTypeJwt,
+		PrivateKey:    rsaKey,
+		Tracing:       "trace",
+		Transporter:   &loggingTransport{},
 	}
+	connector := gosnowflake.NewConnector(gosnowflake.SnowflakeDriver{}, *cnf)
+	db = sql.OpenDB(connector)
 	rows, err := db.Query("SELECT CURRENT_USER()")
 	if err != nil {
 		log.Printf("please make sure public key is registered in Snowflake:")
