@@ -1,11 +1,13 @@
 package snowflake
 
 import (
+	"crypto/rsa"
 	"crypto/x509"
 	"database/sql"
 	"encoding/base64"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/rwberendsen/grupr/internal/runtime"
 
@@ -30,31 +32,46 @@ func (t *loggingTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 func init() {
 	user := runtime.GetEnvOrDie("SNOWFLAKE_USER")
 	account := runtime.GetEnvOrDie("SNOWFLAKE_ACCOUNT")
-	keyPath := runtime.GetEnvOrDie("SNOWFLAKE_ACCOUNT_RSA_KEY")
 	dbName := runtime.GetEnvOrDie("SNOWFLAKE_DB")
 	region := runtime.GetEnvOrDie("SNOWFLAKE_REGION")
 
-	rsaKey, err := getPrivateRSAKey(keyPath)
-	if err != nil {
-		log.Fatalf("getting rsa key: %v", err)
-	}
-	cnf := &gosnowflake.Config{
-		Account:       account,
-		User:          user,
-		Database:      dbName,
-		Region:        region,
-		Authenticator: gosnowflake.AuthTypeJwt,
-		PrivateKey:    rsaKey,
-		Tracing:       "trace",
-		Transporter:   &loggingTransport{},
+	var cnf *gosnowflake.Config
+	var rsaKey *rsa.PrivateKey
+	if keyPath, ok := os.LookupEnv("SNOWFLAKE_ACCOUNT_RSA_KEY"); !ok {
+		cnf = &gosnowflake.Config{
+			Account:       account,
+			User:          user,
+			Database:      dbName,
+			Region:        region,
+			Authenticator: gosnowflake.AuthTypeExternalBrowser,
+			Tracing:       "trace",
+			Transporter:   &loggingTransport{},
+		}
+	} else {
+		rsaKey, err := getPrivateRSAKey(keyPath)
+		if err != nil {
+			log.Fatalf("getting rsa key: %v", err)
+		}
+		cnf = &gosnowflake.Config{
+			Account:       account,
+			User:          user,
+			Database:      dbName,
+			Region:        region,
+			Authenticator: gosnowflake.AuthTypeJwt,
+			PrivateKey:    rsaKey,
+			Tracing:       "trace",
+			Transporter:   &loggingTransport{},
+		}
 	}
 	connector := gosnowflake.NewConnector(gosnowflake.SnowflakeDriver{}, *cnf)
 	db = sql.OpenDB(connector)
 	rows, err := db.Query("SELECT CURRENT_USER()")
 	if err != nil {
-		log.Printf("please make sure public key is registered in Snowflake:")
-		pubKeyByte, _ := x509.MarshalPKIXPublicKey(rsaKey.Public())
-		log.Printf(base64.StdEncoding.EncodeToString(pubKeyByte))
+		if rsaKey != nil {
+			log.Printf("please make sure public key is registered in Snowflake:")
+			pubKeyByte, _ := x509.MarshalPKIXPublicKey(rsaKey.Public())
+			log.Printf(base64.StdEncoding.EncodeToString(pubKeyByte))
+		}
 		log.Fatalf("Error querying: %v", err)
 	}
 	for rows.Next() {
