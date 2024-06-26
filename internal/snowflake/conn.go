@@ -33,7 +33,6 @@ func init() {
 	user := runtime.GetEnvOrDie("GRUPR_SNOWFLAKE_USER")
 	account := runtime.GetEnvOrDie("GRUPR_SNOWFLAKE_ACCOUNT")
 	dbName := runtime.GetEnvOrDie("GRUPR_SNOWFLAKE_DB")
-	region := runtime.GetEnvOrDie("GRUPR_SNOWFLAKE_REGION")
 	useSQLOpen := runtime.GetEnvOrDie("GRUPR_SNOWFLAKE_USE_SQL_OPEN")
 
 	// Not able to connect, whereas I was a while back;
@@ -53,7 +52,8 @@ func init() {
 
 	var rsaKey *rsa.PrivateKey
 	if useSQLOpen == "true" {
-		dsn := user + "@" + "account/" + dbName + "?authenticator=" + gosnowflake.AuthTypeExternalBrowser.String()
+		dsn := user + "@" + account + "/" + dbName + "?authenticator=" + gosnowflake.AuthTypeExternalBrowser.String()
+		log.Printf("dsn: %v", dsn)
 		var err error
 		db, err = sql.Open("snowflake", dsn)
 		if err != nil {
@@ -61,15 +61,15 @@ func init() {
 		}
 	} else {
 		var cnf *gosnowflake.Config
-		if keyPath, ok := os.LookupEnv("SNOWFLAKE_ACCOUNT_RSA_KEY"); !ok {
+		if keyPath, ok := os.LookupEnv("GRUPR_SNOWFLAKE_RSA_KEY_PATH"); !ok {
 			cnf = &gosnowflake.Config{
 				Account:       account,
 				User:          user,
 				Database:      dbName,
-				Region:        region,
 				Authenticator: gosnowflake.AuthTypeExternalBrowser,
-				InsecureMode:  true, // TODO, set to False after ruling out OCSP is causing issues
+				InsecureMode:  false,
 				Tracing:       "trace",
+				Params:        map[string]*string{},
 			}
 		} else {
 			rsaKey, err := getPrivateRSAKey(keyPath)
@@ -80,11 +80,11 @@ func init() {
 				Account:       account,
 				User:          user,
 				Database:      dbName,
-				Region:        region,
 				Authenticator: gosnowflake.AuthTypeJwt,
 				PrivateKey:    rsaKey,
 				Tracing:       "trace",
-				Transporter:   &loggingTransport{},
+				InsecureMode:  false,
+				Params:        map[string]*string{},
 			}
 		}
 		connector := gosnowflake.NewConnector(gosnowflake.SnowflakeDriver{}, *cnf)
