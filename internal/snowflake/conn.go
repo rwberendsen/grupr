@@ -30,41 +30,66 @@ func (t *loggingTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 }
 
 func init() {
-	user := runtime.GetEnvOrDie("SNOWFLAKE_USER")
-	account := runtime.GetEnvOrDie("SNOWFLAKE_ACCOUNT")
-	dbName := runtime.GetEnvOrDie("SNOWFLAKE_DB")
-	region := runtime.GetEnvOrDie("SNOWFLAKE_REGION")
+	user := runtime.GetEnvOrDie("GRUPR_SNOWFLAKE_USER")
+	account := runtime.GetEnvOrDie("GRUPR_SNOWFLAKE_ACCOUNT")
+	dbName := runtime.GetEnvOrDie("GRUPR_SNOWFLAKE_DB")
+	region := runtime.GetEnvOrDie("GRUPR_SNOWFLAKE_REGION")
+	useSQLOpen := runtime.GetEnvOrDie("GRUPR_SNOWFLAKE_USE_SQL_OPEN")
 
-	var cnf *gosnowflake.Config
+	// Not able to connect, whereas I was a while back;
+	// Since then, company is now managing this device with JamF
+	// Maybe issue with ZScaler?
+	// Strategies to tackle:
+	// - Check if TLS works on its own with Snowflake (elimination; hand-craft lower level code to get more info on what is going on)
+	// - Try and get even more debugging info out of the Snowflake driver (already used Config with tracing and implemented RoundTrip interface logging the HTTP requests)
+	// - Add ZScaler root key to Systems keychain (done with command):
+	//     sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ~/Downloads/Zscaler\ Root\ CA.pem
+	// - Prove that it is ZScaler
+	// - Checking OS stuff like sockets
+	// - Play with Wireshark to see what is happening
+	// - Check what is the TLS protocol version
+	// Grokking the code and docs learning how it works
+	// Use a different code platform (Python) to connect; this works
+
 	var rsaKey *rsa.PrivateKey
-	if keyPath, ok := os.LookupEnv("SNOWFLAKE_ACCOUNT_RSA_KEY"); !ok {
-		cnf = &gosnowflake.Config{
-			Account:       account,
-			User:          user,
-			Database:      dbName,
-			Region:        region,
-			Authenticator: gosnowflake.AuthTypeExternalBrowser,
-			Tracing:       "trace",
-			Transporter:   &loggingTransport{},
+	if useSQLOpen == "true" {
+		dsn := user + "@" + "account/" + dbName + "?authenticator=" + gosnowflake.AuthTypeExternalBrowser.String()
+		var err error
+		db, err = sql.Open("snowflake", dsn)
+		if err != nil {
+			log.Fatalf("sql.Open error: %v", err)
 		}
 	} else {
-		rsaKey, err := getPrivateRSAKey(keyPath)
-		if err != nil {
-			log.Fatalf("getting rsa key: %v", err)
+		var cnf *gosnowflake.Config
+		if keyPath, ok := os.LookupEnv("SNOWFLAKE_ACCOUNT_RSA_KEY"); !ok {
+			cnf = &gosnowflake.Config{
+				Account:       account,
+				User:          user,
+				Database:      dbName,
+				Region:        region,
+				Authenticator: gosnowflake.AuthTypeExternalBrowser,
+				InsecureMode:  true, // TODO, set to False after ruling out OCSP is causing issues
+				Tracing:       "trace",
+			}
+		} else {
+			rsaKey, err := getPrivateRSAKey(keyPath)
+			if err != nil {
+				log.Fatalf("getting rsa key: %v", err)
+			}
+			cnf = &gosnowflake.Config{
+				Account:       account,
+				User:          user,
+				Database:      dbName,
+				Region:        region,
+				Authenticator: gosnowflake.AuthTypeJwt,
+				PrivateKey:    rsaKey,
+				Tracing:       "trace",
+				Transporter:   &loggingTransport{},
+			}
 		}
-		cnf = &gosnowflake.Config{
-			Account:       account,
-			User:          user,
-			Database:      dbName,
-			Region:        region,
-			Authenticator: gosnowflake.AuthTypeJwt,
-			PrivateKey:    rsaKey,
-			Tracing:       "trace",
-			Transporter:   &loggingTransport{},
-		}
+		connector := gosnowflake.NewConnector(gosnowflake.SnowflakeDriver{}, *cnf)
+		db = sql.OpenDB(connector)
 	}
-	connector := gosnowflake.NewConnector(gosnowflake.SnowflakeDriver{}, *cnf)
-	db = sql.OpenDB(connector)
 	rows, err := db.Query("SELECT CURRENT_USER()")
 	if err != nil {
 		if rsaKey != nil {
