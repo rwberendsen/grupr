@@ -67,10 +67,10 @@ func (g Grups) allDisjoint() error {
 	return nil
 }
 
-func (grups Grups) String() string {
-	data, err := yaml.Marshal(grups)
+func (g Grups) String() string {
+	data, err := yaml.Marshal(g)
 	if err != nil {
-		panic("grups could not be marshalled")
+		panic("Grups could not be marshalled")
 	}
 	return string(data)
 }

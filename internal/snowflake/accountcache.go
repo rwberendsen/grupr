@@ -7,6 +7,10 @@ import (
 )
 
 // caching objects in Snowflake locally
+func newAccountCache() *accountCache {
+	return &accountCache{map[string]*dbCache{}, map[string]bool{}}
+}
+
 type accountCache struct {
 	dbs     map[string]*dbCache
 	dbNames map[string]bool
@@ -37,7 +41,7 @@ func escapeString(s string) string {
 }
 
 func (c *accountCache) addDBs() {
-	rows, err := db.Query(`SELECT database_name FROM snowflake.information_schema.databases`)
+	rows, err := getDB().Query(`SELECT database_name FROM snowflake.information_schema.databases`)
 	if err != nil {
 		log.Fatalf("querying snowflake: %s", err)
 	}
@@ -69,7 +73,7 @@ func (c *accountCache) getDBnames() map[string]bool {
 }
 
 func (c *dbCache) addSchemas() {
-	rows, err := db.Query(fmt.Sprintf(`SELECT schema_name FROM IDENTIFIER('"%s".information_schema.schemata')`, escapeIdentifier(c.dbName)))
+	rows, err := getDB().Query(fmt.Sprintf(`SELECT schema_name FROM IDENTIFIER('"%s".information_schema.schemata')`, escapeIdentifier(c.dbName)))
 	if err != nil {
 		log.Fatalf("querying snowflake: %s", err)
 	}
@@ -101,7 +105,7 @@ func (c *dbCache) getSchemaNames() map[string]bool {
 }
 
 func (c *schemaCache) addTables() {
-	rows, err := db.Query(fmt.Sprintf(`SELECT table_name FROM "%s".information_schema.tables WHERE table_schema = '%s'`,
+	rows, err := getDB().Query(fmt.Sprintf(`SELECT table_name FROM "%s".information_schema.tables WHERE table_schema = '%s'`,
 		escapeIdentifier(c.dbName), escapeString(c.schemaName)))
 	if err != nil {
 		log.Fatalf("querying snowflake: %s", err)
@@ -126,7 +130,7 @@ func (c *schemaCache) getTableNames() map[string]bool {
 }
 
 func (c *schemaCache) addViews() {
-	rows, err := db.Query(fmt.Sprintf(`SELECT table_name FROM "%s".information_schema.views WHERE table_schema = '%s'`,
+	rows, err := getDB().Query(fmt.Sprintf(`SELECT table_name FROM "%s".information_schema.views WHERE table_schema = '%s'`,
 		escapeIdentifier(c.dbName), escapeString(c.schemaName)))
 	if err != nil {
 		log.Fatalf("querying snowflake: %s", err)

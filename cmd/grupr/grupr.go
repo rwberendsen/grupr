@@ -60,22 +60,24 @@ func main() {
 	}
 	fmt.Printf("--- newGrups:\n%v\n\n", newGrups)
 
-	var oldGrups semantics.Grups
 	if *oldFlag != "" {
-		oldGrups, err = getGrupsFromPath(*oldFlag)
+		oldGrups, err := getGrupsFromPath(*oldFlag)
 		if err != nil {
 			log.Fatalf("get old groups: %s", err)
 		}
 		fmt.Printf("--- oldGrups:\n%v\n\n", oldGrups)
+
+		grupsDiff := semantics.NewGrupsDiff(oldGrups, newGrups)
+		fmt.Printf("--- grupsDiff:\n%v\n\n", grupsDiff)
+
+		// now we can work with the diff: created, deleted, updated.
+		// e.g., first created.
+		// we can get all tables / views from snowflake, and start
+		// expanding the object (exclude) expressions to sets of matching tables.
+		snowflakeGrupsDiff := snowflake.NewGrupsDiff(grupsDiff)
+		fmt.Printf("%v", snowflakeGrupsDiff)
 	}
 
-	grupsDiff := semantics.NewGrupsDiff(oldGrups, newGrups)
-	fmt.Printf("--- grupsDiff:\n%v\n\n", grupsDiff)
-
-	// now we can work with the diff: created, deleted, updated.
-	// e.g., first created.
-	// we can get all tables / views from snowflake, and start
-	// expanding the object (exclude) expressions to sets of matching tables.
-	snowflakeGrupsDiff := snowflake.NewGrupsDiff(grupsDiff)
-	fmt.Printf("%v", snowflakeGrupsDiff)
+	snowflakeNewGrups := snowflake.NewGrups(newGrups)
+	fmt.Printf("--- snowflakeNewGrups:\n%v\n\n", snowflakeNewGrups)
 }

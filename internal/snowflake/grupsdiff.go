@@ -2,6 +2,7 @@ package snowflake
 
 import (
 	"github.com/rwberendsen/grupr/internal/semantics"
+	"gopkg.in/yaml.v3"
 )
 
 type GrupsDiff struct {
@@ -19,7 +20,7 @@ func NewGrupsDiff(g semantics.GrupsDiff) GrupsDiff {
 	// for deleted products we don't need to know the objects for now
 
 	// as we match databases and schema's, we build up a local cache of the DB tree.
-	c := &accountCache{map[string]*dbCache{}, map[string]bool{}}
+	c := newAccountCache()
 	for k, v := range g.Created {
 		r.Created[k] = newProduct(v, c)
 	}
@@ -30,4 +31,12 @@ func NewGrupsDiff(g semantics.GrupsDiff) GrupsDiff {
 		r.Updated[k] = newProductDiff(v, c)
 	}
 	return r
+}
+
+func (g GrupsDiff) String() string {
+	data, err := yaml.Marshal(g)
+	if err != nil {
+		panic("GrupsDiff could not be marshalled")
+	}
+	return string(data)
 }

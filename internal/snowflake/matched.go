@@ -5,23 +5,23 @@ import (
 )
 
 type Matched struct {
-	objects map[semantics.Expr]accountObjs
+	Objects map[semantics.Expr]AccountObjs
 }
 
 func newMatched(m semantics.Matcher, c *accountCache) Matched {
-	r := Matched{map[semantics.Expr]accountObjs{}}
+	r := Matched{map[semantics.Expr]AccountObjs{}}
 	for k := range m.Include {
-		r.objects[k] = match(k, c)
+		r.Objects[k] = match(k, c)
 	}
 	for k := range m.Exclude {
-		r.objects[m.Superset[k]] = r.objects[m.Superset[k]].subtract(match(k, c))
+		r.Objects[m.Superset[k]] = r.Objects[m.Superset[k]].subtract(match(k, c))
 	}
 	return r
 }
 
 func matchPart(e semantics.ExprPart, l map[string]bool) map[string]bool {
 	r := map[string]bool{}
-	if e.Is_quoted {
+	if e.IsQuoted {
 		if _, ok := l[e.S]; ok {
 			r[e.S] = true
 		}
@@ -39,8 +39,8 @@ func matchPart(e semantics.ExprPart, l map[string]bool) map[string]bool {
 	return r
 }
 
-func match(e semantics.Expr, c *accountCache) accountObjs {
-	o := accountObjs{}
+func match(e semantics.Expr, c *accountCache) AccountObjs {
+	o := AccountObjs{}
 	matchedDBs := matchPart(e[semantics.Database], c.getDBnames())
 	for db, _ := range matchedDBs {
 		o = o.addDB(db, e[semantics.Schema].MatchAll())

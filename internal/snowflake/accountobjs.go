@@ -1,126 +1,126 @@
 package snowflake
 
 // couple of simple data structures to hold matched objects in account
-type accountObjs struct {
-	dbs map[string]dbObjs
+type AccountObjs struct {
+	Dbs map[string]DbObjs
 }
 
-type dbObjs struct {
-	schemas  map[string]schemaObjs
-	matchAll bool
+type DbObjs struct {
+	Schemas  map[string]SchemaObjs
+	MatchAll bool
 }
 
-type schemaObjs struct {
+type SchemaObjs struct {
 	// note that in case of drift during runtime tables and views may
 	// contain the same keys (i.e., if during runtime a table was removed
 	// and a view with the same name created)
-	tables   map[string]bool
-	views    map[string]bool
-	matchAll bool
+	Tables   map[string]bool
+	Views    map[string]bool
+	MatchAll bool
 }
 
-func (o accountObjs) addDB(db string, matchAllSchemas bool) accountObjs {
-	if _, ok := o.dbs[db]; !ok {
-		if o.dbs == nil {
-			o.dbs = map[string]dbObjs{}
+func (o AccountObjs) addDB(db string, matchAllSchemas bool) AccountObjs {
+	if _, ok := o.Dbs[db]; !ok {
+		if o.Dbs == nil {
+			o.Dbs = map[string]DbObjs{}
 		}
-		o.dbs[db] = dbObjs{map[string]schemaObjs{}, matchAllSchemas}
+		o.Dbs[db] = DbObjs{map[string]SchemaObjs{}, matchAllSchemas}
 	}
 	return o
 }
 
-func (o accountObjs) addSchema(db string, schema string, matchAllTables bool) accountObjs {
-	if _, ok := o.dbs[db].schemas[schema]; !ok {
-		o.dbs[db].schemas[schema] = schemaObjs{map[string]bool{}, map[string]bool{}, matchAllTables}
+func (o AccountObjs) addSchema(db string, schema string, matchAllTables bool) AccountObjs {
+	if _, ok := o.Dbs[db].Schemas[schema]; !ok {
+		o.Dbs[db].Schemas[schema] = SchemaObjs{map[string]bool{}, map[string]bool{}, matchAllTables}
 	}
 	return o
 }
 
-func (o accountObjs) addTable(db string, schema string, obj string) accountObjs {
-	o.dbs[db].schemas[schema].tables[obj] = true
+func (o AccountObjs) addTable(db string, schema string, obj string) AccountObjs {
+	o.Dbs[db].Schemas[schema].Tables[obj] = true
 	return o
 }
 
-func (o accountObjs) addView(db string, schema string, obj string) accountObjs {
-	o.dbs[db].schemas[schema].views[obj] = true
+func (o AccountObjs) addView(db string, schema string, obj string) AccountObjs {
+	o.Dbs[db].Schemas[schema].Views[obj] = true
 	return o
 }
 
-func (lhs accountObjs) subtract(rhs accountObjs) accountObjs {
-	r := accountObjs{map[string]dbObjs{}}
-	for k, v := range lhs.dbs {
-		if v2, ok := rhs.dbs[k]; !ok {
-			r.dbs[k] = v
+func (lhs AccountObjs) subtract(rhs AccountObjs) AccountObjs {
+	r := AccountObjs{map[string]DbObjs{}}
+	for k, v := range lhs.Dbs {
+		if v2, ok := rhs.Dbs[k]; !ok {
+			r.Dbs[k] = v
 		} else {
-			r.dbs[k] = v.subtract(v2)
+			r.Dbs[k] = v.subtract(v2)
 		}
 	}
 	return r
 }
 
-func (lhs dbObjs) subtract(rhs dbObjs) dbObjs {
-	r := dbObjs{map[string]schemaObjs{}, false}
-	for k, v := range lhs.schemas {
-		if v2, ok := rhs.schemas[k]; !ok {
-			r.schemas[k] = v
+func (lhs DbObjs) subtract(rhs DbObjs) DbObjs {
+	r := DbObjs{map[string]SchemaObjs{}, false}
+	for k, v := range lhs.Schemas {
+		if v2, ok := rhs.Schemas[k]; !ok {
+			r.Schemas[k] = v
 		} else {
-			r.schemas[k] = v.subtract(v2)
+			r.Schemas[k] = v.subtract(v2)
 		}
 	}
 	return r
 }
 
-func (lhs schemaObjs) subtract(rhs schemaObjs) schemaObjs {
-	r := schemaObjs{map[string]bool{}, map[string]bool{}, false}
-	for k, _ := range lhs.tables {
-		if _, ok := rhs.tables[k]; !ok {
-			r.tables[k] = true
+func (lhs SchemaObjs) subtract(rhs SchemaObjs) SchemaObjs {
+	r := SchemaObjs{map[string]bool{}, map[string]bool{}, false}
+	for k, _ := range lhs.Tables {
+		if _, ok := rhs.Tables[k]; !ok {
+			r.Tables[k] = true
 		}
 	}
-	for k, _ := range lhs.views {
-		if _, ok := rhs.views[k]; !ok {
-			r.views[k] = true
+	for k, _ := range lhs.Views {
+		if _, ok := rhs.Views[k]; !ok {
+			r.Views[k] = true
 		}
 	}
 	return r
 }
 
-func (lhs accountObjs) add(rhs accountObjs) accountObjs {
-	if lhs.dbs == nil {
-		lhs.dbs = map[string]dbObjs{}
+func (lhs AccountObjs) add(rhs AccountObjs) AccountObjs {
+	if lhs.Dbs == nil {
+		lhs.Dbs = map[string]DbObjs{}
 	}
-	for k, v := range rhs.dbs {
-		if _, ok := lhs.dbs[k]; !ok {
-			lhs.dbs[k] = v
+	for k, v := range rhs.Dbs {
+		if _, ok := lhs.Dbs[k]; !ok {
+			lhs.Dbs[k] = v
 		} else {
-			lhs.dbs[k] = lhs.dbs[k].add(rhs.dbs[k])
+			lhs.Dbs[k] = lhs.Dbs[k].add(rhs.Dbs[k])
 		}
 	}
 	return lhs
 }
 
-func (lhs dbObjs) add(rhs dbObjs) dbObjs {
-	lhs.matchAll = lhs.matchAll || rhs.matchAll
-	for k, v := range rhs.schemas {
-		if _, ok := lhs.schemas[k]; !ok {
-			lhs.schemas[k] = v
+func (lhs DbObjs) add(rhs DbObjs) DbObjs {
+	lhs.MatchAll = lhs.MatchAll || rhs.MatchAll
+	for k, v := range rhs.Schemas {
+		if _, ok := lhs.Schemas[k]; !ok {
+			lhs.Schemas[k] = v
 		} else {
-			lhs.schemas[k] = lhs.schemas[k].add(rhs.schemas[k])
+			lhs.Schemas[k] = lhs.Schemas[k].add(rhs.Schemas[k])
 		}
 	}
 	return lhs
 }
 
-func (lhs schemaObjs) add(rhs schemaObjs) schemaObjs {
-	lhs.matchAll = lhs.matchAll || rhs.matchAll
-	for k, _ := range rhs.tables {
-		if _, ok := lhs.tables[k]; !ok {
-			lhs.tables[k] = true
+func (lhs SchemaObjs) add(rhs SchemaObjs) SchemaObjs {
+	lhs.MatchAll = lhs.MatchAll || rhs.MatchAll
+	for k, _ := range rhs.Tables {
+		if _, ok := lhs.Tables[k]; !ok {
+			lhs.Tables[k] = true
 		}
 	}
-	for k, _ := range rhs.views {
-		if _, ok := lhs.views[k]; !ok {
-			lhs.views[k] = true
+	for k, _ := range rhs.Views {
+		if _, ok := lhs.Views[k]; !ok {
+			lhs.Views[k] = true
 		}
 	}
 	return lhs

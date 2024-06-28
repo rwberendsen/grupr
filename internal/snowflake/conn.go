@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"log"
-	"net/http"
 	"os"
 
 	"github.com/rwberendsen/grupr/internal/runtime"
@@ -16,20 +15,10 @@ import (
 
 var db *sql.DB
 
-type loggingTransport struct{}
-
-func (t *loggingTransport) RoundTrip(r *http.Request) (*http.Response, error) {
-	log.Printf("----REQUEST START:")
-	log.Printf("%v", r)
-	log.Printf("----REQUEST END:")
-	res, err := gosnowflake.SnowflakeTransport.RoundTrip(r)
-	log.Printf("----RESPONSE START:")
-	log.Printf("%v", res)
-	log.Printf("----RESPONSE END:")
-	return res, err
-}
-
-func init() {
+func getDB() *sql.DB {
+	if db != nil {
+		return db
+	}
 	user := runtime.GetEnvOrDie("GRUPR_SNOWFLAKE_USER")
 	account := runtime.GetEnvOrDie("GRUPR_SNOWFLAKE_ACCOUNT")
 	dbName := runtime.GetEnvOrDie("GRUPR_SNOWFLAKE_DB")
@@ -95,7 +84,7 @@ func init() {
 		if rsaKey != nil {
 			log.Printf("please make sure public key is registered in Snowflake:")
 			pubKeyByte, _ := x509.MarshalPKIXPublicKey(rsaKey.Public())
-			log.Printf(base64.StdEncoding.EncodeToString(pubKeyByte))
+			log.Print(base64.StdEncoding.EncodeToString(pubKeyByte))
 		}
 		log.Fatalf("Error querying: %v", err)
 	}
@@ -109,4 +98,5 @@ func init() {
 	if err = rows.Err(); err != nil {
 		log.Fatalf("errors found during scanning: %s", err)
 	}
+	return db
 }

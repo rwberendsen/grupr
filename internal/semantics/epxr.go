@@ -30,8 +30,8 @@ const (
 )
 
 type ExprPart struct {
-	S         string
-	Is_quoted bool
+	S        string
+	IsQuoted bool
 }
 
 func CreateRegexpIdentifier(s string) *regexp.Regexp {
@@ -42,7 +42,7 @@ func CreateRegexpIdentifier(s string) *regexp.Regexp {
 }
 
 func (e ExprPart) MatchAll() bool {
-	return !e.Is_quoted && e.S == "*"
+	return !e.IsQuoted && e.S == "*"
 }
 
 var validUnquotedExpr *regexp.Regexp = regexp.MustCompile(`^[a-z_][a-z0-9_$]{0,254}[*]?$`) // identifier chars + optional wildcard suffix
@@ -70,17 +70,17 @@ func (lhs Expr) subsetOf(rhs Expr) bool {
 
 func (lhs ExprPart) subsetOf(rhs ExprPart) bool {
 	// return true if rhs can match at least all objects that lhs can match
-	if lhs.Is_quoted && rhs.Is_quoted {
+	if lhs.IsQuoted && rhs.IsQuoted {
 		return lhs.S == rhs.S // also return true if improper subset
 	}
-	if !lhs.Is_quoted && rhs.Is_quoted {
+	if !lhs.IsQuoted && rhs.IsQuoted {
 		return false // unqoted will always match more objects than quoted
 	}
-	if lhs.Is_quoted && !rhs.Is_quoted {
+	if lhs.IsQuoted && !rhs.IsQuoted {
 		re := CreateRegexpIdentifier(rhs.S)
 		return re.MatchString(lhs.S)
 	}
-	// !lhs.Isquoted && !rhs.Is_quoted
+	// !lhs.Isquoted && !rhs.IsQuoted
 	if lhs.S == rhs.S {
 		return true
 	}
@@ -150,7 +150,7 @@ func (lhs ExprPart) disjoint(rhs ExprPart) bool {
 }
 
 func validateExprPart(p ExprPart) bool {
-	if p.Is_quoted {
+	if p.IsQuoted {
 		return validQuotedExpr.MatchString(p.S)
 	}
 	if !validUnquotedExpr.MatchString(p.S) {
@@ -180,7 +180,7 @@ func newExpr(s string) (Expr, error) {
 			if end == len(s) || s[end] != '"' {
 				panic("did not find quote at end of parsed quoted CSV field")
 			}
-			r[i].Is_quoted = true
+			r[i].IsQuoted = true
 			r[i].S = substr
 		} else {
 			// this is an unquoted field

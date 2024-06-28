@@ -35,7 +35,7 @@ type ProductDiff struct {
 func (g GrupsDiff) String() string {
 	data, err := yaml.Marshal(g)
 	if err != nil {
-		panic("grups could not be marshalled")
+		panic("GrupsDiff could not be marshalled")
 	}
 	return string(data)
 }
