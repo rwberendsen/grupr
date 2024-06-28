@@ -1,6 +1,8 @@
 package snowflake
 
 import (
+	"log"
+
 	"github.com/rwberendsen/grupr/internal/semantics"
 )
 
@@ -42,6 +44,8 @@ func matchPart(e semantics.ExprPart, l map[string]bool) map[string]bool {
 func match(e semantics.Expr, c *accountCache) AccountObjs {
 	o := AccountObjs{}
 	matchedDBs := matchPart(e[semantics.Database], c.getDBnames())
+	log.Printf("DBnames: %v", c.getDBnames())
+	log.Printf("matchedDBS: %v", matchedDBs)
 	for db, _ := range matchedDBs {
 		o = o.addDB(db, e[semantics.Schema].MatchAll())
 		matchedSchemas := matchPart(e[semantics.Schema], c.getDBs()[db].getSchemaNames())

@@ -8,7 +8,7 @@ import (
 
 // caching objects in Snowflake locally
 func newAccountCache() *accountCache {
-	return &accountCache{map[string]*dbCache{}, map[string]bool{}}
+	return &accountCache{}
 }
 
 type accountCache struct {
@@ -41,16 +41,21 @@ func escapeString(s string) string {
 }
 
 func (c *accountCache) addDBs() {
+	c.dbs = map[string]*dbCache{}
+	c.dbNames = map[string]bool{}
 	rows, err := getDB().Query(`SELECT database_name FROM snowflake.information_schema.databases`)
 	if err != nil {
 		log.Fatalf("querying snowflake: %s", err)
 	}
+	log.Print("queried database successfully")
 	for rows.Next() {
+		log.Print("processing row")
 		var dbName string
 		if err = rows.Scan(&dbName); err != nil {
 			log.Fatalf("error scanning row: %s", err)
 		}
-		c.dbs[dbName] = &dbCache{dbName, map[string]*schemaCache{}, map[string]bool{}}
+		log.Printf("dbName: %v", dbName)
+		c.dbs[dbName] = &dbCache{dbName: dbName}
 		c.dbNames[dbName] = true
 	}
 	if err = rows.Err(); err != nil {
@@ -73,6 +78,8 @@ func (c *accountCache) getDBnames() map[string]bool {
 }
 
 func (c *dbCache) addSchemas() {
+	c.schemas = map[string]*schemaCache{}
+	c.schemaNames = map[string]bool{}
 	rows, err := getDB().Query(fmt.Sprintf(`SELECT schema_name FROM IDENTIFIER('"%s".information_schema.schemata')`, escapeIdentifier(c.dbName)))
 	if err != nil {
 		log.Fatalf("querying snowflake: %s", err)
@@ -82,7 +89,7 @@ func (c *dbCache) addSchemas() {
 		if err = rows.Scan(&schemaName); err != nil {
 			log.Fatalf("error scanning row: %s", err)
 		}
-		c.schemas[schemaName] = &schemaCache{c.dbName, schemaName, map[string]bool{}, map[string]bool{}}
+		c.schemas[schemaName] = &schemaCache{dbName: c.dbName, schemaName: schemaName}
 		c.schemaNames[schemaName] = true
 	}
 	if err = rows.Err(); err != nil {
@@ -105,6 +112,7 @@ func (c *dbCache) getSchemaNames() map[string]bool {
 }
 
 func (c *schemaCache) addTables() {
+	c.tableNames = map[string]bool{}
 	rows, err := getDB().Query(fmt.Sprintf(`SELECT table_name FROM "%s".information_schema.tables WHERE table_schema = '%s'`,
 		escapeIdentifier(c.dbName), escapeString(c.schemaName)))
 	if err != nil {
@@ -130,6 +138,7 @@ func (c *schemaCache) getTableNames() map[string]bool {
 }
 
 func (c *schemaCache) addViews() {
+	c.viewNames = map[string]bool{}
 	rows, err := getDB().Query(fmt.Sprintf(`SELECT table_name FROM "%s".information_schema.views WHERE table_schema = '%s'`,
 		escapeIdentifier(c.dbName), escapeString(c.schemaName)))
 	if err != nil {

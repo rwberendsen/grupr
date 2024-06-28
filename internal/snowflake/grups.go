@@ -1,6 +1,8 @@
 package snowflake
 
 import (
+	"log"
+
 	"github.com/rwberendsen/grupr/internal/semantics"
 	"gopkg.in/yaml.v3"
 )
@@ -15,6 +17,7 @@ func NewGrups(g semantics.Grups) Grups {
 	for k, v := range g.Products {
 		r.Products[k] = newProduct(v, c)
 	}
+	log.Printf("accountCache: %v", *c)
 	return r
 }
 
