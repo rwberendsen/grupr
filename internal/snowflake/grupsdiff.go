@@ -24,7 +24,7 @@ func NewGrupsDiff(g semantics.GrupsDiff) GrupsDiff {
 	for k, v := range g.Created {
 		r.Created[k] = newProduct(v, c)
 	}
-	for k, _ := range g.Deleted {
+	for k := range g.Deleted {
 		r.Deleted[k] = true
 	}
 	for k, v := range g.Updated {

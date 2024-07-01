@@ -80,4 +80,11 @@ func main() {
 
 	snowflakeNewGrups := snowflake.NewGrups(newGrups)
 	fmt.Printf("--- snowflakeNewGrups:\n%v\n\n", snowflakeNewGrups)
+
+	basicStats := snowflake.NewBasicStats(newGrups, snowflakeNewGrups)
+	err = snowflake.PersistInSnowflake(basicStats)
+
+	if err != nil {
+		log.Fatalf("persisting stats: %v", err)
+	}
 }

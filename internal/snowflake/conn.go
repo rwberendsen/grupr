@@ -8,7 +8,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/rwberendsen/grupr/internal/runtime"
+	"github.com/rwberendsen/grupr/internal/config"
 
 	"github.com/snowflakedb/gosnowflake"
 )
@@ -19,10 +19,10 @@ func getDB() *sql.DB {
 	if db != nil {
 		return db
 	}
-	user := runtime.GetEnvOrDie("GRUPR_SNOWFLAKE_USER")
-	account := runtime.GetEnvOrDie("GRUPR_SNOWFLAKE_ACCOUNT")
-	dbName := runtime.GetEnvOrDie("GRUPR_SNOWFLAKE_DB")
-	useSQLOpen := runtime.GetEnvOrDie("GRUPR_SNOWFLAKE_USE_SQL_OPEN")
+	user := config.GetEnvOrDie("GRUPR_SNOWFLAKE_USER")
+	account := config.GetEnvOrDie("GRUPR_SNOWFLAKE_ACCOUNT")
+	dbName := config.GetEnvOrDie("GRUPR_SNOWFLAKE_DB")
+	useSQLOpen := config.GetEnvOrDie("GRUPR_SNOWFLAKE_USE_SQL_OPEN")
 
 	// Not able to connect, whereas I was a while back;
 	// Since then, company is now managing this device with JamF
@@ -61,7 +61,8 @@ func getDB() *sql.DB {
 				Params:        map[string]*string{},
 			}
 		} else {
-			rsaKey, err := getPrivateRSAKey(keyPath)
+			var err error
+			rsaKey, err = getPrivateRSAKey(keyPath)
 			if err != nil {
 				log.Fatalf("getting rsa key: %v", err)
 			}

@@ -72,12 +72,12 @@ func (lhs DbObjs) subtract(rhs DbObjs) DbObjs {
 
 func (lhs SchemaObjs) subtract(rhs SchemaObjs) SchemaObjs {
 	r := SchemaObjs{map[string]bool{}, map[string]bool{}, false}
-	for k, _ := range lhs.Tables {
+	for k := range lhs.Tables {
 		if _, ok := rhs.Tables[k]; !ok {
 			r.Tables[k] = true
 		}
 	}
-	for k, _ := range lhs.Views {
+	for k := range lhs.Views {
 		if _, ok := rhs.Views[k]; !ok {
 			r.Views[k] = true
 		}
@@ -85,43 +85,22 @@ func (lhs SchemaObjs) subtract(rhs SchemaObjs) SchemaObjs {
 	return r
 }
 
-func (lhs AccountObjs) add(rhs AccountObjs) AccountObjs {
-	if lhs.Dbs == nil {
-		lhs.Dbs = map[string]DbObjs{}
-	}
-	for k, v := range rhs.Dbs {
-		if _, ok := lhs.Dbs[k]; !ok {
-			lhs.Dbs[k] = v
-		} else {
-			lhs.Dbs[k] = lhs.Dbs[k].add(rhs.Dbs[k])
+func (o AccountObjs) TableCount() int {
+	r := 0
+	for _, db := range o.Dbs {
+		for _, schema := range db.Schemas {
+			r += len(schema.Tables)
 		}
 	}
-	return lhs
+	return r
 }
 
-func (lhs DbObjs) add(rhs DbObjs) DbObjs {
-	lhs.MatchAll = lhs.MatchAll || rhs.MatchAll
-	for k, v := range rhs.Schemas {
-		if _, ok := lhs.Schemas[k]; !ok {
-			lhs.Schemas[k] = v
-		} else {
-			lhs.Schemas[k] = lhs.Schemas[k].add(rhs.Schemas[k])
+func (o AccountObjs) ViewCount() int {
+	r := 0
+	for _, db := range o.Dbs {
+		for _, schema := range db.Schemas {
+			r += len(schema.Views)
 		}
 	}
-	return lhs
-}
-
-func (lhs SchemaObjs) add(rhs SchemaObjs) SchemaObjs {
-	lhs.MatchAll = lhs.MatchAll || rhs.MatchAll
-	for k, _ := range rhs.Tables {
-		if _, ok := lhs.Tables[k]; !ok {
-			lhs.Tables[k] = true
-		}
-	}
-	for k, _ := range rhs.Views {
-		if _, ok := lhs.Views[k]; !ok {
-			lhs.Views[k] = true
-		}
-	}
-	return lhs
+	return r
 }
