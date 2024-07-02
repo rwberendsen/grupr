@@ -36,6 +36,20 @@ func NewBasicStats(grups semantics.Grups, sfGrups Grups) []*BasicStats {
 			}
 			r = append(r, stats)
 		}
+		for intrfId, intrf := range prd.Interfaces {
+			for e, ea := range intrf.Matcher.Include {
+				stats := &BasicStats{
+					ProductId:   prdId,
+					InterfaceId: intrfId,
+					Expr:        e,
+					DTAP:        ea.DTAP,
+					UserGroup:   ea.UserGroup,
+					TableCount:  sfGrups.Products[prdId].Interfaces[intrfId].Matched.Objects[e].TableCount(),
+					ViewCount:   sfGrups.Products[prdId].Interfaces[intrfId].Matched.Objects[e].ViewCount(),
+				}
+				r = append(r, stats)
+			}
+		}
 	}
 	return r
 }

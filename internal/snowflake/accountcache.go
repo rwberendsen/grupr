@@ -89,8 +89,50 @@ func (c *dbCache) addSchemas() {
 		if err = rows.Scan(&schemaName); err != nil {
 			log.Fatalf("error scanning row: %s", err)
 		}
-		c.schemas[schemaName] = &schemaCache{dbName: c.dbName, schemaName: schemaName}
+		c.schemas[schemaName] = &schemaCache{dbName: c.dbName, schemaName: schemaName, tableNames: map[string]bool{},
+			viewNames: map[string]bool{}}
 		c.schemaNames[schemaName] = true
+	}
+	if err = rows.Err(); err != nil {
+		log.Fatal(err)
+	}
+	// go ahead and get tables and views in one go as well, to have fewer roundtrips to Snowflake; only a few per DB
+	c.addTables()
+	c.addViews()
+}
+
+func (c *dbCache) addTables() {
+	rows, err := getDB().Query(fmt.Sprintf(`SELECT table_schema, table_name FROM "%s".information_schema.tables`,
+		escapeIdentifier(c.dbName)))
+	if err != nil {
+		log.Fatalf("querying snowflake: %s", err)
+	}
+	for rows.Next() {
+		var schemaName string
+		var tableName string
+		if err = rows.Scan(&schemaName, &tableName); err != nil {
+			log.Fatalf("error scanning row: %s", err)
+		}
+		c.schemas[schemaName].tableNames[tableName] = true
+	}
+	if err = rows.Err(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func (c *dbCache) addViews() {
+	rows, err := getDB().Query(fmt.Sprintf(`SELECT table_schema, table_name FROM "%s".information_schema.views`,
+		escapeIdentifier(c.dbName)))
+	if err != nil {
+		log.Fatalf("querying snowflake: %s", err)
+	}
+	for rows.Next() {
+		var schemaName string
+		var viewName string
+		if err = rows.Scan(&schemaName, &viewName); err != nil {
+			log.Fatalf("error scanning row: %s", err)
+		}
+		c.schemas[schemaName].viewNames[viewName] = true
 	}
 	if err = rows.Err(); err != nil {
 		log.Fatal(err)
@@ -111,54 +153,10 @@ func (c *dbCache) getSchemaNames() map[string]bool {
 	return c.schemaNames
 }
 
-func (c *schemaCache) addTables() {
-	c.tableNames = map[string]bool{}
-	rows, err := getDB().Query(fmt.Sprintf(`SELECT table_name FROM "%s".information_schema.tables WHERE table_schema = '%s'`,
-		escapeIdentifier(c.dbName), escapeString(c.schemaName)))
-	if err != nil {
-		log.Fatalf("querying snowflake: %s", err)
-	}
-	for rows.Next() {
-		var tableName string
-		if err = rows.Scan(&tableName); err != nil {
-			log.Fatalf("error scanning row: %s", err)
-		}
-		c.tableNames[tableName] = true
-	}
-	if err = rows.Err(); err != nil {
-		log.Fatal(err)
-	}
-}
-
 func (c *schemaCache) getTableNames() map[string]bool {
-	if c.tableNames == nil {
-		c.addTables()
-	}
 	return c.tableNames
 }
 
-func (c *schemaCache) addViews() {
-	c.viewNames = map[string]bool{}
-	rows, err := getDB().Query(fmt.Sprintf(`SELECT table_name FROM "%s".information_schema.views WHERE table_schema = '%s'`,
-		escapeIdentifier(c.dbName), escapeString(c.schemaName)))
-	if err != nil {
-		log.Fatalf("querying snowflake: %s", err)
-	}
-	for rows.Next() {
-		var viewName string
-		if err = rows.Scan(&viewName); err != nil {
-			log.Fatalf("error scanning row: %s", err)
-		}
-		c.tableNames[viewName] = true
-	}
-	if err = rows.Err(); err != nil {
-		log.Fatal(err)
-	}
-}
-
 func (c *schemaCache) getViewNames() map[string]bool {
-	if c.viewNames == nil {
-		c.addViews()
-	}
 	return c.viewNames
 }

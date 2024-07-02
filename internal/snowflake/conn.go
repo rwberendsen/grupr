@@ -20,6 +20,7 @@ func getDB() *sql.DB {
 		return db
 	}
 	user := config.GetEnvOrDie("GRUPR_SNOWFLAKE_USER")
+	role := config.GetEnvOrDie("GRUPR_SNOWFLAKE_ROLE")
 	account := config.GetEnvOrDie("GRUPR_SNOWFLAKE_ACCOUNT")
 	dbName := config.GetEnvOrDie("GRUPR_SNOWFLAKE_DB")
 	useSQLOpen := config.GetEnvOrDie("GRUPR_SNOWFLAKE_USE_SQL_OPEN")
@@ -54,6 +55,7 @@ func getDB() *sql.DB {
 			cnf = &gosnowflake.Config{
 				Account:       account,
 				User:          user,
+				Role:          role,
 				Database:      dbName,
 				Authenticator: gosnowflake.AuthTypeExternalBrowser,
 				Params:        map[string]*string{},
@@ -67,6 +69,7 @@ func getDB() *sql.DB {
 			cnf = &gosnowflake.Config{
 				Account:       account,
 				User:          user,
+				Role:          role,
 				Database:      dbName,
 				Authenticator: gosnowflake.AuthTypeJwt,
 				PrivateKey:    rsaKey,
