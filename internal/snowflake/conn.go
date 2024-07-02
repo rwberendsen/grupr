@@ -56,8 +56,6 @@ func getDB() *sql.DB {
 				User:          user,
 				Database:      dbName,
 				Authenticator: gosnowflake.AuthTypeExternalBrowser,
-				InsecureMode:  false,
-				Tracing:       "trace",
 				Params:        map[string]*string{},
 			}
 		} else {
@@ -72,8 +70,6 @@ func getDB() *sql.DB {
 				Database:      dbName,
 				Authenticator: gosnowflake.AuthTypeJwt,
 				PrivateKey:    rsaKey,
-				Tracing:       "trace",
-				InsecureMode:  false,
 				Params:        map[string]*string{},
 			}
 		}

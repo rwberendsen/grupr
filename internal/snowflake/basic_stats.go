@@ -86,7 +86,7 @@ INSERT INTO %v.%v.%vbasic_stats (
 VALUES
 `,
 		dbName, schema, gruprPrefix)
-	sql += strings.Join(getValuesSQL(stats), "\n")
+	sql += strings.Join(getValuesSQL(stats), ",\n")
 	log.Printf("sql:\n%s", sql)
 	_, err = getDB().Exec(sql)
 	if err != nil {
