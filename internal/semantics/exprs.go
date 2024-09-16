@@ -25,7 +25,7 @@ func newExprs(s string, DTAPs map[string]KindOfData, UserGroups map[string]bool)
 		return exprs, fmt.Errorf("object expression has newline")
 	}
 	dtapExpanded := map[string]ExprAttr{}
-	if strings.Contains(s, DTAPTemplate) {
+	if strings.Contains(s, DTAPTemplate) { // TODO: also allow expressions like [dtap:prd] for cases where users want to specify this only exists for a specific DTAP
 		if len(DTAPs) == 0 {
 			return exprs, fmt.Errorf("expanding dtaps in '%s': no dtaps found", s)
 		}
@@ -33,11 +33,11 @@ func newExprs(s string, DTAPs map[string]KindOfData, UserGroups map[string]bool)
 			dtapExpanded[strings.ReplaceAll(s, DTAPTemplate, d)] = ExprAttr{d, kod, ""}
 		}
 	} else {
-		dtapExpanded[s] = ExprAttr{"", Real, ""} // TODO: also enable user to specify data type at product / interface level for non DTAP expressions
+		dtapExpanded[s] = ExprAttr{"", Real, ""}
 	}
 	userGroupExpanded := map[string]ExprAttr{}
 	for k, v := range dtapExpanded {
-		if strings.Contains(k, UserGroupTemplate) {
+		if strings.Contains(k, UserGroupTemplate) { // TODO: also allow expressions like [user_group:lpfr] for cases where users want to specify this only exists for a specific DTAP
 			if len(UserGroups) == 0 {
 				return exprs, fmt.Errorf("expanding user groups in '%s': no user groups found", k)
 			}

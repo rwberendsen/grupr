@@ -15,8 +15,8 @@ type BasicStats struct {
 	Expr                  semantics.Expr
 	DTAP                  string
 	DataKind              semantics.KindOfData
-	UserGroup             string
-	UserGroupColumnValues []string
+	UserGroup             string // TODO: UserGroups: tables matched by an expr can contain multiple UserGroups
+	UserGroupColumnValues []string // TODO: drop this one in favour of line above; provide way to explicity label an expr with user groups distinct from the product level spec.
 	TableCount            int
 	ViewCount             int
 	ByteCount             int

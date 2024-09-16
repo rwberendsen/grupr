@@ -26,7 +26,7 @@ func (k KindOfData) String() string {
 }
 
 type Product struct {
-	DTAPs      map[string]KindOfData `yaml:"dtaps,flow,omitempty"`
+	DTAPs      map[string]KindOfData `yaml:"dtaps,flow,omitempty"` // TODO: allow rendering a DTAP as an empty string in an identifier, e.g., omit to DTAP for production data
 	UserGroups map[string]bool       `yaml:"user_groups,flow,omitempty"`
 	Matcher    Matcher
 	Interfaces map[string]Interface             `yaml:",omitempty"`
