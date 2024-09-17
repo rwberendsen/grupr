@@ -7,23 +7,41 @@ import (
 )
 
 type ElmntOr struct {
-	Product Product `yaml:",omitempty"`
-	ProductInterface Interface `yaml:"product_interface,omitempty"`
 	ProducingService ProducingService `yaml:"producing_service,omitempty"`
-	ProducingServiceInterface Interface `yaml:"producing_service_interface,omitempty"`
+	Product Product `yaml:",omitempty"`
+	Interface Interface`yaml:"interface,omitempty"`
+}
+
+type ProducingService struct {
+	Id string
+        ObjectsDB string `yaml:"objects_db"`
+	DTAPs          DTAPSpec             `yaml:"dtaps,flow,omitempty"`
 }
 
 type Product struct {
-	Name           string
-	LongName       string			`yaml:"long_name,omitempty`
+	Id	       string
 	Classification string
 	CanLeaveGroup  *bool                `yaml:"can_leave_group,omitempty"`
 	DTAPs          DTAPSpec             `yaml:"dtaps,flow,omitempty"`
 	UserGroups     []string             `yaml:"user_groups,flow,omitempty"`
+	UserGroupColumn string		    `yaml:"user_group_column,omitempty"`
 	Objects        []string             `yaml:",omitempty"`
 	ObjectsExclude []string             `yaml:"objects_exclude,omitempty"`
-	Interfaces     []string `yaml:",omitempty"`
-	Consumes       []InterfaceId   `yaml:",omitempty"`
+	Consumes       []InterfaceId   	    `yaml:",omitempty"`
+	MaskColumns	[]string	    `yaml:"mask_columns"`
+}
+
+type Interface struct {
+	Id
+	ProductId		string
+	ProducingServiceId string
+	Classification string `yaml:",omitempty"` // inherits from product if not specified; can be less strict, but not stricter
+	CanLeaveGroup  *bool                `yaml:"can_leave_group,omitempty"`
+	ExposeDTAPS    []string
+	UserGroups     []string             `yaml:"user_groups,flow,omitempty"`
+	UserGroupColumn string		    `yaml:"user_group_column,omitempty"`
+	Objects        []string
+	ObjectsExclude []string `yaml:"objects_exclude,omitempty"`
 }
 
 type DTAPSpec struct {
@@ -32,20 +50,11 @@ type DTAPSpec struct {
 }
 
 type InterfaceId struct {
-	Product   string `yaml:"product"`
-	Interface string `yaml:"interface"`
-	ProducingService string `yaml:"producing_service,omitempty"`
+	ProductId   string `yaml:"product"`
+	InterfaceId string `yaml:"interface"`
+	ProducingServiceId string `yaml:"producing_service,omitempty"`
 }
 
-type Interface struct {
-	Product		string
-	Name		string
-	LongName	string		`yaml:"long_name,omitempty"`
-	Classification string
-	CanLeaveGroup  *bool                `yaml:"can_leave_group,omitempty"`
-	Objects        []string
-	ObjectsExclude []string `yaml:"objects_exclude,omitempty"`
-}
 
 func NewElmntOr(data []byte) (ElmntOr, error) {
 	elmntor := ElmntOr{}
