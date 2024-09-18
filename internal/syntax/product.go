@@ -1,7 +1,11 @@
 package syntax
 
+import (
+	"fmt"
+)
+
 type Product struct {
-	Id	       string
+	Id	       ID
 	Classification string
 	CanLeaveGroup  *bool                `yaml:"can_leave_group,omitempty"`
 	DTAPs          DTAPSpec             `yaml:"dtaps,flow,omitempty"`
@@ -11,4 +15,15 @@ type Product struct {
 	ObjectsExclude []string             `yaml:"objects_exclude,omitempty"`
 	Consumes       []InterfaceId   	    `yaml:",omitempty"`
 	MaskColumns	[]string	    `yaml:"mask_columns"`
+}
+
+func (p *Product) validate() error {
+	if err := Id.validate(); err != nil { return err }
+	if err := validateClassification(Classification, CanLeaveGroup); err != nil {
+		return fmt.Errorf("product id: %s, Classificatoin: %v", Id, err)
+	}
+	if err := DTAPs.validate(); err != nil {
+		return fmt.Errorf("product id: %s, DTAPs: %v", Id, err)
+	}
+	return nil
 }
