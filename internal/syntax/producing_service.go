@@ -1,7 +1,7 @@
 package syntax
 
 type ProducingService struct {
-	ID ID_ `yaml:"id"`
+	ID string `yaml:"id"`
         ObjectsDB string `yaml:"objects_db"`
 	DTAPs          DTAPSpec             `yaml:"dtaps,flow,omitempty"`
 }

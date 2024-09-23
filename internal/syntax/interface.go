@@ -5,9 +5,9 @@ import (
 )
 
 type Interface struct {
-	ID		ID_ `yaml:"id"`
-	ProductID		ID_ `yaml:"product_id"`
-	ProducingServiceID *ID_ `yaml:"producing_service_id,omitempty"`
+	ID		string `yaml:"id"`
+	ProductID		string `yaml:"product_id"`
+	ProducingServiceID string `yaml:"producing_service_id,omitempty"`
 	Classification string `yaml:",omitempty"` // inherits from product if not specified; can be less strict, but not stricter
 	CanLeaveGroup  *bool                `yaml:"can_leave_group,omitempty"`
 	ExposeDTAPs    []ID_
@@ -20,11 +20,8 @@ type Interface struct {
 }
 
 func (i * Interface) validate() error {
-	if err := i.ID.validate(); err != nil { return fmt.Errorf("interface %s: %v", i.ID, err) }
-	if err := i.ProductID.validate(); err != nil { return fmt.Errorf("interface %s: %v", i.ID, err) }
-	if i.ProducingServiceID != nil {
-		if err := i.ProducingServiceID.validate(); err != nil { return fmt.Errorf("interface %s: %v", i.ID, err) }
-	}
+	iid := InterfaceID{ID: i.ID, ProductID: i.ProductID, ProducingServiceID: i.ProducingServiceID}
+	id err := iid.validate(); err != nil { return fmt.Errorf("interface: %s") }
 	if err := validateClassification(i.Classification, i.CanLeaveGroup); err != nil { return fmt.Errorf("interface %s: %v", i.ID, err) }
 	for d := range i.ExposeDTAPs {
 		if err := d.validate(); err != nil { return fmt.Errorf("interface %s: exposed DTAP %s: %v", i.ID, d, err) }

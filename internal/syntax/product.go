@@ -5,7 +5,7 @@ import (
 )
 
 type Product struct {
-	ID	       ID_ `yaml:"id"`
+	ID	       string `yaml:"id"`
 	Classification string
 	CanLeaveGroup  *bool                `yaml:"can_leave_group,omitempty"`
 	DTAPs          DTAPSpec             `yaml:"dtaps,flow,omitempty"`

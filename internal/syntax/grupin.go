@@ -8,7 +8,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type Grupin []ElmntOr
+type Grupin struct {
+	ProducingServices map[string]ProducingService
+	Products	map[string]Product
+	Interfaces	map[InterfaceID]Interface
+}
 
 func NewGrupin(r io.Reader) (*Grupin, error) {
 	dec := yaml.NewDecoder(f)
@@ -21,10 +25,11 @@ func NewGrupin(r io.Reader) (*Grupin, error) {
 			break
 		}
 		if err != nil {
-			return r, fmt.Errrorf("decoding YAML: %s", err)
+			return g, fmt.Errrorf("decoding YAML: %s", err)
 		}
-		err := e.validate()
-		g = append(g, e)
+		if err := e.validateAndAdd(&g); err != nil {
+			return g, fmt.Errorf("decoding YAML: %s", err)
+		}
 	}
 	return &g, nil
 }
