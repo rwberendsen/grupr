@@ -13,7 +13,7 @@ type Interface struct {
 
 func (i * Interface) validate() error {
 	iid := InterfaceID{ID: i.ID, ProductID: i.ProductID, ProducingServiceID: i.ProducingServiceID}
-	if err := iid.validate(); err != nil { return fmt.Errorf("interface: %s") }
+	if err := iid.validate(); err != nil { return err }
 	if err := InterfaceMetadata.validate(); err != nil { return fmt.Errorf("interface '%s': %v", iid, err) }
 	return nil
 }

@@ -10,12 +10,12 @@ import (
 )
 
 type Grupin struct {
-	Products map[string]Product
 	ProducingServices map[string]ProducingService
-	Interfaces map[string]map[string]map[string] // ProducingService, Product, and Interface ID, respectively
+	Products map[string]Product
+	Interfaces map[InterfaceID]Interface
 }
 
-func NewGrupin(g syntax.Grupin) (Grupin, error) {
+func NewGrupin(g_in syntax.Grupin) (Grupin, error) {
 	r := Grups{map[string]Product{}, map[string]ProducingService{}}
 	for k, v := range g.ProducingServices {
 		if s, err := newProducingService(v); err != nil {

@@ -23,3 +23,7 @@ func (d DTAPSpec) validate() error {
 	}
 	return nil
 }
+
+func (d DTAPSpec) isEmpty() bool {
+	return d.Prod == "" && len(d.NonProd) == 0
+}

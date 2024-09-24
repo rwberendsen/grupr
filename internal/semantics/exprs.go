@@ -9,43 +9,46 @@ import (
 
 type ExprAttr struct {
 	DTAP      string `yaml:"dtap,omitempty"`
-	DataKind  KindOfData
-	UserGroup string `yaml:"user_group,omitempty"`
+	UserGroups []string `yaml:"user_groups,omitempty"`
 }
 type Exprs map[Expr]ExprAttr
 
 const (
-	DTAPTemplate      = "[dtap]"
+	DTAPTemplate      = "[dtap]" // TODO: at some point, make the character(s) used to demarkate this template configurable
 	UserGroupTemplate = "[user_group]"
 )
 
-func newExprs(s string, DTAPs map[string]KindOfData, UserGroups map[string]bool) (Exprs, error) {
+func newExprs(s string, DTAPs map[string]string, userGroups map[string]string) (Exprs, error) {
 	exprs := Exprs{}
 	if strings.ContainsRune(s, '\n') {
 		return exprs, fmt.Errorf("object expression has newline")
 	}
 	dtapExpanded := map[string]ExprAttr{}
-	if strings.Contains(s, DTAPTemplate) { // TODO: also allow expressions like [dtap:prd] for cases where users want to specify this only exists for a specific DTAP
+	if strings.Contains(s, DTAPTemplate) { // If object exists only in, say, a dev env, that's okay. Cause it's okay if the production rendition of the object does not match any existing objects. What counts is that if they would exist, then they would be matched.
 		if len(DTAPs) == 0 {
 			return exprs, fmt.Errorf("expanding dtaps in '%s': no dtaps found", s)
 		}
-		for d, kod := range DTAPs {
-			dtapExpanded[strings.ReplaceAll(s, DTAPTemplate, d)] = ExprAttr{d, kod, ""}
+		for d, rendered_dtap := range DTAPs {
+			dtapExpanded[strings.ReplaceAll(s, DTAPTemplate, rendered_dtap)] = ExprAttr{DTAP: d}
 		}
 	} else {
-		dtapExpanded[s] = ExprAttr{"", Real, ""}
+		if len(DTAPs) != 0 {
+			return exprs, fmt.Errorf("no dtap expr found, but DTAPs are specified")
+		}
+		dtapExpanded[s] = ExprAttr{}
 	}
 	userGroupExpanded := map[string]ExprAttr{}
+	userGroupKeys := maps.Keys(userGroups)
 	for k, v := range dtapExpanded {
-		if strings.Contains(k, UserGroupTemplate) { // TODO: also allow expressions like [user_group:lpfr] for cases where users want to specify this only exists for a specific DTAP
-			if len(UserGroups) == 0 {
+		if strings.Contains(k, UserGroupTemplate) { // If object exists only for, say, AYNL, that's okay. Cause it's okay if the rendition of the object for other user groups does not match any existing objects. What counts is that if they would exist, then they would be matched.
+			if len(userGroups) == 0 {
 				return exprs, fmt.Errorf("expanding user groups in '%s': no user groups found", k)
 			}
-			for u := range UserGroups {
-				userGroupExpanded[strings.ReplaceAll(k, UserGroupTemplate, u)] = ExprAttr{v.DTAP, v.DataKind, u}
+			for u, rendered_user_group := range userGroups {
+				userGroupExpanded[strings.ReplaceAll(k, UserGroupTemplate, rendered_user_group)] = ExprAttr{v.DTAP, []string{u}}
 			}
 		} else {
-			userGroupExpanded[k] = ExprAttr{v.DTAP, v.DataKind, ""}
+			userGroupExpanded[k] = ExprAttr{v.DTAP, userGroupKeys} // Objects matched by expression are shared between user groups
 		}
 	}
 	for k, v := range userGroupExpanded {

@@ -5,45 +5,34 @@ import (
 )
 
 type InterfaceMetadata struct {
-	Classification string
+	Classification *string `yaml:",omitempty"`
 	CanLeaveGroup  *bool                `yaml:"can_leave_group,omitempty"`
 	UserGroups     []string             `yaml:"user_groups,flow,omitempty"`
-	UserGroupColumn string		    `yaml:"user_group_column,omitempty"`
+	UserGroupColumn *string		    `yaml:"user_group_column,omitempty"`
 	Objects        []string             `yaml:",omitempty"`
 	ObjectsExclude []string             `yaml:"objects_exclude,omitempty"`
-	MaskColumns	[]string	    `yaml:"mask_columns"`
-	HashColumns	[]string	    `yaml:"hash_columns"`
-	ExposeDTAPs	[]string	    `yaml:"expose_dtaps"`
+	MaskColumns	[]string	    `yaml:"mask_columns,omitempty"`
+	HashColumns	[]string	    `yaml:"hash_columns,omitempty"`
+	ExposeDTAPs	[]string	    `yaml:"expose_dtaps,flow,omitempty"`
 }
 
 func (i InterfaceMetadata) validate() error {
-	if err := validateClassification(i.Classification, i.CanLeaveGroup); err != nil { return fmt.Errorf("interface %s: %v", i.ID, err) }
-	for d := range i.ExposeDTAPs {
-		if err := d.validate(); err != nil { return fmt.Errorf("interface %s: exposed DTAP %s: %v", i.ID, d, err) }
+	if Classification != nil {
+		if err := validateClassification(i.Classification, i.CanLeaveGroup); err != nil { return err }
+	} else if CanLeaveGroup != nil {
+		return fmt.Errorf("Classification not specified but CanLeaveGroup was specified")
 	}
 	for u := range i.UserGroups {
-		if err := d.validate(); err != nil { return fmt.Errorf("interface %s: usergroup %s: %v", i.ID, u, err) }
+		if err := validateID(u); err != nil { return fmt.Errorf("UserGroup %s: %v", u, err) }
 	}
 	if i.UserGroupColumn != nil {
-		if i.UserGroups == nil || len(i.UserGroups == 0 { return fmt.Errorf("interface %s: usergroup column specified but no user groups") }
+		if i.UserGroups == nil || len(i.UserGroups == 0 { return fmt.Errorf("UserGroupColumn specified but not UserGroups") }
 	}
-	if i.Objects == nil || len(i.Objects) {
-		return fmt.Errorf("interface %s: no objects specified in interface")
+	if len(i.Objects) == 0 && len(i.ObjectsExclude) != 0 {
+		return fmt.Errorf("no objects specified, but objects to exclude were specified", p.ID)
+	}
+	for d := range i.ExposeDTAPs {
+		if err := validateID(d); err != nil { return fmt.Errorf("exposed DTAPs: %v", err) }
 	}
 	return nil
-	//if err := validateClassification(p.Classification, p.CanLeaveGroup); err != nil {
-	//	return fmt.Errorf("product id: %s, Classificatoin: %v", p.ID, err)
-	//}
-	//for u := range p.UserGroups {
-	//	if err := d.validate(); err != nil { return fmt.Errorf("product %s: usergroup %s: %v", p.ID, u, err) }
-	//}
-	//if p.UserGroupColumn != nil {
-	//	if p.UserGroups == nil || len(p.Usergroups) == 0 { return fmt.Errorf("product %s: usergroup column specified but no user groups", p.ID) }
-	//}
-	//if (p.Objects == nil || len(p.Objects) == 0) && p.ObjectsExclude != nil {
-	//	return fmt.Errorf("product %s: no objects specified, but objects to exclude were specified", p.ID)
-	//}
-	//for i := range p.Consumes {
-	//	if err := i.validate(); err != nil { return fmt.Errorf("product %s: consumes: %v", p.ID, err) }
-	//}
 }
