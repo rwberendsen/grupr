@@ -12,6 +12,7 @@ import (
 type Grupin struct {
 	Products map[string]Product
 	ProducingServices map[string]ProducingService
+	Interfaces map[string]map[string]map[string] // ProducingService, Product, and Interface ID, respectively
 }
 
 func NewGrupin(g syntax.Grupin) (Grupin, error) {
