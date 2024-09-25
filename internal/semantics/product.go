@@ -8,30 +8,11 @@ import (
 	"golang.org/x/exp/maps"
 )
 
-var validTemplate *regexp.Regexp = regexp.MustCompile(`^[A-Za-z0-9_]+$`) // empty DTAP string or UserGroup string not supported
-
-type KindOfData int
-
-const (
-	Real KindOfData = iota
-	Fake
-	Pseudo
-)
-
-var kindsOfData map[string]KindOfData = map[string]KindOfData{"real": Real, "fake": Fake, "pseudo": Pseudo}
-
-func (k KindOfData) String() string {
-	printKindOfData := map[KindOfData]string{Real: "real", Fake: "fake", Pseudo: "pseudo"}
-	return printKindOfData[k]
-}
-
 type Product struct {
-	Classification Classification_
-	DTAPs      map[string]KindOfData `yaml:"dtaps,flow,omitempty"` // TODO: allow rendering a DTAP as an empty string in an identifier, e.g., omit to DTAP for production data
-	UserGroups map[string]bool       `yaml:"user_groups,flow,omitempty"`
-	Matcher    Matcher
-	Interfaces map[string]Interface             `yaml:",omitempty"`
-	Consumes   map[syntax.ProductInterface]bool `yaml:",omitempty"`
+	ID	 string
+	DTAPs      syntax.DTAPSpec `yaml:"dtaps,flow,omitempty"` // TODO: allow rendering a DTAP as an empty string in an identifier, e.g., omit to DTAP for production data
+	Consumes   map[InterfaceID]bool `yaml:",omitempty"`
+	InterfaceMetadata // TODO: lift this out into Grupin.Interfaces!?
 }
 
 func (lhs Product) disjoint(rhs Product) bool {
@@ -54,53 +35,21 @@ func (lhs Product) disjoint(rhs Product) bool {
 	return true
 }
 
-func newProduct(p syntax.Product) (Product, error) {
-	r := Product{
-		DTAPs:      map[string]KindOfData{},
-		UserGroups: map[string]bool{},
-		Interfaces: map[string]Interface{},
-		Consumes:   map[syntax.ProductInterface]bool{},
+func newProduct(p_syn syntax.Product) (Product, error) {
+	p_sem := Product{
+		ID: p_syn.ID,
+		DTAPs:      p_syn.DTAPs,
+		Consumes:   map[InterfaceID]bool{},
+		InterfaceMetadata: newInterfaceMetadata(pSyn.InterfaceMetadata, p_syn.ID),
 	}
-	for k, v := range p.DTAPs {
-		if !validTemplate.MatchString(k) {
-			return r, fmt.Errorf("invalid dtap")
+	for _, i := range p_syn.Consumes {
+		iid := newInterfaceId(i)
+		if _, ok := p_sem.Consumes[iid]; ok {
+			return p_sem, fmt.Errorf("duplicate consumed interface id")
 		}
-		if _, ok := kindsOfData[v]; !ok {
-			return r, fmt.Errorf("invalid kind of data")
-		}
-		r.DTAPs[k] = kindsOfData[v]
+		p_sem.Consumes[iid] = true
 	}
-	for _, i := range p.UserGroups {
-		if !validTemplate.MatchString(i) {
-			return r, fmt.Errorf("invalid user group")
-		}
-		if _, ok := r.UserGroups[i]; ok {
-			return r, fmt.Errorf("duplicate user group")
-		}
-		r.UserGroups[i] = true
-	}
-	if m, err := newMatcher(p.Objects, p.ObjectsExclude, r.DTAPs, r.UserGroups); err != nil {
-		return r, fmt.Errorf("invalid object matching expressions: %s", err)
-	} else {
-		r.Matcher = m
-	}
-	for k, v := range p.Interfaces {
-		if !validId.MatchString(k) {
-			return r, fmt.Errorf("invalid interface id: '%s'", k)
-		}
-		if i, err := newInterface(v, r.DTAPs, r.UserGroups); err != nil {
-			return r, fmt.Errorf("invalid interface '%s': %s", k, err)
-		} else {
-			r.Interfaces[k] = i
-		}
-	}
-	for _, i := range p.Consumes {
-		if _, ok := r.Consumes[i]; ok {
-			return r, fmt.Errorf("duplicate consumed interface id")
-		}
-		r.Consumes[i] = true
-	}
-	return r, nil
+	return p_sem, nil
 }
 
 func (p Product) equals(o Product) bool {

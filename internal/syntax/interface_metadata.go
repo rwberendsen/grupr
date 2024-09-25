@@ -14,6 +14,8 @@ type InterfaceMetadata struct {
 	MaskColumns	[]string	    `yaml:"mask_columns,omitempty"`
 	HashColumns	[]string	    `yaml:"hash_columns,omitempty"`
 	ExposeDTAPs	[]string	    `yaml:"expose_dtaps,flow,omitempty"`
+	DTAPRendering   map[string]string   `yaml:"dtap_rendering,omitempty"`
+        UserGroupRendering map[string]string `yaml:"user_group_rendering,omitempty"`
 }
 
 func (i InterfaceMetadata) validate() error {
@@ -33,6 +35,14 @@ func (i InterfaceMetadata) validate() error {
 	}
 	for d := range i.ExposeDTAPs {
 		if err := validateID(d); err != nil { return fmt.Errorf("exposed DTAPs: %v", err) }
+	}
+	for k, v := range i.DTAPRendering {
+		if err := validateID(k); err != nil { return fmt.Errorf("DTAPRendering key: %v", err) }
+		if err := validateID(v); err != nil { return fmt.Errorf("DTAPRendering value: %v", err) }
+	}
+	for k, v := range i.UserGroupRendering {
+		if err := validateID(k); err != nil { return fmt.Errorf("UserGroupRendering key: %v", err) }
+		if err := validateID(v); err != nil { return fmt.Errorf("UserGroupRendering value: %v", err) }
 	}
 	return nil
 }
