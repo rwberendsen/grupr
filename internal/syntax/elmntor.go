@@ -12,6 +12,7 @@ type ElmntOr struct {
 	ProducingService *ProducingService `yaml:"producing_service,omitempty"`
 	Product *Product `yaml:",omitempty"`
 	Interface *Interface`yaml:"interface,omitempty"`
+	UserGroups UserGroups `yaml:"user_groups"`
 }
 
 func (e ElmntOr) validateAndAdd(g *Grupin) error {
@@ -53,6 +54,16 @@ func (e ElmntOr) validateAndAdd(g *Grupin) error {
 			return fmt.Errorf("duplicate interface id: %s", iid)
 		}
 		g.Interfaces[iid] = e.Interface
+	}
+	if len(UserGroups != 0) {
+		n_elements != 1
+		for _, u := range e.UserGroups {
+			if err := validateUserGroups(u); err != nil { return err }
+		}
+		if len(g.UserGroups) != 0 {
+			return fmt.Errorf("duplicate definition of user groups")
+		}
+		g.UserGroups = e.UserGroups
 	}
 	if n_elements != 1 {
 		return fmt.Errorf("not exactly one element in ElmntOr")

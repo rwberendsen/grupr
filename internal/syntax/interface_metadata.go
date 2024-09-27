@@ -5,10 +5,10 @@ import (
 )
 
 type InterfaceMetadata struct {
-	Classification *string `yaml:",omitempty"`
+	Classification string `yaml:",omitempty"`
 	CanLeaveGroup  *bool                `yaml:"can_leave_group,omitempty"`
 	UserGroups     []string             `yaml:"user_groups,flow,omitempty"`
-	UserGroupColumn *string		    `yaml:"user_group_column,omitempty"`
+	UserGroupColumn string		    `yaml:"user_group_column,omitempty"`
 	Objects        []string             `yaml:",omitempty"`
 	ObjectsExclude []string             `yaml:"objects_exclude,omitempty"`
 	MaskColumns	[]string	    `yaml:"mask_columns,omitempty"`
@@ -19,7 +19,7 @@ type InterfaceMetadata struct {
 }
 
 func (i InterfaceMetadata) validate() error {
-	if Classification != nil {
+	if Classification != "" {
 		if err := validateClassification(i.Classification, i.CanLeaveGroup); err != nil { return err }
 	} else if CanLeaveGroup != nil {
 		return fmt.Errorf("Classification not specified but CanLeaveGroup was specified")
@@ -27,8 +27,8 @@ func (i InterfaceMetadata) validate() error {
 	for u := range i.UserGroups {
 		if err := validateID(u); err != nil { return fmt.Errorf("UserGroup %s: %v", u, err) }
 	}
-	if i.UserGroupColumn != nil {
-		if i.UserGroups == nil || len(i.UserGroups == 0 { return fmt.Errorf("UserGroupColumn specified but not UserGroups") }
+	if i.UserGroupColumn != "" {
+		if len(i.UserGroups) == 0 { return fmt.Errorf("UserGroupColumn specified but not UserGroups") }
 	}
 	if len(i.Objects) == 0 && len(i.ObjectsExclude) != 0 {
 		return fmt.Errorf("no objects specified, but objects to exclude were specified", p.ID)

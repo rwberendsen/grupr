@@ -12,7 +12,7 @@ type Matcher struct {
 	Superset map[Expr]Expr `yaml:",omitempty"`
 }
 
-func newMatcher(include []string, exclude []string, DTAPs map[string]KindOfData, UserGroups map[string]bool) (Matcher, error) {
+func newMatcher(include []string, exclude []string, im InterfaceMetadata) (Matcher, error) {
 	m := Matcher{Exprs{}, Exprs{}, map[Expr]Expr{}}
 	for _, objExpr := range include {
 		exprs, err := newExprs(objExpr, DTAPs, UserGroups)
@@ -44,7 +44,7 @@ func newMatcher(include []string, exclude []string, DTAPs map[string]KindOfData,
 	if ok := m.Exclude.allDisjoint(); !ok {
 		return m, fmt.Errorf("non disjoint set of exclude exprs")
 	}
-	// check that every expr in exclude is a strict subset of exactly one expression in include
+	// Check that every expr in exclude is a strict subset of exactly one expression in include
 	for i := range m.Exclude {
 		hasStrictSuperset := 0
 		for j := range m.Include {

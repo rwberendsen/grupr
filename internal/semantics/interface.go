@@ -8,6 +8,7 @@ import (
 
 type Interface struct {
 	Matcher Matcher
+	InterfaceMetadata
 }
 
 func newInterface(i syntax.Interface, DTAPs map[string]KindOfData, UserGroups map[string]bool) (Interface, error) {

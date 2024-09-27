@@ -10,9 +10,11 @@ import (
 
 type Product struct {
 	ID	 string
-	DTAPs      syntax.DTAPSpec `yaml:"dtaps,flow,omitempty"` // TODO: allow rendering a DTAP as an empty string in an identifier, e.g., omit to DTAP for production data
-	Consumes   map[InterfaceID]bool `yaml:",omitempty"`
-	InterfaceMetadata // TODO: lift this out into Grupin.Interfaces!?
+	DTAPs      syntax.DTAPSpec `yaml:"dtaps,flow,omitempty"`
+	Consumes   map[syntax.InterfaceID]bool `yaml:",omitempty"`
+	Matcher	Matcher
+	InterfaceMetadata
+	Interfaces map[string]Interface
 }
 
 func (lhs Product) disjoint(rhs Product) bool {
@@ -35,21 +37,30 @@ func (lhs Product) disjoint(rhs Product) bool {
 	return true
 }
 
-func newProduct(p_syn syntax.Product) (Product, error) {
-	p_sem := Product{
-		ID: p_syn.ID,
-		DTAPs:      p_syn.DTAPs,
-		Consumes:   map[InterfaceID]bool{},
-		InterfaceMetadata: newInterfaceMetadata(pSyn.InterfaceMetadata, p_syn.ID),
+func newProduct(pSyn syntax.Product, ug syntax.UserGroups) (Product, error) {
+	pSem := Product{
+		ID: pSyn.ID,
+		DTAPs:      pSyn.DTAPs,
+		Consumes:   map[syntax.InterfaceID]bool{},
+		Interfaces map[string]Interface{}
 	}
-	for _, i := range p_syn.Consumes {
-		iid := newInterfaceId(i)
-		if _, ok := p_sem.Consumes[iid]; ok {
-			return p_sem, fmt.Errorf("duplicate consumed interface id")
+	if i, err := newInterfaceMetadata(pSyn.InterfaceMetadata, ug, nil) {
+		return pSem, fmt.Errorf("product %s: interface metadata: %v", pSem.ID, err)
+	} else {
+		pSem.InterfaceMetadata = i
+	}
+	if m, err := newMatcher(pSyn.Objects, pSyn.ObjectsExclude, pSem.InterfaceMetadata); err != nil {
+		return pSem, fmt.Errorf("product %s: matcher: %s", pSem.ID, err)
+	} else {
+		pSem.Matcher = m
+	}
+	for _, iid := range pSyn.Consumes {
+		if _, ok := pSem.Consumes[iid]; ok {
+			return pSem, fmt.Errorf("duplicate consumed interface id")
 		}
-		p_sem.Consumes[iid] = true
+		pSem.Consumes[iid] = true
 	}
-	return p_sem, nil
+	return pSem, nil
 }
 
 func (p Product) equals(o Product) bool {

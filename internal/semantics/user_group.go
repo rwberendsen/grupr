@@ -7,6 +7,4 @@ import (
 type UserGroup int
 
 const (
-	lpnl UserGroup iota
-	lpbe
 )

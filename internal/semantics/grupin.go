@@ -10,30 +10,29 @@ import (
 )
 
 type Grupin struct {
+	UserGroups syntax.UserGroups
 	ProducingServices map[string]syntax.ProducingService
 	Products map[string]Product
-	Interfaces map[InterfaceID]Interface
 }
 
-func NewGrupin(g_syn syntax.Grupin) (Grupin, error) {
-	g_sem := Grupin{map[string]syntax.ProducingService{}, map[string]Product{}, map[InterfaceID]Interface}
-	g_sem.ProducingServices = g_syn.ProducingServices
-	for k, v := range g_syn.Products {
-		if p, err := newProduct(v); err != nil {
-			return g_sem, fmt.Errorf("product '%s': %s", k, err)
+func NewGrupin(gSyn syntax.Grupin) (Grupin, error) {
+	gSem := Grupin{gSyn.UserGroups, gSyn.ProducingServices}, map[string]Product{}}
+	for k, v := range gSyn.Products {
+		if p, err := newProduct(v, gSem.UserGroups); err != nil {
+			return gSem, fmt.Errorf("product '%s': %s", k, err)
 		} else {
-			g_sem.Products[k] = p
+			gSem.Products[k] = p
 		}
 	}
 	for k, v := range gSyn.Interfaces {
 	}
-	if err := g_sem.allConsumedOk(); err != nil {
-		return g_sem, err
+	if err := gSem.allConsumedOk(); err != nil {
+		return gSem, err
 	}
-	if err := g_sem.allDisjoint(); err != nil {
-		return g_sem, err
+	if err := gSem.allDisjoint(); err != nil {
+		return gSem, err
 	}
-	return g_sem, nil
+	return gSem, nil
 }
 
 func (g Grups) allConsumedOk() error {
