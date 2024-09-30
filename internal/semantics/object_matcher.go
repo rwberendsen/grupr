@@ -6,14 +6,14 @@ import (
 	"golang.org/x/exp/maps"
 )
 
-type Matcher struct {
+type ObjectMatcher struct {
 	Include  Exprs
 	Exclude  Exprs         `yaml:",omitempty"`
 	Superset map[Expr]Expr `yaml:",omitempty"`
 }
 
-func newMatcher(include []string, exclude []string, im InterfaceMetadata) (Matcher, error) {
-	m := Matcher{Exprs{}, Exprs{}, map[Expr]Expr{}}
+func newObjectMatcher(include []string, exclude []string, im InterfaceMetadata) (ObjectMatcher, error) {
+	m := ObjectMatcher{Exprs{}, Exprs{}, map[Expr]Expr{}}
 	for _, objExpr := range include {
 		exprs, err := newExprs(objExpr, DTAPs, UserGroups)
 		if err != nil {
@@ -60,11 +60,11 @@ func newMatcher(include []string, exclude []string, im InterfaceMetadata) (Match
 	return m, nil
 }
 
-func (lhs Matcher) equals(rhs Matcher) bool {
+func (lhs ObjectMatcher) equals(rhs ObjectMatcher) bool {
 	return maps.Equal(lhs.Include, rhs.Include) && maps.Equal(lhs.Exclude, rhs.Exclude)
 }
 
-func (lhs Matcher) disjoint(rhs Matcher) bool {
+func (lhs ObjectMatcher) disjoint(rhs ObjectMatcher) bool {
 	for l := range lhs.Include {
 		for r := range rhs.Include {
 			if !l.disjoint(r) {

@@ -7,12 +7,12 @@ import (
 )
 
 type Interface struct {
-	Matcher Matcher
+	ObjectMatcher ObjectMatcher
 	InterfaceMetadata
 }
 
 func newInterface(i syntax.Interface, DTAPs map[string]KindOfData, UserGroups map[string]bool) (Interface, error) {
-	if m, err := newMatcher(i.Objects, i.ObjectsExclude, DTAPs, UserGroups); err != nil {
+	if m, err := newObjectMatcher(i.Objects, i.ObjectsExclude, DTAPs, UserGroups); err != nil {
 		return Interface{}, fmt.Errorf("invalid object matching expressions: %s", err)
 	} else {
 		return Interface{m}, nil
@@ -20,5 +20,5 @@ func newInterface(i syntax.Interface, DTAPs map[string]KindOfData, UserGroups ma
 }
 
 func (i Interface) equals(j Interface) bool {
-	return i.Matcher.equals(j.Matcher)
+	return i.ObjectMatcher.equals(j.ObjectMatcher)
 }

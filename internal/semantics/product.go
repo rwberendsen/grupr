@@ -12,24 +12,24 @@ type Product struct {
 	ID	 string
 	DTAPs      syntax.DTAPSpec `yaml:"dtaps,flow,omitempty"`
 	Consumes   map[syntax.InterfaceID]bool `yaml:",omitempty"`
-	Matcher	Matcher
+	ObjectMatcher	ObjectMatcher
 	InterfaceMetadata
 	Interfaces map[string]Interface
 }
 
 func (lhs Product) disjoint(rhs Product) bool {
-	if !lhs.Matcher.disjoint(rhs.Matcher) {
+	if !lhs.ObjectMatcher.disjoint(rhs.ObjectMatcher) {
 		return false
 	}
 	for _, l := range lhs.Interfaces {
-		if !l.Matcher.disjoint(rhs.Matcher) {
+		if !l.ObjectMatcher.disjoint(rhs.ObjectMatcher) {
 			return false
 		}
 		for _, r := range rhs.Interfaces {
-			if !r.Matcher.disjoint(lhs.Matcher) {
+			if !r.ObjectMatcher.disjoint(lhs.ObjectMatcher) {
 				return false
 			}
-			if !r.Matcher.disjoint(l.Matcher) {
+			if !r.ObjectMatcher.disjoint(l.ObjectMatcher) {
 				return false
 			}
 		}
@@ -49,10 +49,10 @@ func newProduct(pSyn syntax.Product, ug syntax.UserGroups) (Product, error) {
 	} else {
 		pSem.InterfaceMetadata = i
 	}
-	if m, err := newMatcher(pSyn.Objects, pSyn.ObjectsExclude, pSem.InterfaceMetadata); err != nil {
+	if m, err := newObjectMatcher(pSyn.Objects, pSyn.ObjectsExclude, pSem.InterfaceMetadata); err != nil {
 		return pSem, fmt.Errorf("product %s: matcher: %s", pSem.ID, err)
 	} else {
-		pSem.Matcher = m
+		pSem.ObjectMatcher = m
 	}
 	for _, iid := range pSyn.Consumes {
 		if _, ok := pSem.Consumes[iid]; ok {
@@ -67,7 +67,7 @@ func (p Product) equals(o Product) bool {
 	if equal := maps.Equal(p.DTAPs, o.DTAPs); !equal {
 		return false
 	}
-	if equal := p.Matcher.equals(o.Matcher); !equal {
+	if equal := p.ObjectMatcher.equals(o.ObjectMatcher); !equal {
 		return false
 	}
 	// interfaces
