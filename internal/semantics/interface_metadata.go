@@ -7,66 +7,60 @@ import (
 
 type InterfaceMetadata struct {
 	Classification Classification
-	Usergroups []string
+	Usergroups map[string]bool
 	UserGroupColumn ColumnMatcher
 	MaskColumns ColumnMatcher
 	HashColumns ColumnMatcher
-	ExposeDTAPs []string
+	ExposeDTAPs map[string]bool
 	DTAPRendering map[string]string
 	UserGroupRendering map[string]string
 }
 
 
-func newInterfaceMetadata(imSyn syntax.InterfaceMetadata, ug syntax.UserGroups, p *Product) (InterfaceMetadata, error) {
+func newInterfaceMetadata(imSyn syntax.InterfaceMetadata, allowedUserGroups map[string]bool, p *Product) (InterfaceMetadata, error) {
+	// p *Product: if not nil, it will have already validated product-level interface metadata
 	imSem := InterfaceMetadata{}
-	if p != nil {
-		if imSyn.Classification == "" {
+	if err := imSem.setClassification(imSyn, p); err != nil { return err }
+	if err := imSem.setUserGroups(imSyn, allowedUserGroups, p); err != nil { return err }
+	if err := imSem.setUserGroupColumn(imSyn, p); err != nil { return err }
+	// ...
+	return imSem, nil
+}
+
+func (imSem *InterfaceMetadata) setClassification(imSyn syntax.InterfaceMetadata, p *Product) error {
+	if imSyn.Classification == "" {
+		if p != nil {
 			imSem.Classification = p.Classification
-		} else {
-			if c, err := newClassification(imSyn.Classification); err != nil {
-				return imSem, err
-			}
+			return nil
 		}
-		if imSyn.Usergroups == nil { imSem.UserGroups = p.UserGroups }
-		if imSyn.UserGroupColumn == "" { imSem.UserGroupColumn = p.UserGroupColumn }
-		if imSyn.MaskColumns == nil { imSem.MaskColumns = p.MaskColumns }
- 		if imSyn.HashColumns == nil { imSem.HashColumns = p.HashColumns }
-		if imSyn.ExposeDTAPs == nil { imSem.ExposeDTAPs = p.ExposeDTAPs }
-		if imSyn.DTAPRendering == nil { imSem.DTAPRendering = p.DTAPRendering }
-		if imSyn.UserGroupRendering == nil { imSem.UserGroupRendering = p.UserGroupRendering }
+		return fmt.Errorf("Classfication is a required field on product level")
 	}
-	if p == nil {
-		// the interface metadata is product-level
-		if imSyn.Classification == "" {
-			return fmt.Errorf("Classification required on product-level")
-		}
-		imSem.Classification = newClassification(imSyn.Classification)
-		if err := validateUserGroups(imSyn.UserGroups, ug); err != nil { return imSem, err }
-		imSem.UserGroups = imSyn.UserGroups
+	imSem.Classification = newClassification(imSyn.Classification)
+	return nil
+}
+
+func (imSem *InterfaceMetadata) setUserGroups(imSyn syntax.InterfaceMetadata, allowedUserGroups map[string]bool,  p *Product) error {
+	if imSyn.UserGroups == nil {
+		imSem.UserGroups = p.UserGroups
+		return nil
+	}
+	ug := map[string]bool
+	for _, u := range imSyn.UserGroups {
+		if _, ok := allowedUserGroups[u]; !ok { return fmt.Errorf("Unknown user group: %s", u) }
+		if _, ok := ug[u]; ok { return fmt.Errorf("Duplicate user group: %s", u) }
+		ug[u] = true
+	}
+	imSem.UserGroups = ug
+}
+
+func (imSem *InterfaceMetadata) setUserGroupColumn(imSyn syntax.InterfaceMetadata, p *Product) error {
+	if imSyn.UserGroupColumn == nil {
+		imSem.UserGroupColumn = p.UserGroupColumn
+		return nil
+	}
+	if columnMatcher, err := newColumnMatcher(imSyn.UserGroupColumn); err != nil {
+		return fmt.Errorf("user_group_column: %v", err)
 	} else {
-		// the interface metadata should be consistent with the product level interface metadata
+		imSem.UserGroupColumn = columnMatcher
 	}
-	// TODO copy pasted from old newProduct function, to check
-	for _, i := range p_syn.UserGroups {
-		if _, ok := p_sem.UserGroups[i]; ok {
-			return p_sem, fmt.Errorf("duplicate user group")
-		}
-		p_sem.UserGroups[i] = true
-	}
-	if m, err := newMatcher(p_syn.Objects, p_syn.ObjectsExclude, p_sem.DTAPs, p_sem.UserGroups); err != nil {
-		return p_sem, fmt.Errorf("invalid object matching expressions: %s", err)
-	} else {
-		p_sem.Matcher = m
-	}
-	for k, v := range p_syn.Interfaces {
-		if !validId.MatchString(k) {
-			return p_sem, fmt.Errorf("invalid interface id: '%s'", k)
-		}
-		if i, err := newInterface(v, p_sem.DTAPs, p_sem.UserGroups); err != nil {
-			return p_sem, fmt.Errorf("invalid interface '%s': %s", k, err)
-		} else {
-			p_sem.Interfaces[k] = i
-		}
-	}
-	return imSem
 }
