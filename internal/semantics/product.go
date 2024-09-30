@@ -17,26 +17,6 @@ type Product struct {
 	Interfaces map[string]Interface
 }
 
-func (lhs Product) disjoint(rhs Product) bool {
-	if !lhs.ObjectMatcher.disjoint(rhs.ObjectMatcher) {
-		return false
-	}
-	for _, l := range lhs.Interfaces {
-		if !l.ObjectMatcher.disjoint(rhs.ObjectMatcher) {
-			return false
-		}
-		for _, r := range rhs.Interfaces {
-			if !r.ObjectMatcher.disjoint(lhs.ObjectMatcher) {
-				return false
-			}
-			if !r.ObjectMatcher.disjoint(l.ObjectMatcher) {
-				return false
-			}
-		}
-	}
-	return true
-}
-
 func newProduct(pSyn syntax.Product, ug syntax.UserGroups) (Product, error) {
 	pSem := Product{
 		ID: pSyn.ID,
@@ -61,6 +41,26 @@ func newProduct(pSyn syntax.Product, ug syntax.UserGroups) (Product, error) {
 		pSem.Consumes[iid] = true
 	}
 	return pSem, nil
+}
+
+func (lhs Product) disjoint(rhs Product) bool {
+	if !lhs.ObjectMatcher.disjoint(rhs.ObjectMatcher) {
+		return false
+	}
+	for _, l := range lhs.Interfaces {
+		if !l.ObjectMatcher.disjoint(rhs.ObjectMatcher) {
+			return false
+		}
+		for _, r := range rhs.Interfaces {
+			if !r.ObjectMatcher.disjoint(lhs.ObjectMatcher) {
+				return false
+			}
+			if !r.ObjectMatcher.disjoint(l.ObjectMatcher) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func (p Product) equals(o Product) bool {

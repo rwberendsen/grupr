@@ -8,17 +8,17 @@ import (
 )
 
 type ExprAttr struct {
-	DTAP      string `yaml:"dtap,omitempty"`
-	UserGroups []string `yaml:"user_groups,omitempty"`
+	DTAPs      map[string]string `yaml:"dtap,omitempty"`
+	UserGroups map[string]string `yaml:"user_groups,omitempty"`
 }
 type Exprs map[Expr]ExprAttr
 
 const (
-	DTAPTemplate      = "[dtap]" // TODO: at some point, make the character(s) used to demarkate this template configurable
+	DTAPTemplate      = "[dtap]" // TODO: At some point, make the character(s) used to demarkate this template configurable; or, just the whole template; remember, this expands even inside of quoted parts; it happens before splitting.
 	UserGroupTemplate = "[user_group]"
 )
 
-func newExprs(s string, DTAPs map[string]string, userGroups map[string]string) (Exprs, error) {
+func newExprs(s string, DTAPs map[string]string, userGroups map[string]string, isPartOfColumnMatcher bool) (Exprs, error) {
 	exprs := Exprs{}
 	if strings.ContainsRune(s, '\n') {
 		return exprs, fmt.Errorf("object expression has newline")
@@ -28,27 +28,28 @@ func newExprs(s string, DTAPs map[string]string, userGroups map[string]string) (
 		if len(DTAPs) == 0 {
 			return exprs, fmt.Errorf("expanding dtaps in '%s': no dtaps found", s)
 		}
-		for d, rendered_dtap := range DTAPs {
-			dtapExpanded[strings.ReplaceAll(s, DTAPTemplate, rendered_dtap)] = ExprAttr{DTAP: d}
+		for d, renderedDTAP := range DTAPs {
+			dtapExpanded[strings.ReplaceAll(s, DTAPTemplate, renderedDTAP)] = ExprAttr{DTAPs: map[string]string{d: renderedDTAP}}
 		}
 	} else {
-		if len(DTAPs) != 0 {
-			return exprs, fmt.Errorf("no dtap expr found, but DTAPs are specified")
+		if len(DTAPs) != 0 && !isPartOfColumnMatcher {
+			return exprs, fmt.Errorf("The product has DTAPs, and not part of column matcher expression, but no DTAP expansion found")
 		}
-		dtapExpanded[s] = ExprAttr{}
+		// In a column matcher expression, or when there are no DTAPs, it is okay to omit a DTAP expansion
+		// Only when the object matcher is part of a column matcher can a single expression have more than one DTAP
+		dtapExpanded[s] = ExprAttr{DTAPs: DTAPs}
 	}
 	userGroupExpanded := map[string]ExprAttr{}
-	userGroupKeys := maps.Keys(userGroups)
 	for k, v := range dtapExpanded {
-		if strings.Contains(k, UserGroupTemplate) { // If object exists only for, say, AYNL, that's okay. Cause it's okay if the rendition of the object for other user groups does not match any existing objects. What counts is that if they would exist, then they would be matched.
+		if strings.Contains(k, UserGroupTemplate) { // If object only actually exists for, say, one particular user group, that's okay. Cause it's okay if the rendition of the object for other user groups does not match any existing objects. What counts is that if they would exist, then they would be matched.
 			if len(userGroups) == 0 {
 				return exprs, fmt.Errorf("expanding user groups in '%s': no user groups found", k)
 			}
-			for u, rendered_user_group := range userGroups {
-				userGroupExpanded[strings.ReplaceAll(k, UserGroupTemplate, rendered_user_group)] = ExprAttr{v.DTAP, []string{u}}
+			for u, renderedUserGroup := range userGroups {
+				userGroupExpanded[strings.ReplaceAll(k, UserGroupTemplate, renderedUserGroup)] = ExprAttr{DTAPs: v.DTAPs, UserGroups: map[string]string{u: renderedUserGroup}}
 			}
 		} else {
-			userGroupExpanded[k] = ExprAttr{v.DTAP, userGroupKeys} // Objects matched by expression are shared between user groups
+			userGroupExpanded[k] = ExprAttr{DTAPs: v.DTAP, UserGroups: userGroups} // Objects matched by expression are shared between user groups
 		}
 	}
 	for k, v := range userGroupExpanded {
