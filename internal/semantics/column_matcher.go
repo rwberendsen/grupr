@@ -5,21 +5,26 @@ import (
 )
 
 type ColumnMatcher struct {
-	// TODO: next hard nut to crack would be ObjectMatcher incorporates include of type []string;
-	// similarly, one ColumnMatcher can have an []string; but, every entry with a different column name matching expression, potentially... so can we reuse ObjectMatcher after all? We seemed to be so close,
-	// after tackling today how to expand the set logic for column matching expressions. Possibly, we should wrap Exprs instead, rather than ObjectMatcher!? renaming it into ObjExprs!?
-	ColumnExpr ColumnExpr_
+	ColumnExprs ColumnExprs
 }
 
-func newColumnMatcher(l []string) (ColumnMatcher, error) {
-	// split with CSV reader
-
-	// add parts on the left until we have db, schema, table, column
-
-	// create ObjectMatcher object of db, schema, table; with only Include
-
-	// for column; reuse ExprPart
-
+func newColumnMatcher(l []string, im InterfaceMetadata) (ColumnMatcher, error) {
+	m := ColumnMatcher{ColumnExprs{}}
+	for _, expr := range l {
+		exprs, err := newColumnExprs(expr, DTAPs, UserGroups)
+		if err != nil {
+			return m, fmt.Errorf("parsing column expr: %s", err)
+		}
+		for e, ea := range exprs {
+			if _, ok := m.ColumnExprs[e]; ok {
+				return m, fmt.Errorf("duplicate column expr: '%v', with attributes: '%v'", e, ea)
+			}
+			m.ColumnExprs[e] = ea
+		}
+	}
+	if ok := m.ColumnExprs.allDisjoint(); !ok {
+		return m, fmt.Errorf("non disjoint set of column exprs")
+	}
 	// for Validation: if this is not a product-level interface; ObjectMatcher part of ColumnMatcher can not be
 	// disjoint with interface ObjectMatcher: for each DTAP that is: for each DTAP, there must be an overlap in
 	// the objects matched by the ColumnMatcher and the interface ObjectMatcher.

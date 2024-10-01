@@ -63,7 +63,7 @@ func (lhs ExprPart) subsetOf(rhs ExprPart) bool {
 	// *	a*	!subset
 }
 
-func validateExprPart(p ExprPart) bool {
+func (p ExprPart) validate() bool {
 	if p.IsQuoted {
 		return validQuotedExpr.MatchString(p.S)
 	}

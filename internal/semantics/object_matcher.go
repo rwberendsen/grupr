@@ -12,13 +12,10 @@ type ObjectMatcher struct {
 	Superset map[Expr]Expr `yaml:",omitempty"`
 }
 
-func newObjectMatcher(include []string, exclude []string, im InterfaceMetadata, isPartOfColumnMatcher bool) (ObjectMatcher, error) {
-	if isPartOfColumnMatcher && exclude != nil {
-		panic("Column matching expressions do not come with the option to exclude objects")
-	}
+func newObjectMatcher(include []string, exclude []string, im InterfaceMetadata) (ObjectMatcher, error) {
 	m := ObjectMatcher{Exprs{}, Exprs{}, map[Expr]Expr{}}
 	for _, objExpr := range include {
-		exprs, err := newExprs(objExpr, DTAPs, UserGroups, isPartOfColumnMatcher)
+		exprs, err := newExprs(objExpr, DTAPs, UserGroups)
 		if err != nil {
 			return m, fmt.Errorf("parsing obj expr: %s", err)
 		}
@@ -29,7 +26,7 @@ func newObjectMatcher(include []string, exclude []string, im InterfaceMetadata, 
 			m.Include[e] = ea
 		}
 	}
-	if ok := m.Include.allDisjoint(isPartOfColumnMatcher); !ok {
+	if ok := m.Include.allDisjoint(); !ok {
 		return m, fmt.Errorf("non disjoint set of include exprs")
 	}
 	for _, objExpr := range exclude {
@@ -44,7 +41,7 @@ func newObjectMatcher(include []string, exclude []string, im InterfaceMetadata, 
 			m.Exclude[e] = ea
 		}
 	}
-	if ok := m.Exclude.allDisjoint(false); !ok {
+	if ok := m.Exclude.allDisjoint(); !ok {
 		return m, fmt.Errorf("non disjoint set of exclude exprs")
 	}
 	// Check that every expr in exclude is a strict subset of exactly one expression in include
