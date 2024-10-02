@@ -21,10 +21,10 @@ func (e ElmntOr) validateAndAdd(g *Grupin) error {
 		n_elements += 1
 		err := e.ProducingService.validate()
 		if err != nil {
-			return fmt.Errorf("validating ProducingService: %v", err)
+			return err
 		}
 		if _, ok := g.ProducingServices[e.ProducingService.ID]; ok {
-			return fmt.Errorf("duplicate producing service id: %s", e.ProducingService.ID)
+			return FormattingError{fmt.Sprintf("duplicate producing service id: %s", e.ProducingService.ID)}
 		}
 		g.ProducingServices[e.ProducingService.ID] = e.ProducingService
 	}
@@ -32,10 +32,10 @@ func (e ElmntOr) validateAndAdd(g *Grupin) error {
 		n_elements += 1
 		err := e.Product.validate()
 		if err != nil {
-			return fmt.Errorf("validating Product: %v", err)
+			return err
 		}
 		if _, ok := g.Products[e.Product.ID]; ok {
-			return fmt.Errorf("duplicate product id: %s", e.Product.ID)
+			return FormattingError{fmt.Sprintf("duplicate product id: %s", e.Product.ID)}
 		}
 		g.Products[e.Product.ID] = e.Product
 	}
@@ -43,7 +43,7 @@ func (e ElmntOr) validateAndAdd(g *Grupin) error {
 		n_elements += 1
 		err := e.Interface.validate()
 		if err != nil {
-			return fmt.Errorf("validating Interface: %v", err)
+			return err
 		}
 		iid := InterfaceID{
 			ID: e.Interface.ID,
@@ -51,22 +51,22 @@ func (e ElmntOr) validateAndAdd(g *Grupin) error {
 			ProducingServiceID: e.Interface.ProducingServiceID
 		}
 		if _, ok := g.Interfaces[iid]; ok {
-			return fmt.Errorf("duplicate interface id: %s", iid)
+			return FormattingError{fmt.Sprintf("duplicate interface id: %s", iid)}
 		}
 		g.Interfaces[iid] = e.Interface
 	}
-	if len(UserGroups != 0) {
+	if e.UserGroups != nil {
 		n_elements != 1
 		ug := map[string]bool
 		for _, u := range e.UserGroups {
-			if err := validateID(u); err != nil { return fmt.Errorf("user_groups: %v", err) }
-			if _, ok := ug[u]; ok { return fmt.Errorf("duplicate user group: %s", u) }
+			if err := validateID(u); err != nil { return fmt.Errorf("user_groups: %w", err) }
+			if _, ok := ug[u]; ok { return FormattingError{fmt.Sprintf("duplicate user group: %s", u)} }
 			ug[u] = true
 		}
 		g.UserGroups = u
 	}
 	if n_elements != 1 {
-		return fmt.Errorf("not exactly one element in ElmntOr")
+		return FormattingError{"not exactly one element in ElmntOr"}
 	}
 	return nil
 }

@@ -14,8 +14,8 @@ type Product struct {
 func (p *Product) validate() error {
 	if err := validateID(p.ID); err != nil { return err }
 	if err := p.DTAPs.validate(); err != nil {
-		return fmt.Errorf("product id: %s, DTAPs: %v", p.ID, err)
+		return fmt.Errorf("product id: %s, DTAPs: %w", p.ID, err)
 	}
-	if err := InterfaceMetadata.validate(); err != nil { return fmt.Errorf("product %s: %v", p.ID, err) }
+	if err := InterfaceMetadata.validate(); err != nil { return fmt.Errorf("product %s: %w", p.ID, err) }
 	return nil
 }

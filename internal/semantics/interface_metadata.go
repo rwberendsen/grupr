@@ -13,8 +13,8 @@ type InterfaceMetadata struct {
 	MaskColumns ColMatcher
 	HashColumns ColMatcher
 	ExposeDTAPs map[string]bool
-	DTAPRendering map[string]string
-	UserGroupRendering map[string]string
+	DTAPRendering map[string]string // Renderings may contain upper-case characters, so they can be used inside quoted fields
+	UserGroupRendering map[string]string // Renderings may contain upper-case characters, so they can be used inside quoted fields
 }
 
 
@@ -34,11 +34,11 @@ func (imSem *InterfaceMetadata) setClassification(imSyn syntax.InterfaceMetadata
 			imSem.Classification = p.Classification
 			return nil
 		}
-		return fmt.Errorf("Classfication is a required field on product level")
+		return PolicyError{"Classfication is a required field on product level"}
 	}
 	imSem.Classification = newClassification(imSyn.Classification)
 	if p != nil && p.Classification < imSem.Classification {
-		return fmt.Errorf("Classification on interface higher than product classification")
+		return PolicyError{"Classification on interface higher than product classification"}
 	}
 	return nil
 }
@@ -50,8 +50,8 @@ func (imSem *InterfaceMetadata) setUserGroups(imSyn syntax.InterfaceMetadata, al
 	}
 	ug := map[string]bool
 	for _, u := range imSyn.UserGroups {
-		if _, ok := allowedUserGroups[u]; !ok { return fmt.Errorf("Unknown user group: %s", u) }
-		if _, ok := ug[u]; ok { return fmt.Errorf("Duplicate user group: %s", u) }
+		if _, ok := allowedUserGroups[u]; !ok { return SetLogicError{fmt.Sprintf("Unknown user group: %s", u)} }
+		if _, ok := ug[u]; ok { return SetLogicError{fmt.Sprintf("Duplicate user group: %s", u) } }
 		ug[u] = true
 	}
 	imSem.UserGroups = ug
@@ -63,7 +63,7 @@ func (imSem *InterfaceMetadata) setUserGroupColumn(imSyn syntax.InterfaceMetadat
 		return nil
 	}
 	if columnMatcher, err := newColMatcher(imSyn.UserGroupColumn); err != nil {
-		return fmt.Errorf("user_group_column: %v", err)
+		return fmt.Errorf("user_group_column: %w", err)
 	} else {
 		imSem.UserGroupColumn = columnMatcher
 	}

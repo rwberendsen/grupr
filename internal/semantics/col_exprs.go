@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"golang.org/x/exp/maps"
+	"github.com/rwberendsen/grupr/internal/syntax"
 )
 
 type ColExprAttr struct {
@@ -21,12 +22,12 @@ const (
 func newColExprs(s string, DTAPs map[string]string, userGroups map[string]string) (ColExprs, error) {
 	exprs := ColExprs{}
 	if strings.ContainsRune(s, '\n') {
-		return exprs, fmt.Errorf("object expression has newline")
+		return exprs, syntax.FormattingError{"object expression has newline"}
 	}
 	dtapExpanded := map[string]ColExprAttr{}
 	if strings.Contains(s, DTAPTemplate) { // If object exists only in, say, a dev env, that's okay. Cause it's okay if the production rendition of the object does not match any existing objects. What counts is that if they would exist, then they would be matched.
 		if len(DTAPs) == 0 {
-			return exprs, fmt.Errorf("expanding dtaps in '%s': no dtaps found", s)
+			return exprs, SetLogicError{fmt.Sprintf("expanding dtaps in '%s': no dtaps found", s)}
 		}
 		for d, renderedDTAP := range DTAPs {
 			dtapExpanded[strings.ReplaceAll(s, DTAPTemplate, renderedDTAP)] = ColExprAttr{DTAPs: map[string]string{d: renderedDTAP}}

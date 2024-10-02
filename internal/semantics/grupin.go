@@ -19,7 +19,7 @@ func NewGrupin(gSyn syntax.Grupin) (Grupin, error) {
 	gSem := Grupin{gSyn.UserGroups, gSyn.ProducingServices}, map[string]Product{}}
 	for k, v := range gSyn.Products {
 		if p, err := newProduct(v, gSem.UserGroups); err != nil {
-			return gSem, fmt.Errorf("product '%s': %s", k, err)
+			return gSem,  err
 		} else {
 			gSem.Products[k] = p
 		}
@@ -39,7 +39,7 @@ func (g Grups) allConsumedOk() error {
 	for pid, p := range g.Products {
 		for pi := range p.Consumes {
 			if pi.Product == pid {
-				return fmt.Errorf("consuming interface '%s' from own product '%s'", pi.Interface, pi.Product)
+				return PolicyError{fmt.Sprintf("consuming interface '%s' from own product '%s'", pi.Interface, pi.Product)}
 			}
 			if pUpstream, ok := g.Products[pi.Product]; !ok {
 				return fmt.Errorf("product '%s': consumed product '%s' not found", pid, pi.Product)

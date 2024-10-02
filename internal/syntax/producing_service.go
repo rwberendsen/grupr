@@ -1,5 +1,9 @@
 package syntax
 
+import (
+	"fmt"
+)
+
 type ProducingService struct {
 	ID string `yaml:"id"`
         ObjectsDB string `yaml:"objects_db,omitempty"`
@@ -7,7 +11,7 @@ type ProducingService struct {
 }
 
 func (p ProducingService) validate() error {
-	if err := ID.validate(); err != nil { return err }
-	if err := DTAPs.validate(); err != nil { return err }
+	if err := validateID(); err != nil { return err }
+	if err := DTAPs.validate(); err != nil { return fmt.Errorf("Producing service id '%s', DTAPs: %w", p.ID, err) }
 	return nil
 }

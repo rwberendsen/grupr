@@ -26,10 +26,10 @@ func NewGrupin(r io.Reader) (*Grupin, error) {
 			break
 		}
 		if err != nil {
-			return g, fmt.Errrorf("decoding YAML: %s", err)
+			return g, fmt.Errrorf("decoding YAML: %w", err)
 		}
 		if err := e.validateAndAdd(&g); err != nil {
-			return g, fmt.Errorf("decoding YAML: %s", err)
+			return g, fmt.Errorf("decoding YAML: %w", err)
 		}
 	}
 	return &g, nil

@@ -1,4 +1,4 @@
-package semantics
+ackage semantics
 
 import (
 	"regexp"
@@ -18,6 +18,16 @@ func CreateRegexpIdentifier(s string) *regexp.Regexp {
 type ExprPart struct {
 	S        string
 	IsQuoted bool
+}
+
+func (p ExprPart) validate() bool {
+	if p.IsQuoted {
+		return validQuotedExpr.MatchString(p.S)
+	}
+	if !validUnquotedExpr.MatchString(p.S) {
+		return p.S == "*"
+	}
+	return true
 }
 
 func (lhs ExprPart) subsetOf(rhs ExprPart) bool {
@@ -61,16 +71,6 @@ func (lhs ExprPart) subsetOf(rhs ExprPart) bool {
 	// ab	abc*	!subset
 	// a*	*	subset
 	// *	a*	!subset
-}
-
-func (p ExprPart) validate() bool {
-	if p.IsQuoted {
-		return validQuotedExpr.MatchString(p.S)
-	}
-	if !validUnquotedExpr.MatchString(p.S) {
-		return p.S == "*"
-	}
-	return true
 }
 
 func (lhs ExprPart) disjoint(rhs ExprPart) bool {

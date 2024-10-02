@@ -24,7 +24,7 @@ func newProduct(pSyn syntax.Product, ug syntax.UserGroups) (Product, error) {
 		Interfaces map[string]Interface{}
 	}
 	if i, err := newInterfaceMetadata(pSyn.InterfaceMetadata, ug, nil) {
-		return pSem, fmt.Errorf("product %s: interface metadata: %v", pSem.ID, err)
+		return pSem, fmt.Errorf("product id %s: interface metadata: %w", pSem.ID, err)
 	} else {
 		pSem.InterfaceMetadata = i
 	}
