@@ -6,14 +6,14 @@ import (
 	"golang.org/x/exp/maps"
 )
 
-type ObjectMatcher struct {
+type ObjMatcher struct {
 	Include  ObjExprs
 	Exclude  ObjExprs         `yaml:",omitempty"`
 	Superset map[ObjExpr]ObjExpr `yaml:",omitempty"`
 }
 
-func newObjectMatcher(include []string, exclude []string, im InterfaceMetadata) (ObjectMatcher, error) {
-	m := ObjectMatcher{Exprs{}, Exprs{}, map[ObjExpr]ObjExpr{}}
+func newObjMatcher(include []string, exclude []string, im InterfaceMetadata) (ObjMatcher, error) {
+	m := ObjMatcher{Exprs{}, Exprs{}, map[ObjExpr]ObjExpr{}}
 	for _, expr := range include {
 		objExprs, err := newObjExprs(expr, DTAPs, UserGroups)
 		if err != nil {
@@ -60,11 +60,11 @@ func newObjectMatcher(include []string, exclude []string, im InterfaceMetadata) 
 	return m, nil
 }
 
-func (lhs ObjectMatcher) equals(rhs ObjectMatcher) bool {
+func (lhs ObjMatcher) equals(rhs ObjMatcher) bool {
 	return maps.Equal(lhs.Include, rhs.Include) && maps.Equal(lhs.Exclude, rhs.Exclude)
 }
 
-func (lhs ObjectMatcher) disjoint(rhs ObjectMatcher) bool {
+func (lhs ObjMatcher) disjoint(rhs ObjMatcher) bool {
 	for l := range lhs.Include {
 		for r := range rhs.Include {
 			if !l.disjoint(r) {
@@ -77,11 +77,11 @@ func (lhs ObjectMatcher) disjoint(rhs ObjectMatcher) bool {
 	return true
 }
 
-func (om ObjectMatcher) disjointWithColumnExpr(c ColExpr, dtap string) {
+func (om ObjMatcher) disjointWithColumnExpr(c ColExpr, dtap string) {
 	for o, attr := range om.Include {
 		if attr.DTAP == dtap {
 			if !c.disjointWithExpr(o) {
-				if c.subsetOfObjExpr(om.Exclude) {
+				if !c.subsetOfObjExprs(om.Exclude) {
 					return false
 				}
 			}

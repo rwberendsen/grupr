@@ -6,12 +6,12 @@ import (
 )
 
 type InterfaceMetadata struct {
-	ObjectMatcher	ObjectMatcher
+	ObjectMatcher	ObjMatcher
 	Classification Classification
 	Usergroups map[string]bool
-	UserGroupColumn ColumnMatcher
-	MaskColumns ColumnMatcher
-	HashColumns ColumnMatcher
+	UserGroupColumn ColMatcher
+	MaskColumns ColMatcher
+	HashColumns ColMatcher
 	ExposeDTAPs map[string]bool
 	DTAPRendering map[string]string
 	UserGroupRendering map[string]string
@@ -62,7 +62,7 @@ func (imSem *InterfaceMetadata) setUserGroupColumn(imSyn syntax.InterfaceMetadat
 		imSem.UserGroupColumn = p.UserGroupColumn
 		return nil
 	}
-	if columnMatcher, err := newColumnMatcher(imSyn.UserGroupColumn); err != nil {
+	if columnMatcher, err := newColMatcher(imSyn.UserGroupColumn); err != nil {
 		return fmt.Errorf("user_group_column: %v", err)
 	} else {
 		imSem.UserGroupColumn = columnMatcher
