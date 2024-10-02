@@ -6,6 +6,7 @@ import (
 )
 
 type InterfaceMetadata struct {
+	ObjectMatcher	ObjectMatcher
 	Classification Classification
 	Usergroups map[string]bool
 	UserGroupColumn ColumnMatcher
@@ -36,6 +37,9 @@ func (imSem *InterfaceMetadata) setClassification(imSyn syntax.InterfaceMetadata
 		return fmt.Errorf("Classfication is a required field on product level")
 	}
 	imSem.Classification = newClassification(imSyn.Classification)
+	if p != nil && p.Classification < imSem.Classification {
+		return fmt.Errorf("Classification on interface higher than product classification")
+	}
 	return nil
 }
 

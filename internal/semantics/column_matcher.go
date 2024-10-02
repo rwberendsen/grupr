@@ -25,6 +25,14 @@ func newColumnMatcher(l []string, im InterfaceMetadata) (ColumnMatcher, error) {
 	if ok := m.ColumnExprs.allDisjoint(); !ok {
 		return m, fmt.Errorf("non disjoint set of column exprs")
 	}
+	for e, ea range m.ColumnExprs {
+		for dtap in ea.DTAPs {
+			if im.ObjectMatcher.disjointWithColumnExpr(e, dtap) {
+				return m, fmt.Errorf("column expression '%s' disjoint with object expression", e)
+			}
+		}
+	}
+	return m, nil
 	// for Validation: if this is not a product-level interface; ObjectMatcher part of ColumnMatcher can not be
 	// disjoint with interface ObjectMatcher: for each DTAP that is: for each DTAP, there must be an overlap in
 	// the objects matched by the ColumnMatcher and the interface ObjectMatcher.

@@ -7,19 +7,19 @@ import (
 )
 
 type ObjectMatcher struct {
-	Include  Exprs
-	Exclude  Exprs         `yaml:",omitempty"`
-	Superset map[Expr]Expr `yaml:",omitempty"`
+	Include  ObjExprs
+	Exclude  ObjExprs         `yaml:",omitempty"`
+	Superset map[ObjExpr]ObjExpr `yaml:",omitempty"`
 }
 
 func newObjectMatcher(include []string, exclude []string, im InterfaceMetadata) (ObjectMatcher, error) {
-	m := ObjectMatcher{Exprs{}, Exprs{}, map[Expr]Expr{}}
-	for _, objExpr := range include {
-		exprs, err := newExprs(objExpr, DTAPs, UserGroups)
+	m := ObjectMatcher{Exprs{}, Exprs{}, map[ObjExpr]ObjExpr{}}
+	for _, expr := range include {
+		objExprs, err := newObjExprs(expr, DTAPs, UserGroups)
 		if err != nil {
 			return m, fmt.Errorf("parsing obj expr: %s", err)
 		}
-		for e, ea := range exprs {
+		for e, ea := range objExprs {
 			if _, ok := m.Include[e]; ok {
 				return m, fmt.Errorf("duplicate include expr: '%v', with attributes: '%v'", e, ea)
 			}
@@ -29,12 +29,12 @@ func newObjectMatcher(include []string, exclude []string, im InterfaceMetadata) 
 	if ok := m.Include.allDisjoint(); !ok {
 		return m, fmt.Errorf("non disjoint set of include exprs")
 	}
-	for _, objExpr := range exclude {
-		exprs, err := newExprs(objExpr, DTAPs, UserGroups, false)
+	for _, expr := range exclude {
+		objExprs, err := newObjExprs(expr, DTAPs, UserGroups, false)
 		if err != nil {
 			return m, fmt.Errorf("parsing obj expr: %s", err)
 		}
-		for e, ea := range exprs {
+		for e, ea := range objExprs {
 			if _, ok := m.Exclude[e]; ok {
 				return m, fmt.Errorf("duplicate exclude expr")
 			}
@@ -77,16 +77,12 @@ func (lhs ObjectMatcher) disjoint(rhs ObjectMatcher) bool {
 	return true
 }
 
-func (lhs ObjectMatcher) disjointInDTAP(rhs ObjectMatcher, DTAP string) {
-	for lk, lv := range lhs.Include {
-		if _, lOK := lv.DTAPs[DTAP]; lOK {
-			for rk, rv := range rhs.Include {
-				if _, rOK := rv.DTAPs[DTAP]; rOK {
-					if !lk.disjoint(rk) {
-						if !lk.subsetOfExprs(rhs.Exclude) && !rk.subsetOfExprs(lhs.Exclude) {
-							return false
-						}
-					}
+func (om ObjectMatcher) disjointWithColumnExpr(c ColExpr, dtap string) {
+	for o, attr := range om.Include {
+		if attr.DTAP == dtap {
+			if !c.disjointWithExpr(o) {
+				if c.subsetOfObjExpr(om.Exclude) {
+					return false
 				}
 			}
 		}

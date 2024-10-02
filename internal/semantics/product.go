@@ -12,7 +12,6 @@ type Product struct {
 	ID	 string
 	DTAPs      syntax.DTAPSpec `yaml:"dtaps,flow,omitempty"`
 	Consumes   map[syntax.InterfaceID]bool `yaml:",omitempty"`
-	ObjectMatcher	ObjectMatcher
 	InterfaceMetadata
 	Interfaces map[string]Interface
 }
