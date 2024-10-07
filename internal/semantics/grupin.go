@@ -13,10 +13,11 @@ type Grupin struct {
 	UserGroups syntax.UserGroups
 	ProducingServices map[string]syntax.ProducingService
 	Products map[string]Product
+	Interfaces map[syntax.InterfaceID]Interface
 }
 
 func NewGrupin(gSyn syntax.Grupin) (Grupin, error) {
-	gSem := Grupin{gSyn.UserGroups, gSyn.ProducingServices}, map[string]Product{}}
+	gSem := Grupin{gSyn.UserGroups, gSyn.ProducingServices}, map[string]Product{}, map[syntax.InterfaceID]Interface}
 	for k, v := range gSyn.Products {
 		if p, err := newProduct(v, gSem.UserGroups); err != nil {
 			return gSem,  err
@@ -35,16 +36,14 @@ func NewGrupin(gSyn syntax.Grupin) (Grupin, error) {
 	return gSem, nil
 }
 
-func (g Grups) allConsumedOk() error {
-	for pid, p := range g.Products {
-		for pi := range p.Consumes {
-			if pi.Product == pid {
-				return PolicyError{fmt.Sprintf("consuming interface '%s' from own product '%s'", pi.Interface, pi.Product)}
+func (g Grupin) allConsumedOk() error {
+	for _, p := range g.Products {
+		for iid := range p.Consumes {
+			if _, ok := g.Interfaces[iid]; !ok {
+				return syntax.SetLogicError{fmt.Sprintf("product '%s': consumed interface '%s' not found", p.ID, iid)}
 			}
-			if pUpstream, ok := g.Products[pi.Product]; !ok {
-				return fmt.Errorf("product '%s': consumed product '%s' not found", pid, pi.Product)
-			} else if _, ok := pUpstream.Interfaces[pi.Interface]; !ok {
-				return fmt.Errorf("product '%s': consumed interface '%s' from product '%s' not found", pid, pi.Interface, pi.Product)
+			if p.Classification < g.Interfaces[iid].Classification {
+				return PolicyError{fmt.Sprintf("product '%s' consumes interface with higher classification", p.ID)}
 			}
 		}
 	}
@@ -59,7 +58,7 @@ func (g Grups) allDisjoint() error {
 	for i := 0; i < len(keys)-1; i++ {
 		for j := i + 1; j < len(keys); j++ {
 			if !g.Products[keys[i]].disjoint(g.Products[keys[j]]) {
-				return fmt.Errorf("overlapping products '%s' and '%s'", keys[i], keys[j])
+				return syntax.SetLogicError{fmt.Sprintf("overlapping products '%s' and '%s'", keys[i], keys[j])}
 			}
 		}
 	}

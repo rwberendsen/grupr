@@ -1,5 +1,9 @@
 package syntax
 
+import (
+	"fmt"
+)
+
 type InterfaceID struct {
 	ID string `yaml:"interface"`
 	ProductID   string `yaml:"product"`

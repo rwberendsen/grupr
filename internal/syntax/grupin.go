@@ -9,10 +9,10 @@ import (
 )
 
 type Grupin struct {
+	UserGroups	map[string]bool
 	ProducingServices map[string]ProducingService
 	Products	map[string]Product
 	Interfaces	map[InterfaceID]Interface
-	UserGroups	map[string]bool
 }
 
 func NewGrupin(r io.Reader) (*Grupin, error) {
