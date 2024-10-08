@@ -14,8 +14,8 @@ type InterfaceMetadata struct {
 	MaskColumns	[]string	    `yaml:"mask_columns,omitempty"`
 	HashColumns	[]string	    `yaml:"hash_columns,omitempty"`
 	ExposeDTAPs	[]string	    `yaml:"expose_dtaps,flow,omitempty"`
-	DTAPRendering   map[string]string   `yaml:"dtap_rendering,omitempty"`
-        UserGroupRendering map[string]string `yaml:"user_group_rendering,omitempty"`
+	DTAPRendering   Rendering 		`yaml:"dtap_rendering,omitempty"`
+        UserGroupRendering Rendering `yaml:"user_group_rendering,omitempty"`
 }
 
 func (i InterfaceMetadata) validate() error {
@@ -34,15 +34,9 @@ func (i InterfaceMetadata) validate() error {
 		return fmt.Errorf("no objects specified, but objects to exclude were specified", p.ID)
 	}
 	for d := range i.ExposeDTAPs {
-		if err := validateID(d); err != nil { return fmt.Errorf("exposed DTAPs: %w", err) }
+		if err := validateID(d); err != nil { return fmt.Errorf("ExposeDTAPs: %w", err) }
 	}
-	for k, v := range i.DTAPRendering {
-		if err := validateID(k); err != nil { return fmt.Errorf("DTAPRendering key: %w", err) }
-		if err := validateID(v); err != nil { return fmt.Errorf("DTAPRendering value: %w", err) }
-	}
-	for k, v := range i.UserGroupRendering {
-		if err := validateID(k); err != nil { return fmt.Errorf("UserGroupRendering key: %w", err) }
-		if err := validateID(v); err != nil { return fmt.Errorf("UserGroupRendering value: %w", err) }
-	}
+	if err := i.DTAPRendering.validate(); err != nil { return fmt.Errorf("DTAPRendering: %w", err) }
+	if err := i.UserGroupRendering.validate(); err != nil { return fmt.Errorf("UserGroupRendering: %w", err) }
 	return nil
 }
