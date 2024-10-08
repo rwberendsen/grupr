@@ -18,3 +18,11 @@ func (i InterfaceID) validate() error {
 	}
 	return nil
 }
+
+func (i InterfaceID) IsProductInterface() bool {
+	return i.ProducingServiceID == ""
+}
+
+func (i InterfaceID) IsProducingServiceInterface() bool {
+	return i.ProducingServiceID != ""
+}
