@@ -25,7 +25,7 @@ func (i InterfaceMetadata) validate() error {
 		return fmt.Errorf("Classification not specified but CanLeaveGroup was specified")
 	}
 	for u := range i.UserGroups {
-		if err := validateID(u); err != nil { return fmt.Errorf("UserGroup %s: %v", u, err) }
+		if err := validateID(u); err != nil { return fmt.Errorf("UserGroup %s: %w", u, err) }
 	}
 	if i.UserGroupColumn != "" {
 		if len(i.UserGroups) == 0 { return fmt.Errorf("UserGroupColumn specified but not UserGroups") }
@@ -34,15 +34,15 @@ func (i InterfaceMetadata) validate() error {
 		return fmt.Errorf("no objects specified, but objects to exclude were specified", p.ID)
 	}
 	for d := range i.ExposeDTAPs {
-		if err := validateID(d); err != nil { return fmt.Errorf("exposed DTAPs: %v", err) }
+		if err := validateID(d); err != nil { return fmt.Errorf("exposed DTAPs: %w", err) }
 	}
 	for k, v := range i.DTAPRendering {
-		if err := validateID(k); err != nil { return fmt.Errorf("DTAPRendering key: %v", err) }
-		if err := validateID(v); err != nil { return fmt.Errorf("DTAPRendering value: %v", err) }
+		if err := validateID(k); err != nil { return fmt.Errorf("DTAPRendering key: %w", err) }
+		if err := validateID(v); err != nil { return fmt.Errorf("DTAPRendering value: %w", err) }
 	}
 	for k, v := range i.UserGroupRendering {
-		if err := validateID(k); err != nil { return fmt.Errorf("UserGroupRendering key: %v", err) }
-		if err := validateID(v); err != nil { return fmt.Errorf("UserGroupRendering value: %v", err) }
+		if err := validateID(k); err != nil { return fmt.Errorf("UserGroupRendering key: %w", err) }
+		if err := validateID(v); err != nil { return fmt.Errorf("UserGroupRendering value: %w", err) }
 	}
 	return nil
 }

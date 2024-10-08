@@ -18,35 +18,37 @@ type InterfaceMetadata struct {
 }
 
 
-func newInterfaceMetadata(imSyn syntax.InterfaceMetadata, allowedUserGroups map[string]bool, p *Product, s *ProducingService) (InterfaceMetadata, error) {
+func newInterfaceMetadata(imSyn syntax.InterfaceMetadata, allowedUserGroups map[string]bool, dtaps syntax.DTAPSpec, parent *InterfaceMetadata) (InterfaceMetadata, error) {
 	// p *Product: if not nil, it will have already validated product-level interface metadata
-	imSem := InterfaceMetadata{}
-	if err := imSem.setClassification(imSyn, p); err != nil { return err }
-	if err := imSem.setUserGroups(imSyn, allowedUserGroups, p); err != nil { return err }
-	if err := imSem.setUserGroupColumn(imSyn, p); err != nil { return err }
-	if err := imSem.setExposeDTAPs(imSyn, p, s); err != nil { return err }
+	imSem := InterfaceMetadata{ExposeDTAPs: map[string]bool{}}
+	if err := imSem.setClassification(imSyn, parent); err != nil { return err }
+	if err := imSem.setUserGroups(imSyn, parent, allowedUserGroups); err != nil { return err }
+	if err := imSem.setUserGroupColumn(imSyn, parent); err != nil { return err }
+	if err := imSem.setExposeDTAPs(imSyn, parent, dtaps); err != nil { return err }
 	// ...
 	return imSem, nil
 }
 
-func (imSem *InterfaceMetadata) setClassification(imSyn syntax.InterfaceMetadata, p *Product) error {
+func (imSem *InterfaceMetadata) setClassification(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata) error {
 	if imSyn.Classification == "" {
-		if p != nil {
+		if parent != nil {
 			imSem.Classification = p.Classification
 			return nil
 		}
 		return PolicyError{"Classfication is a required field on product level"}
 	}
 	imSem.Classification = newClassification(imSyn.Classification)
-	if p != nil && p.Classification < imSem.Classification {
+	if parent != nil && parent.Classification < imSem.Classification {
 		return PolicyError{"Classification on interface higher than product classification"}
 	}
 	return nil
 }
 
-func (imSem *InterfaceMetadata) setUserGroups(imSyn syntax.InterfaceMetadata, allowedUserGroups map[string]bool,  p *Product) error {
+func (imSem *InterfaceMetadata) setUserGroups(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata, allowedUserGroups map[string]bool) error {
 	if imSyn.UserGroups == nil {
-		imSem.UserGroups = p.UserGroups
+		if parent != nil {
+			imSem.UserGroups = parent.UserGroups
+		}
 		return nil
 	}
 	ug := map[string]bool
@@ -58,18 +60,31 @@ func (imSem *InterfaceMetadata) setUserGroups(imSyn syntax.InterfaceMetadata, al
 	imSem.UserGroups = ug
 }
 
-func (imSem *InterfaceMetadata) setUserGroupColumn(imSyn syntax.InterfaceMetadata, p *Product) error {
-	if imSyn.UserGroupColumn == nil {
-		imSem.UserGroupColumn = p.UserGroupColumn
+func (imSem *InterfaceMetadata) setUserGroupColumn(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata) error {
+	if imSyn.UserGroupColumn == "" {
+		if parent != nil {
+			imSem.UserGroupColumn = parent.UserGroupColumn
+		}
 		return nil
 	}
-	if columnMatcher, err := newColMatcher(imSyn.UserGroupColumn); err != nil {
+	if columnMatcher, err := newColMatcher(imSyn.UserGroupColumn); err != nil { // TODO colMatcher needs some context, like DTAPs and UserGroups
 		return fmt.Errorf("user_group_column: %w", err)
 	} else {
 		imSem.UserGroupColumn = columnMatcher
 	}
 }
 
-func (imSem *InterfaceMetadata) setExposeDTAPs(imSyn syntax.InterfaceMetadata, p *Product, s *ProducingService) error {
-	// ...
+func (imSem *InterfaceMetadata) setExposeDTAPs(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata, dtaps syntax.DTAPSpec) error {
+	if imSyn.ExposeDTAPs == nil {
+		if parent != nil {
+			imSem.ExposeDTAPs = parent.ExposeDTAPs
+		}
+		return nil
+	}
+	for _, d := range imSyn.ExposeDTAPs {
+		if _, ok := imSem.ExposeDTAPs[d]; ok { return syntax.FormattingError{fmt.Sprintf("expose dtaps: duplicate dtap '%s'", d)}
+		if !dtaps.HasDTAP(d) { return SetLogicError{fmt.Sprintf("expose dtaps: unknown dtap '%s'", d)}
+		imSem.ExposeDTAPs[d] = true
+	}
+	return nil
 }

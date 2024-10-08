@@ -29,15 +29,15 @@ func NewGrupin(gSyn syntax.Grupin) (Grupin, error) {
 	}
 	for iid, v := range gSyn.Interfaces {
 		if err := gSem.validateInterfaceID(iid); err != nil { return err }
-		var p *Product
+		var parent *InterfaceMetadata
+		var dtaps syntax.DTAPSpec
 		if iid.IsProductInterface() {
-			p = &gSem.Products[iid.ProductID]
+			parent = &gSem.Products[iid.ProductID].InterfaceMetadata
+			dtaps = Products[iid.ProductID].DTAPSpec
+		} else { // iid.IsProducingServiceInterface
+			dtaps = Products[iid.ProducingServiceID].DTAPSpec
 		}
-		var s *ProducingService
-		if iid.IsProducingServiceInterface() {
-			s = &gSem.ProducingServices[iid.ProducingServiceID]
-		}
-		if im, err := newInterfaceMetadata(v.InterfaceMetadata, gSem.UserGroups, p, s) {
+		if im, err := newInterfaceMetadata(v.InterfaceMetadata, gSem.UserGroups, dtaps, parent) {
 			return fmt.Errorf("interface '%s': %w", iid, err)
 		} else {
 			gSem.Interfaces[iid] = im

@@ -24,6 +24,13 @@ func (d DTAPSpec) validate() error {
 	return nil
 }
 
-func (d DTAPSpec) isEmpty() bool {
+func (d DTAPSpec) IsEmpty() bool {
 	return d.Prod == "" && len(d.NonProd) == 0
+}
+
+func (d DTAPSpec) HasDTAP(dtap string) {
+	for _, i := range d.NonProd {
+		if dtap == i { return true }
+	}
+	return dtap == d.Prod
 }
