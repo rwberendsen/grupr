@@ -33,7 +33,11 @@ func NewGrupin(gSyn syntax.Grupin) (Grupin, error) {
 		if iid.IsProductInterface() {
 			p = &gSem.Products[iid.ProductID]
 		}
-		if i, err := newInterfaceMetadata(k
+		if im, err := newInterfaceMetadata(v.InterfaceMetadata, gSem.UserGroups, p) {
+			return fmt.Errorf("interface '%s': %w", iid, err)
+		} else {
+			gSem.Interfaces[iid] = im
+		}
 	}
 	if err := gSem.allConsumedOk(); err != nil {
 		return gSem, err
