@@ -18,12 +18,13 @@ type InterfaceMetadata struct {
 }
 
 
-func newInterfaceMetadata(imSyn syntax.InterfaceMetadata, allowedUserGroups map[string]bool, p *Product) (InterfaceMetadata, error) {
+func newInterfaceMetadata(imSyn syntax.InterfaceMetadata, allowedUserGroups map[string]bool, p *Product, s *ProducingService) (InterfaceMetadata, error) {
 	// p *Product: if not nil, it will have already validated product-level interface metadata
 	imSem := InterfaceMetadata{}
 	if err := imSem.setClassification(imSyn, p); err != nil { return err }
 	if err := imSem.setUserGroups(imSyn, allowedUserGroups, p); err != nil { return err }
 	if err := imSem.setUserGroupColumn(imSyn, p); err != nil { return err }
+	if err := imSem.setExposeDTAPs(imSyn, p, s); err != nil { return err }
 	// ...
 	return imSem, nil
 }
@@ -67,4 +68,8 @@ func (imSem *InterfaceMetadata) setUserGroupColumn(imSyn syntax.InterfaceMetadat
 	} else {
 		imSem.UserGroupColumn = columnMatcher
 	}
+}
+
+func (imSem *InterfaceMetadata) setExposeDTAPs(imSyn syntax.InterfaceMetadata, p *Product, s *ProducingService) error {
+	// ...
 }
