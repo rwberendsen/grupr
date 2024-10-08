@@ -34,3 +34,7 @@ func (d DTAPSpec) HasDTAP(dtap string) {
 	}
 	return dtap == d.Prod
 }
+
+func (d DTAPSpec) Count() int {
+	return len(d.NonProd) + 1
+}

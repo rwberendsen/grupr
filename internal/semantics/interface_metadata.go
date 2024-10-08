@@ -13,18 +13,20 @@ type InterfaceMetadata struct {
 	MaskColumns ColMatcher
 	HashColumns ColMatcher
 	ExposeDTAPs map[string]bool
-	DTAPRendering map[string]string // Renderings may contain upper-case characters, so they can be used inside quoted fields
-	UserGroupRendering map[string]string // Renderings may contain upper-case characters, so they can be used inside quoted fields
+	DTAPRendering syntax.Rendering
+	UserGroupRendering syntax.Rendering
 }
 
 
 func newInterfaceMetadata(imSyn syntax.InterfaceMetadata, allowedUserGroups map[string]bool, dtaps syntax.DTAPSpec, parent *InterfaceMetadata) (InterfaceMetadata, error) {
 	// p *Product: if not nil, it will have already validated product-level interface metadata
-	imSem := InterfaceMetadata{ExposeDTAPs: map[string]bool{}}
+	imSem := InterfaceMetadata{}
 	if err := imSem.setClassification(imSyn, parent); err != nil { return err }
 	if err := imSem.setUserGroups(imSyn, parent, allowedUserGroups); err != nil { return err }
 	if err := imSem.setUserGroupColumn(imSyn, parent); err != nil { return err }
 	if err := imSem.setExposeDTAPs(imSyn, parent, dtaps); err != nil { return err }
+	if err := imSem.setDTAPRendering(imSyn, parent, dtaps); err != nil { return err }
+	if err := imSem.setUserGroupRendering(imSyn, parent); err != nil { return err }
 	// ...
 	return imSem, nil
 }
@@ -58,6 +60,12 @@ func (imSem *InterfaceMetadata) setUserGroups(imSyn syntax.InterfaceMetadata, pa
 		ug[u] = true
 	}
 	imSem.UserGroups = ug
+	if parent != nil {
+		for u := range imSem.UserGroups {
+			if _, ok := parent.UserGroups[u]; !ok { return PolicyError{fmt.Sprintf("Interface should not have user group '%s' that product does not have", u)} }
+		}
+	}
+	return nil
 }
 
 func (imSem *InterfaceMetadata) setUserGroupColumn(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata) error {
@@ -72,6 +80,7 @@ func (imSem *InterfaceMetadata) setUserGroupColumn(imSyn syntax.InterfaceMetadat
 	} else {
 		imSem.UserGroupColumn = columnMatcher
 	}
+	return nil
 }
 
 func (imSem *InterfaceMetadata) setExposeDTAPs(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata, dtaps syntax.DTAPSpec) error {
@@ -81,10 +90,39 @@ func (imSem *InterfaceMetadata) setExposeDTAPs(imSyn syntax.InterfaceMetadata, p
 		}
 		return nil
 	}
+	imSem.ExposeDTAPs = make(map[string]bool, dtaps.Count())
 	for _, d := range imSyn.ExposeDTAPs {
-		if _, ok := imSem.ExposeDTAPs[d]; ok { return syntax.FormattingError{fmt.Sprintf("expose dtaps: duplicate dtap '%s'", d)}
-		if !dtaps.HasDTAP(d) { return SetLogicError{fmt.Sprintf("expose dtaps: unknown dtap '%s'", d)}
+		if _, ok := imSem.ExposeDTAPs[d]; ok { return syntax.FormattingError{fmt.Sprintf("ExposeDTAPs: duplicate dtap '%s'", d)}
+		if !dtaps.HasDTAP(d) { return SetLogicError{fmt.Sprintf("ExposeDTAPs: unknown dtap '%s'", d)}
 		imSem.ExposeDTAPs[d] = true
 	}
+	return nil
+}
+
+func (imSem *InterfaceMetadata) setDTAPRendering(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata, dtaps syntax.DTAPSpec) error {
+	if imSyn.DTAPRendering == nil {
+		if parent != nil {
+			imSem.DTAPRendering = parent.DTAPRendering
+		}
+		return nil
+	}
+	for k := range imSyn.DTAPRendering {
+		if !dtaps.HasDTAP(k) { return SetLogicError{fmt.Sprintf("DTAPRendering: unknown dtap '%s'", k)} }
+	}
+	imSem.DTAPRendering = imSyn.DTAPRendering
+	return nil
+}
+
+func (imSem *InterfaceMetadata) setUserGroupRendering(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata) error {
+	if imSyn.UserGroupRendering == nil {
+		if parent != nil {
+			imSem.UserGroupRendering = parent.UserGroupRendering
+		}
+		return nil
+	}
+	for k := range imSyn.UserGroupRendering {
+		if _, ok := imSem.UserGroups[k]; !ok { return SetLogicError{fmt.Sprintf("UserGroupRendering: unknown user group '%s'", k)} }
+	}
+	imSem.UserGroupRendering = imSyn.UserGroupRendering
 	return nil
 }
