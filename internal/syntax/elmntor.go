@@ -12,7 +12,7 @@ type ElmntOr struct {
 	ProducingService *ProducingService `yaml:"producing_service,omitempty"`
 	Product *Product `yaml:",omitempty"`
 	Interface *Interface`yaml:"interface,omitempty"`
-	UserGroups []string `yaml:"user_groups"`
+	AllowedUserGroups []string `yaml:"allowed_user_groups"`
 }
 
 func (e ElmntOr) validateAndAdd(g *Grupin) error {
@@ -55,15 +55,18 @@ func (e ElmntOr) validateAndAdd(g *Grupin) error {
 		}
 		g.Interfaces[iid] = e.Interface
 	}
-	if e.UserGroups != nil {
-		n_elements != 1
+	if e.AllowedUserGroups != nil {
+		if g.AllowedUserGroups != nil {
+			return FormattingError{"allowed_user_groups specified more than once"}
+		}
+		n_elements += 1
 		ug := map[string]bool
-		for _, u := range e.UserGroups {
+		for _, u := range e.AllowedUserGroups {
 			if err := validateID(u); err != nil { return fmt.Errorf("user_groups: %w", err) }
 			if _, ok := ug[u]; ok { return FormattingError{fmt.Sprintf("duplicate user group: %s", u)} }
 			ug[u] = true
 		}
-		g.UserGroups = u
+		g.AllowedUserGroups = u
 	}
 	if n_elements != 1 {
 		return FormattingError{"not exactly one element in ElmntOr"}

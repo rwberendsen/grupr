@@ -38,26 +38,11 @@ func newProduct(pSyn syntax.Product, allowedUserGroups syntax.UserGroups) (Produ
 }
 
 func (lhs Product) disjoint(rhs Product) bool {
-	if !lhs.ObjectMatcher.disjoint(rhs.ObjectMatcher) {
-		return false
-	}
-	for _, l := range lhs.Interfaces {
-		if !l.ObjectMatcher.disjoint(rhs.ObjectMatcher) {
-			return false
-		}
-		for _, r := range rhs.Interfaces {
-			if !r.ObjectMatcher.disjoint(lhs.ObjectMatcher) {
-				return false
-			}
-			if !r.ObjectMatcher.disjoint(l.ObjectMatcher) {
-				return false
-			}
-		}
-	}
-	return true
+	return lhs.ObjectMatcher.disjoint(rhs.ObjectMatcher)
 }
 
 func (p Product) equals(o Product) bool {
+	// TODO: revisit after recent changes
 	if equal := maps.Equal(p.DTAPs, o.DTAPs); !equal {
 		return false
 	}

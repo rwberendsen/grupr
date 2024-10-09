@@ -11,7 +11,7 @@ import (
 
 type Grupin struct {
 	// TODO: Classification: enable user to supply classifications with short name, long name, and integer value
-	UserGroups syntax.UserGroups
+	AllowedUserGroups map[string]bool
 	ProducingServices map[string]syntax.ProducingService
 	Products map[string]Product
 	Interfaces map[syntax.InterfaceID]InterfaceMetadata
@@ -19,9 +19,16 @@ type Grupin struct {
 }
 
 func NewGrupin(gSyn syntax.Grupin) (Grupin, error) {
-	gSem := Grupin{gSyn.UserGroups, gSyn.ProducingServices}, map[string]Product{}, map[syntax.InterfaceID]Interface}
+	gSem := Grupin{
+		AllowedUserGroups: gSyn.AllowedUserGroups,
+		ProducinServices: gSyn.ProducingServices},
+		Products: map[string]Product{},
+		Interfaces: map[syntax.InterfaceID]Interface,
+	}
+	for k, v := range gSyn.ProducingServices {
+	}
 	for k, v := range gSyn.Products {
-		if p, err := newProduct(v, gSem.UserGroups); err != nil {
+		if p, err := newProduct(v, gSem.AllowedUserGroups); err != nil {
 			return gSem,  err
 		} else {
 			gSem.Products[k] = p
@@ -30,14 +37,14 @@ func NewGrupin(gSyn syntax.Grupin) (Grupin, error) {
 	for iid, v := range gSyn.Interfaces {
 		if err := gSem.validateInterfaceID(iid); err != nil { return err }
 		var parent *InterfaceMetadata
-		var dtaps syntax.DTAPSpec
+		var dtaps syntax.Rendering
 		if iid.IsProductInterface() {
 			parent = &gSem.Products[iid.ProductID].InterfaceMetadata
-			dtaps = Products[iid.ProductID].DTAPSpec
-		} else { // iid.IsProducingServiceInterface
-			dtaps = Products[iid.ProducingServiceID].DTAPSpec
+			dtaps = gSem.Products[iid.ProductID].DTAPs.DTAPRendering
+		} else { // iid.IsProducingServiceInterface() == true
+			dtaps = gSem.ProducingServices[iid.ProducingServiceID].DTAPs.DTAPRendering
 		}
-		if im, err := newInterfaceMetadata(v.InterfaceMetadata, gSem.UserGroups, dtaps, parent) {
+		if im, err := newInterfaceMetadata(v.InterfaceMetadata, gSem.AllowedUserGroups, dtaps, parent) {
 			return fmt.Errorf("interface '%s': %w", iid, err)
 		} else {
 			gSem.Interfaces[iid] = im
