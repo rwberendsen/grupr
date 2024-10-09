@@ -30,7 +30,7 @@ func (i InterfaceMetadata) validate() error {
 	if i.UserGroupColumn != "" {
 		if len(i.UserGroups) == 0 { return fmt.Errorf("UserGroupColumn specified but not UserGroups") }
 	}
-	if len(i.Objects) == 0 && len(i.ObjectsExclude) != 0 {
+	if i.Objects == nil && i.ObjectsExclude != nil {
 		return fmt.Errorf("no objects specified, but objects to exclude were specified", p.ID)
 	}
 	for d := range i.ExposeDTAPs {

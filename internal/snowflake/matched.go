@@ -16,7 +16,7 @@ func newMatched(m semantics.Matcher, c *accountCache) Matched {
 		r.Objects[k] = match(k, c)
 	}
 	for k := range m.Exclude {
-		r.Objects[m.Superset[k]] = r.Objects[m.Superset[k]].subtract(match(k, c))
+		r.Objects[m.StrictSuperset[k]] = r.Objects[m.StrictSuperset[k]].subtract(match(k, c))
 	}
 	return r
 }

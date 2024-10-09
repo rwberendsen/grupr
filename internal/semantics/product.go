@@ -13,7 +13,6 @@ type Product struct {
 	DTAPs      syntax.DTAPSpec `yaml:"dtaps,flow,omitempty"`
 	Consumes   map[syntax.InterfaceID]bool `yaml:",omitempty"`
 	InterfaceMetadata
-	Interfaces map[string]Interface
 }
 
 func newProduct(pSyn syntax.Product, ug syntax.UserGroups) (Product, error) {
@@ -27,11 +26,6 @@ func newProduct(pSyn syntax.Product, ug syntax.UserGroups) (Product, error) {
 		return pSem, fmt.Errorf("product id %s: interface metadata: %w", pSem.ID, err)
 	} else {
 		pSem.InterfaceMetadata = i
-	}
-	if m, err := newObjectMatcher(pSyn.Objects, pSyn.ObjectsExclude, pSem.InterfaceMetadata); err != nil {
-		return pSem, fmt.Errorf("product %s: matcher: %s", pSem.ID, err)
-	} else {
-		pSem.ObjectMatcher = m
 	}
 	for _, iid := range pSyn.Consumes {
 		if iid.ProducingService == "" && iid.Product == pSem.ID {

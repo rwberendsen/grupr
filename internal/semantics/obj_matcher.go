@@ -9,13 +9,15 @@ import (
 type ObjMatcher struct {
 	Include  ObjExprs
 	Exclude  ObjExprs         `yaml:",omitempty"`
-	Superset map[ObjExpr]ObjExpr `yaml:",omitempty"`
+	StrictSuperset map[ObjExpr]ObjExpr `yaml:"strict_superset,omitempty"` // value is strict superset of key
+	StrictSubset map[ObjExpr]ObjExpr `yaml:"strict_subset,omitempty"` // value is strict subset of key
 }
 
-func newObjMatcher(include []string, exclude []string, im InterfaceMetadata) (ObjMatcher, error) {
-	m := ObjMatcher{Exprs{}, Exprs{}, map[ObjExpr]ObjExpr{}}
+func newObjMatcher(include []string, exclude []string, dtaps *syntax.DTAPSpec, userGroups map[string]bool,
+		   dtapRendering syntax.Rendering, userGroupRendering syntax.Rendering) (ObjMatcher, error) {
+	m := ObjMatcher{Exprs{}, Exprs{}, map[ObjExpr]ObjExpr{}, map[ObjExpr]ObjExpr{}}
 	for _, expr := range include {
-		objExprs, err := newObjExprs(expr, DTAPs, UserGroups)
+		objExprs, err := newObjExprs(expr, dtaps, userGroups)
 		if err != nil {
 			return m, fmt.Errorf("parsing obj expr: %s", err)
 		}
@@ -30,7 +32,7 @@ func newObjMatcher(include []string, exclude []string, im InterfaceMetadata) (Ob
 		return m, fmt.Errorf("non disjoint set of include exprs")
 	}
 	for _, expr := range exclude {
-		objExprs, err := newObjExprs(expr, DTAPs, UserGroups, false)
+		objExprs, err := newObjExprs(expr, dtaps, userGroups, false)
 		if err != nil {
 			return m, fmt.Errorf("parsing obj expr: %s", err)
 		}
@@ -50,7 +52,8 @@ func newObjMatcher(include []string, exclude []string, im InterfaceMetadata) (Ob
 		for j := range m.Include {
 			if i.subsetOf(j) && !j.subsetOf(i) {
 				hasStrictSuperset += 1
-				m.Superset[i] = j
+				m.StrictSuperset[i] = j
+				m.StrictSubset[j] = i
 			}
 		}
 		if hasStrictSuperset != 1 {
@@ -73,6 +76,24 @@ func (lhs ObjMatcher) disjoint(rhs ObjMatcher) bool {
 				}
 			}
 		}
+	}
+	return true
+}
+
+func (lhs ObjMatcher) subsetOf(rhs ObjectMatcher) bool {
+	for l := range lhs.Include {
+		hasSuperset := false
+		for r := range rhs.Include {
+			if l.subSetOf(r) {
+				if rExclude, ok := rhs.StrictSubset[r]; ok {
+					if !l.subsetOf(rExclude) {
+						hasSuperset = true
+						break
+					}
+				}
+			}
+		}
+		if !hasSuperset { return false }
 	}
 	return true
 }

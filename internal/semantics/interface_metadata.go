@@ -19,7 +19,6 @@ type InterfaceMetadata struct {
 
 
 func newInterfaceMetadata(imSyn syntax.InterfaceMetadata, allowedUserGroups map[string]bool, dtaps syntax.DTAPSpec, parent *InterfaceMetadata) (InterfaceMetadata, error) {
-	// p *Product: if not nil, it will have already validated product-level interface metadata
 	imSem := InterfaceMetadata{}
 	if err := imSem.setClassification(imSyn, parent); err != nil { return err }
 	if err := imSem.setUserGroups(imSyn, parent, allowedUserGroups); err != nil { return err }
@@ -27,6 +26,7 @@ func newInterfaceMetadata(imSyn syntax.InterfaceMetadata, allowedUserGroups map[
 	if err := imSem.setExposeDTAPs(imSyn, parent, dtaps); err != nil { return err }
 	if err := imSem.setDTAPRendering(imSyn, parent, dtaps); err != nil { return err }
 	if err := imSem.setUserGroupRendering(imSyn, parent); err != nil { return err }
+	if err := imSem.setObjectMatcher(imSyn, parent, dtaps); err != nil { return err }
 	// ...
 	return imSem, nil
 }
@@ -124,5 +124,25 @@ func (imSem *InterfaceMetadata) setUserGroupRendering(imSyn syntax.InterfaceMeta
 		if _, ok := imSem.UserGroups[k]; !ok { return SetLogicError{fmt.Sprintf("UserGroupRendering: unknown user group '%s'", k)} }
 	}
 	imSem.UserGroupRendering = imSyn.UserGroupRendering
+	return nil
+}
+
+func (imSem *InterfaceMetadata) setObjectMatcher(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata, dtaps syntax.DTAPSpec) error {
+	if imSyn.Objects == nil {
+		if parent != nil {
+			imSem.ObjectMatcher = parent.ObjectMatcher
+			return nil
+		}
+		return PolicyError{"ObjectMatcher is a required field"}
+	}
+	if m, err := newObjMatcher(pSyn.Objects, pSyn.ObjectsExclude, dtaps, imSem.UserGroups,
+				   imSem.DTAPRendering, imSem.UserGroupRendering); err != nil {
+		return pSem, fmt.Errorf("ObjectMatcher: %w", err)
+	pSem.ObjectMatcher = m
+	if parent != nil {
+		if !pSem.ObjectMatcher.subsetOf(parent.ObjectMatcher) {
+			return PolicyError{"ObjectMatcher should be a subset of parent ObjectMatcher"}
+		}
+	}
 	return nil
 }
