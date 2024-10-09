@@ -29,6 +29,7 @@ func (d DTAPSpec) IsEmpty() bool {
 }
 
 func (d DTAPSpec) HasDTAP(dtap string) {
+	if dtap == "" { return false } // "" is a zero value we interpret as a non-existent (not specified) DTAP
 	for _, i := range d.NonProd {
 		if dtap == i { return true }
 	}

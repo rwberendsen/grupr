@@ -15,6 +15,8 @@ func (r Rendering) validate() error {
 		if err := validateID(k); err != nil { return err }
 		if !validRendering.MatchString(v) { return FormattingError{fmt.Sprintf("key '%s': invalid rendering '%s'", k, v)} }
 		if _, ok := renderings[v]; ok { return FormattingError{fmt.Sprintf("key '%s': duplicate rendering '%s'", k, v)} }
+		if _, ok := r[v]; ok && k != v { return FormattingError{fmt.Sprintf("key '%s': rendering '%s' equals another key", k, v)} }
+		renderings[v] = true
 	}
 	return nil
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"golang.org/x/exp/maps"
+	"github.com/rwberendsen/grupr/internal/syntax"
 )
 
 type ObjMatcher struct {
@@ -13,11 +14,11 @@ type ObjMatcher struct {
 	StrictSubset map[ObjExpr]ObjExpr `yaml:"strict_subset,omitempty"` // value is strict subset of key
 }
 
-func newObjMatcher(include []string, exclude []string, dtaps *syntax.DTAPSpec, userGroups map[string]bool,
-		   dtapRendering syntax.Rendering, userGroupRendering syntax.Rendering) (ObjMatcher, error) {
+func newObjMatcher(include []string, exclude []string, dtaps syntax.Rendering, userGroups syntax.Rendering,
+		   dtapRendering syntax.Rendering) (ObjMatcher, error) {
 	m := ObjMatcher{Exprs{}, Exprs{}, map[ObjExpr]ObjExpr{}, map[ObjExpr]ObjExpr{}}
 	for _, expr := range include {
-		objExprs, err := newObjExprs(expr, dtaps, userGroups)
+		objExprs, err := newObjExprs(expr, dtaps, userGroups, dtapRendering)
 		if err != nil {
 			return m, fmt.Errorf("parsing obj expr: %s", err)
 		}
@@ -32,7 +33,7 @@ func newObjMatcher(include []string, exclude []string, dtaps *syntax.DTAPSpec, u
 		return m, fmt.Errorf("non disjoint set of include exprs")
 	}
 	for _, expr := range exclude {
-		objExprs, err := newObjExprs(expr, dtaps, userGroups, false)
+		objExprs, err := newObjExprs(expr, dtaps, userGroups, dtapRendering)
 		if err != nil {
 			return m, fmt.Errorf("parsing obj expr: %s", err)
 		}

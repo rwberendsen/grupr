@@ -10,22 +10,20 @@ import (
 
 type Product struct {
 	ID	 string
-	DTAPs      syntax.DTAPSpec `yaml:"dtaps,flow,omitempty"`
+	DTAPs      DTAPSpec `yaml:"dtaps,flow,omitempty"`
 	Consumes   map[syntax.InterfaceID]bool `yaml:",omitempty"`
 	InterfaceMetadata
 }
 
-func newProduct(pSyn syntax.Product, ug syntax.UserGroups) (Product, error) {
+func newProduct(pSyn syntax.Product, allowedUserGroups syntax.UserGroups) (Product, error) {
 	pSem := Product{
 		ID: pSyn.ID,
 		DTAPs:      pSyn.DTAPs,
 		Consumes:   map[syntax.InterfaceID]bool{},
-		Interfaces map[string]Interface{}
 	}
-	if i, err := newInterfaceMetadata(pSyn.InterfaceMetadata, ug, pSem.DTAPs, nil) {
+	pSem.DTAPs = newDTAPSpec(pSyn.DTAPs, pSyn.DTAPRendering)
+	if pSem.InterfaceMetadata, err := newInterfaceMetadata(pSyn.InterfaceMetadata, allowedUserGroups, pSem.DTAPs.DTAPRendering, nil); err != nil {
 		return pSem, fmt.Errorf("product id %s: interface metadata: %w", pSem.ID, err)
-	} else {
-		pSem.InterfaceMetadata = i
 	}
 	for _, iid := range pSyn.Consumes {
 		if iid.ProducingService == "" && iid.Product == pSem.ID {

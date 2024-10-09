@@ -2,16 +2,18 @@ package semantics
 
 import (
 	"fmt"
+	"github.com/rwberendsen/grupr/internal/syntax"
 )
 
 type ColMatcher struct {
 	ColExprs ColExprs
 }
 
-func newColMatcher(l []string, im InterfaceMetadata) (ColMatcher, error) {
+func newColMatcher(l []string, dtaps syntax.DTAPSpec, userGroups map[string]bool, dtapRendering syntax.Rendering,
+		   userGroupRendering syntax.Rendering, objectMatcher objMatcher) (ColMatcher, error) {
 	m := ColMatcher{ColExprs{}}
 	for _, expr := range l {
-		exprs, err := newColExprs(expr, DTAPs, UserGroups)
+		exprs, err := newColExprs(expr, dtaps, userGroups)
 		if err != nil {
 			return m,  err
 		}

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"golang.org/x/exp/maps"
+	"github.com/rwberendsen/grupr/internal/syntax"
 )
 
 type ObjExprAttr struct {
@@ -18,22 +19,22 @@ const (
 	UserGroupTemplate = "[user_group]"
 )
 
-func newObjExprs(s string, DTAPs map[string]string, userGroups map[string]string) (ObjExprs, error) {
+func newObjExprs(s string, dtaps syntax.Rendering, userGroups syntax.Rendering) (ObjExprs, error) {
 	exprs := ObjExprs{}
 	if strings.ContainsRune(s, '\n') {
 		return exprs, fmt.Errorf("object expression has newline")
 	}
 	dtapExpanded := map[string]ObjExprAttr{}
 	if strings.Contains(s, DTAPTemplate) { // If object exists only in, say, a dev env, that's okay. Cause it's okay if the production rendition of the object does not match any existing objects. What counts is that if they would exist, then they would be matched.
-		if len(DTAPs) == 0 {
-			return exprs, fmt.Errorf("expanding dtaps in '%s': no dtaps found", s)
+		if len(dtaps) == 0 {
+			return exprs, fmt.Errorf("expanding dtaps in '%s': no dtap renderings found", s)
 		}
-		for d, renderedDTAP := range DTAPs {
+		for d, renderedDTAP := range dtaps {
 			dtapExpanded[strings.ReplaceAll(s, DTAPTemplate, renderedDTAP)] = ObjExprAttr{DTAP: d}
 		}
 	} else {
-		if len(DTAPs) != 0 {
-			return exprs, fmt.Errorf("The product has DTAPs, but no DTAP expansion found")
+		if len(dtaps) != 0 {
+			return exprs, fmt.Errorf("The product has dtap renderings, but no DTAP expansion found")
 		}
 		dtapExpanded[s] = ObjExprAttr{}
 	}
