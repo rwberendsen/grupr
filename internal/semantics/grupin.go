@@ -21,11 +21,12 @@ type Grupin struct {
 func NewGrupin(gSyn syntax.Grupin) (Grupin, error) {
 	gSem := Grupin{
 		AllowedUserGroups: gSyn.AllowedUserGroups,
-		ProducinServices: gSyn.ProducingServices},
+		ProducinServices: map[string]ProducingService{},
 		Products: map[string]Product{},
 		Interfaces: map[syntax.InterfaceID]Interface,
 	}
 	for k, v := range gSyn.ProducingServices {
+		gSem[k] = newProducingService(v)
 	}
 	for k, v := range gSyn.Products {
 		if p, err := newProduct(v, gSem.AllowedUserGroups); err != nil {

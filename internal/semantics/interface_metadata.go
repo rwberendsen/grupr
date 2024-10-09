@@ -24,7 +24,7 @@ func newInterfaceMetadata(imSyn syntax.InterfaceMetadata, allowedUserGroups map[
 	if err := imSem.setExposeDTAPs(imSyn, parent, dtaps); err != nil { return err }
 	if err := imSem.setUserGroupRendering(imSyn, parent); err != nil { return err }
 	if err := imSem.setObjectMatcher(imSyn, parent, dtaps); err != nil { return err }
-	if err := imSem.setUserGroupColumn(imSyn, parent); err != nil { return err }
+	if err := imSem.setUserGroupColumn(imSyn, parent, dtaps); err != nil { return err }
 	// ...
 	return imSem, nil
 }
@@ -93,9 +93,11 @@ func (imSem *InterfaceMetadata) setObjectMatcher(imSyn syntax.InterfaceMetadata,
 		}
 		return PolicyError{"ObjectMatcher is a required field"}
 	}
-	if m, err := newObjMatcher(pSyn.Objects, pSyn.ObjectsExclude, dtaps, imSem.UserGroups); err != nil {
-		return pSem, fmt.Errorf("ObjectMatcher: %w", err)
-	pSem.ObjectMatcher = m
+	if m, err := newObjMatcher(imSyn.Objects, imSyn.ObjectsExclude, dtaps, imSem.UserGroups); err != nil {
+		return fmt.Errorf("ObjectMatcher: %w", err)
+	} else {
+		pSem.ObjectMatcher = m
+	}
 	if parent != nil {
 		if !pSem.ObjectMatcher.subsetOf(parent.ObjectMatcher) {
 			return PolicyError{"ObjectMatcher should be a subset of parent ObjectMatcher"}
@@ -104,17 +106,17 @@ func (imSem *InterfaceMetadata) setObjectMatcher(imSyn syntax.InterfaceMetadata,
 	return nil
 }
 
-func (imSem *InterfaceMetadata) setUserGroupColumn(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata) error {
+func (imSem *InterfaceMetadata) setUserGroupColumn(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata, dtaps syntax.Rendering) error {
 	if imSyn.UserGroupColumn == "" {
 		if parent != nil {
 			imSem.UserGroupColumn = parent.UserGroupColumn
 		}
 		return nil
 	}
-	if columnMatcher, err := newColMatcher(imSyn.UserGroupColumn); err != nil { // TODO colMatcher needs some context, like DTAPs and UserGroups
+	if m, err := newColMatcher(imSyn.UserGroupColumn, dtaps, imSem.UserGroups, imSem.ObjectMatcher); err != nil {
 		return fmt.Errorf("user_group_column: %w", err)
 	} else {
-		imSem.UserGroupColumn = columnMatcher
+		imSem.UserGroupColumn = m
 	}
 	return nil
 }

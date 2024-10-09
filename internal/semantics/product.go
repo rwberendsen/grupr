@@ -2,20 +2,19 @@ package semantics
 
 import (
 	"fmt"
-	"regexp"
 
 	"github.com/rwberendsen/grupr/internal/syntax"
 	"golang.org/x/exp/maps"
 )
 
 type Product struct {
-	ID	 string
+	ID	 string `yaml:"id"`
 	DTAPs      DTAPSpec `yaml:"dtaps,flow,omitempty"`
 	Consumes   map[syntax.InterfaceID]bool `yaml:",omitempty"`
 	InterfaceMetadata
 }
 
-func newProduct(pSyn syntax.Product, allowedUserGroups syntax.UserGroups) (Product, error) {
+func newProduct(pSyn syntax.Product, allowedUserGroups map[string]bool) (Product, error) {
 	pSem := Product{
 		ID: pSyn.ID,
 		DTAPs:      pSyn.DTAPs,

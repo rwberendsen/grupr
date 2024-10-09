@@ -9,8 +9,8 @@ import (
 )
 
 type ColExprAttr struct {
-	DTAPs      map[string]string `yaml:"dtap,omitempty"`
-	UserGroups map[string]string `yaml:"user_groups,omitempty"`
+	DTAPs      syntax.Rendering `yaml:"dtap,omitempty"`
+	UserGroups syntax.Rendering`yaml:"user_groups,omitempty"`
 }
 type ColExprs map[ColExpr]ColExprAttr
 
@@ -19,18 +19,18 @@ const (
 	UserGroupTemplate = "[user_group]"
 )
 
-func newColExprs(s string, DTAPs map[string]string, userGroups map[string]string) (ColExprs, error) {
+func newColExprs(s string, dtaps syntax.Rendering, userGroups syntax.Rendering) (ColExprs, error) {
 	exprs := ColExprs{}
 	if strings.ContainsRune(s, '\n') {
 		return exprs, syntax.FormattingError{"object expression has newline"}
 	}
 	dtapExpanded := map[string]ColExprAttr{}
 	if strings.Contains(s, DTAPTemplate) { // If object exists only in, say, a dev env, that's okay. Cause it's okay if the production rendition of the object does not match any existing objects. What counts is that if they would exist, then they would be matched.
-		if len(DTAPs) == 0 {
+		if len(dtaps) == 0 {
 			return exprs, SetLogicError{fmt.Sprintf("expanding dtaps in '%s': no dtaps found", s)}
 		}
-		for d, renderedDTAP := range DTAPs {
-			dtapExpanded[strings.ReplaceAll(s, DTAPTemplate, renderedDTAP)] = ColExprAttr{DTAPs: map[string]string{d: renderedDTAP}}
+		for d, renderedDTAP := range dtaps {
+			dtapExpanded[strings.ReplaceAll(s, DTAPTemplate, renderedDTAP)] = ColExprAttr{DTAPs: syntax.Rendering{d: renderedDTAP}}
 		}
 	} else {
 		// In a column matcher expression it is okay to omit a DTAP expansion, the column expressions are evaluated per DTAP,
@@ -45,7 +45,7 @@ func newColExprs(s string, DTAPs map[string]string, userGroups map[string]string
 			}
 			for u, renderedUserGroup := range userGroups {
 				userGroupExpanded[strings.ReplaceAll(k, UserGroupTemplate, renderedUserGroup)] =
-						ColExprAttr{DTAPs: v.DTAPs, UserGroups: map[string]string{u: renderedUserGroup}}
+						ColExprAttr{DTAPs: v.DTAPs, UserGroups: syntax.Rendering{u: renderedUserGroup}}
 			}
 		} else {
 			userGroupExpanded[k] = ColExprAttr{DTAPs: v.DTAPs, UserGroups: userGroups} // Objects matched by expression are shared between user groups
