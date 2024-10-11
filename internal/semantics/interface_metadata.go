@@ -25,7 +25,8 @@ func newInterfaceMetadata(imSyn syntax.InterfaceMetadata, allowedUserGroups map[
 	if err := imSem.setUserGroupRendering(imSyn, parent); err != nil { return err }
 	if err := imSem.setObjectMatcher(imSyn, parent, dtaps); err != nil { return err }
 	if err := imSem.setUserGroupColumn(imSyn, parent, dtaps); err != nil { return err }
-	// ...
+	if err := imSem.setMaskColumns(imSyn, parent, dtaps); err != nil { return err }
+	if err := imSem.setHashColumns(imSyn, parent, dtaps); err != nil { return err }
 	return imSem, nil
 }
 
@@ -113,10 +114,39 @@ func (imSem *InterfaceMetadata) setUserGroupColumn(imSyn syntax.InterfaceMetadat
 		}
 		return nil
 	}
-	if m, err := newColMatcher(imSyn.UserGroupColumn, dtaps, imSem.UserGroups, imSem.ObjectMatcher); err != nil {
+	if m, err := newColMatcher([]string{imSyn.UserGroupColumn}, dtaps, imSem.UserGroups, imSem.ObjectMatcher); err != nil {
 		return fmt.Errorf("user_group_column: %w", err)
 	} else {
 		imSem.UserGroupColumn = m
+	}
+	return nil
+}
+
+func (imSem *InterfaceMetadata) setHashColumns(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata, dtaps syntax.Rendering) error {
+	if imSyn.MaskColumns is nil {
+		if parent != nil {
+			imSem.HashColumns = parent.HashColumns
+		}
+		return nil
+	}
+	if m, err := newColMatcher([]string{imSyn.HashColumns, dtaps, imSem.UserGroups, imSem.ObjectMatcher); err != nil {
+		return fmt.Errorf("hash_columns: %w", err)
+	} else {
+		imSem.HashColumns = m
+	}
+}
+
+func (imSem *InterfaceMetadata) setMaskColumns(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata, dtaps syntax.Rendering) error {
+	if imSyn.MaskColumns is nil {
+		if parent != nil {
+			imSem.MaskColumns = parent.MaskColumns
+		}
+		return nil
+	}
+	if m, err := newColMatcher(imSyn.MaskColumns, dtaps, imSem.UserGroups, imSem.ObjectMatcher); err != nil {
+		return fmt.Errorf("mask_columns: %w", err)
+	} else {
+		imSem.MaskColumns = m
 	}
 	return nil
 }
