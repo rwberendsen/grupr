@@ -46,6 +46,7 @@ func newColExpr(s string) (ColExpr, error) {
 				panic("unquoted field not ending with end of line or period")
 			}
 			fields[i].S = strings.ToLower(substr) // unquoted identifiers match in a case insensitive way
+				// TODO: create a function newExprPart and introduce this tricky detail ToLower there
 		}
 	}
 	// validate identifier expressions

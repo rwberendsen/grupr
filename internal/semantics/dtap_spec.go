@@ -16,7 +16,7 @@ func newDTAPSpec(dsSyn syntax.DTAPSpec, dtapRendering syntax.Rendering) DTAPSpec
 		// Not specifying any DTAP info means your objects will be considered as production, and you cannot use the [dtap] expansion
 		return DTAPSpec{
 			Prod: "",
-			DTAPRendering: syntax.Rendering{},
+			DTAPRendering: syntax.Rendering{}, // empty rendering
 		 }
 	}
 	dsSem := DTAPSpec{

@@ -1,11 +1,6 @@
 package semantics
 
-import (
-	"fmt"
-)
-
 type Classification int
-
 
 func newClassification(Classification string, CanLeaveGroup *bool) Classification {
 	if Classiffication == "c0" { return 10 }

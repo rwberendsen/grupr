@@ -74,7 +74,9 @@ func (g Grupin) allConsumedOk() error {
 	return nil
 }
 
-func (g Grups) allDisjoint() error {
+func (g Grupin) allDisjoint() error {
+	// TODO: check producing services are disjoint from each other and from products as well
+	// TODO: decide if we are going to require a superset object matcher, just like products.
 	keys := maps.Keys(g.Products)
 	if len(keys) < 2 {
 		return nil
@@ -100,7 +102,7 @@ func (g Grupin) validateInterfaceID(iid syntax.InterfaceID) error {
 	}
 }
 
-func (g Grups) String() string {
+func (g Grupin) String() string {
 	data, err := yaml.Marshal(g)
 	if err != nil {
 		panic("Grups could not be marshalled")
