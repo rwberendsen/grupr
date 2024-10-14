@@ -10,7 +10,6 @@ import (
 
 type Grupin struct {
 	AllowedUserGroups	map[string]bool
-	ProducingServices map[string]ProducingService
 	Products	map[string]Product
 	Interfaces	map[InterfaceID]Interface
 }

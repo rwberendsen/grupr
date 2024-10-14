@@ -12,6 +12,7 @@ type Product struct {
 	DTAPs      DTAPSpec `yaml:"dtaps,flow,omitempty"`
 	Consumes   map[syntax.InterfaceID]bool `yaml:",omitempty"`
 	InterfaceMetadata
+	Interfaces map[string]InterfaceMetadata
 }
 
 func newProduct(pSyn syntax.Product, allowedUserGroups map[string]bool) (Product, error) {
@@ -19,14 +20,15 @@ func newProduct(pSyn syntax.Product, allowedUserGroups map[string]bool) (Product
 		ID: pSyn.ID,
 		DTAPs:      pSyn.DTAPs,
 		Consumes:   map[syntax.InterfaceID]bool{},
+		Interfaces map[string]InterfaceMetadata{},
 	}
 	pSem.DTAPs = newDTAPSpec(pSyn.DTAPs, pSyn.DTAPRendering)
 	if pSem.InterfaceMetadata, err := newInterfaceMetadata(pSyn.InterfaceMetadata, allowedUserGroups, pSem.DTAPs.DTAPRendering, nil); err != nil {
 		return pSem, fmt.Errorf("product id %s: interface metadata: %w", pSem.ID, err)
 	}
 	for _, iid := range pSyn.Consumes {
-		if iid.ProducingService == "" && iid.Product == pSem.ID {
-			return PolicyError{fmt.Sprintf("product '%s' not allowed to consume own interface '%s'", iid.Product, iid.Interface)}
+		if iid.ProducingService == "" && iid.ProductID == pSem.ID {
+			return PolicyError{fmt.Sprintf("product '%s' not allowed to consume own interface '%s'", iid.ProductID, iid.ID)}
 		}
 		if _, ok := pSem.Consumes[iid]; ok {
 			return pSem, fmt.Errorf("duplicate consumed interface id")

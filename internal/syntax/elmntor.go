@@ -9,7 +9,6 @@ import (
 
 
 type ElmntOr struct {
-	ProducingService *ProducingService `yaml:"producing_service,omitempty"`
 	Product *Product `yaml:",omitempty"`
 	Interface *Interface`yaml:"interface,omitempty"`
 	AllowedUserGroups []string `yaml:"allowed_user_groups"`
@@ -17,17 +16,6 @@ type ElmntOr struct {
 
 func (e ElmntOr) validateAndAdd(g *Grupin) error {
 	n_elements := 0
-	if e.ProducingService != nil {
-		n_elements += 1
-		err := e.ProducingService.validate()
-		if err != nil {
-			return err
-		}
-		if _, ok := g.ProducingServices[e.ProducingService.ID]; ok {
-			return FormattingError{fmt.Sprintf("duplicate producing service id: %s", e.ProducingService.ID)}
-		}
-		g.ProducingServices[e.ProducingService.ID] = e.ProducingService
-	}
 	if e.Product != nil {
 		n_elements += 1
 		err := e.Product.validate()
@@ -48,7 +36,6 @@ func (e ElmntOr) validateAndAdd(g *Grupin) error {
 		iid := InterfaceID{
 			ID: e.Interface.ID,
 			ProductID: e.Interface.ProductID,
-			ProducingServiceID: e.Interface.ProducingServiceID
 		}
 		if _, ok := g.Interfaces[iid]; ok {
 			return FormattingError{fmt.Sprintf("duplicate interface id: %s", iid)}

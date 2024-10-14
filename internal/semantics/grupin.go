@@ -12,21 +12,19 @@ import (
 type Grupin struct {
 	// TODO: Classification: enable user to supply classifications with short name, long name, and integer value
 	AllowedUserGroups map[string]bool
-	ProducingServices map[string]syntax.ProducingService
 	Products map[string]Product
 	Interfaces map[syntax.InterfaceID]InterfaceMetadata
 	// TODO: ConsumingServices (e.g., a virtualisation tool, or, a file export tool)
+	// TODO: Are we going to do anything with the BusinessPartner concept, where it could take the value of big customers, for example?
+	// 	 And the ThirdParty concept, for when we ship data to a third party?
+	// 	 And the Application concept (app), for when we ship data intended for a downstream application, a logical app, could be operational one, being outside of our system?
 }
 
 func NewGrupin(gSyn syntax.Grupin) (Grupin, error) {
 	gSem := Grupin{
 		AllowedUserGroups: gSyn.AllowedUserGroups,
-		ProducinServices: map[string]ProducingService{},
 		Products: map[string]Product{},
 		Interfaces: map[syntax.InterfaceID]Interface,
-	}
-	for k, v := range gSyn.ProducingServices {
-		gSem[k] = newProducingService(v)
 	}
 	for k, v := range gSyn.Products {
 		if p, err := newProduct(v, gSem.AllowedUserGroups); err != nil {
@@ -36,19 +34,13 @@ func NewGrupin(gSyn syntax.Grupin) (Grupin, error) {
 		}
 	}
 	for iid, v := range gSyn.Interfaces {
-		if err := gSem.validateInterfaceID(iid); err != nil { return err }
-		var parent *InterfaceMetadata
-		var dtaps syntax.Rendering
-		if iid.IsProductInterface() {
-			parent = &gSem.Products[iid.ProductID].InterfaceMetadata
-			dtaps = gSem.Products[iid.ProductID].DTAPs.DTAPRendering
-		} else { // iid.IsProducingServiceInterface() == true
-			dtaps = gSem.ProducingServices[iid.ProducingServiceID].DTAPs.DTAPRendering
-		}
+		if err := gSem.validateInterfaceID(iid); err != nil { return gSem, err }
+		parent := &gSem.Products[iid.ProductID].InterfaceMetadata
+		dtaps := gSem.Products[iid.ProductID].DTAPs.DTAPRendering
 		if im, err := newInterfaceMetadata(v.InterfaceMetadata, gSem.AllowedUserGroups, dtaps, parent) {
 			return fmt.Errorf("interface '%s': %w", iid, err)
 		} else {
-			gSem.Interfaces[iid] = im
+			gSem.Products[iid.ProductID][iid.ID] = im
 		}
 	}
 	if err := gSem.allConsumedOk(); err != nil {
@@ -63,8 +55,11 @@ func NewGrupin(gSyn syntax.Grupin) (Grupin, error) {
 func (g Grupin) allConsumedOk() error {
 	for _, p := range g.Products {
 		for iid := range p.Consumes {
-			if _, ok := g.Interfaces[iid]; !ok {
-				return SetLogicError{fmt.Sprintf("product '%s': consumed interface '%s' not found", p.ID, iid)}
+			if _, ok := g.Products[iid.ProductID]; !ok {
+				return SetLogicError{fmt.Sprintf("product '%s': consumed interface '%s': product not found", p.ID, iid)}
+			}
+			if _, ok := g.Products[iid.ProductID][iid.ID]; !ok {
+				return SetLogicError{fmt.Sprintf("product '%s': consumed interface '%s': interface not found", p.ID, iid)}
 			}
 			if p.Classification < g.Interfaces[iid].Classification {
 				return PolicyError{fmt.Sprintf("product '%s' consumes interface with higher classification", p.ID)}
@@ -75,8 +70,6 @@ func (g Grupin) allConsumedOk() error {
 }
 
 func (g Grupin) allDisjoint() error {
-	// TODO: check producing services are disjoint from each other and from products as well
-	// TODO: decide if we are going to require a superset object matcher, just like products.
 	keys := maps.Keys(g.Products)
 	if len(keys) < 2 {
 		return nil
@@ -92,14 +85,10 @@ func (g Grupin) allDisjoint() error {
 }
 
 func (g Grupin) validateInterfaceID(iid syntax.InterfaceID) error {
-	if iid.ProducingServiceID != "" {
-		if _, ok := g.ProducingServices[iid.ProducingServiceID]; !ok {
-			return SetLogicError{fmt.Sprintf("interface id '%s': producing service not found", iid)}
-		}
-	}
 	if _, ok := g.Products[iid.ProductID]; !ok {
 		return SetLogicError{fmt.Sprintf("interface id '%s': product not found", iid)}
 	}
+	return nil
 }
 
 func (g Grupin) String() string {

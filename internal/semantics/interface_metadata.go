@@ -14,6 +14,7 @@ type InterfaceMetadata struct {
 	HashColumns ColMatcher
 	ExposeDTAPs map[string]bool
 	DTAPRendering syntax.Rendering
+	// TODO: add field 'ForProduct string' to indicate that an interface was developed at the request of a particular consumer. 
 }
 
 
