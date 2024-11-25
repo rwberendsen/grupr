@@ -14,7 +14,7 @@ type InterfaceMetadata struct {
 	HashColumns ColMatcher
 	ExposeDTAPs map[string]bool
 	DTAPRendering syntax.Rendering
-	// TODO: add field 'ForProduct string' to indicate that an interface was developed at the request of a particular consumer. 
+        ForProduct *string
 }
 
 
@@ -28,6 +28,7 @@ func newInterfaceMetadata(imSyn syntax.InterfaceMetadata, allowedUserGroups map[
 	if err := imSem.setUserGroupColumn(imSyn, parent, dtaps); err != nil { return err }
 	if err := imSem.setMaskColumns(imSyn, parent, dtaps); err != nil { return err }
 	if err := imSem.setHashColumns(imSyn, parent, dtaps); err != nil { return err }
+	if err := imSem.setForProduct(imSyn, parent, dtaps); err != nil { return err }
 	return imSem, nil
 }
 
@@ -124,7 +125,7 @@ func (imSem *InterfaceMetadata) setUserGroupColumn(imSyn syntax.InterfaceMetadat
 }
 
 func (imSem *InterfaceMetadata) setHashColumns(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata, dtaps syntax.Rendering) error {
-	if imSyn.MaskColumns is nil {
+	if imSyn.MaskColumns == nil {
 		if parent != nil {
 			imSem.HashColumns = parent.HashColumns
 		}
@@ -135,10 +136,11 @@ func (imSem *InterfaceMetadata) setHashColumns(imSyn syntax.InterfaceMetadata, p
 	} else {
 		imSem.HashColumns = m
 	}
+	return nil
 }
 
 func (imSem *InterfaceMetadata) setMaskColumns(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata, dtaps syntax.Rendering) error {
-	if imSyn.MaskColumns is nil {
+	if imSyn.MaskColumns == nil {
 		if parent != nil {
 			imSem.MaskColumns = parent.MaskColumns
 		}
@@ -149,5 +151,16 @@ func (imSem *InterfaceMetadata) setMaskColumns(imSyn syntax.InterfaceMetadata, p
 	} else {
 		imSem.MaskColumns = m
 	}
+	return nil
+}
+
+func (imSem *InterfaceMetadata) setForProduct(imSyn syntax.InterfaceMetadata, parent *IntefaceMetadata, dtaps syntax.Rendering) error {
+	if Imsyn.ForProduct == nil {
+		if parent != nil {
+			imSem.ForProduct = parent.ForProduct
+		}
+		return nil
+	}
+	imSem.ForProduct = imSyn.ForProduct
 	return nil
 }

@@ -15,6 +15,7 @@ type InterfaceMetadata struct {
 	HashColumns	[]string	    `yaml:"hash_columns,omitempty"`
 	ExposeDTAPs	[]string	    `yaml:"expose_dtaps,flow,omitempty"`
         UserGroupRendering Rendering `yaml:"user_group_rendering,omitempty"`
+	ForProduct *string                  `yaml:"for_product",omitempty"`
 }
 
 func (i InterfaceMetadata) validate() error {
@@ -36,5 +37,8 @@ func (i InterfaceMetadata) validate() error {
 		if err := validateID(d); err != nil { return fmt.Errorf("ExposeDTAPs: %w", err) }
 	}
 	if err := i.UserGroupRendering.validate(); err != nil { return fmt.Errorf("UserGroupRendering: %w", err) }
+	if ForProduct != nil {
+		if err := validateID(*i.ForProduct); err != nil { return fmt.Errorf("ForProduct: %w", err) }
+	}
 	return nil
 }

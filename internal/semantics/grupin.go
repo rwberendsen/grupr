@@ -61,8 +61,22 @@ func (g Grupin) allConsumedOk() error {
 			if _, ok := g.Products[iid.ProductID][iid.ID]; !ok {
 				return SetLogicError{fmt.Sprintf("product '%s': consumed interface '%s': interface not found", p.ID, iid)}
 			}
+			// TODO: think: this policy also is already checked when creating the product semantic object, perhaps remove check in one of these places.
+			if iid.ProductID == p.ID {
+				return PolicyError{fmt.Sprintf("product '%s' not allowed to consume own interface '%s'", iid.ProductID, iid.ID)}
+			}
 			if p.Classification < g.Interfaces[iid].Classification {
 				return PolicyError{fmt.Sprintf("product '%s' consumes interface with higher classification", p.ID)}
+			}
+		}
+		for id, im := range p.Interfaces {
+			if im.ForProduct != nil {
+				if _, ok := g.Products[*im.ForProduct]; !ok {
+					return SetLogicError{fmt.Sprintf("product '%s': interface '%s': product not found", p.ID, id)}
+				}
+				if *im.ForProduct == p.ID {
+					return PolicyError{fmt.Sprintf("product '%s', interface '%s', ForProduct refers to self, but not allowed to consume own interface", p.ID, id)}
+				}
 			}
 		}
 	}
