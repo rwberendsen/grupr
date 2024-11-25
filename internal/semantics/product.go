@@ -43,13 +43,10 @@ func (lhs Product) disjoint(rhs Product) bool {
 }
 
 func (p Product) equals(o Product) bool {
-	// TODO: revisit after recent changes
-	if equal := maps.Equal(p.DTAPs, o.DTAPs); !equal {
-		return false
-	}
-	if equal := p.ObjectMatcher.equals(o.ObjectMatcher); !equal {
-		return false
-	}
+	if p.ID != o.ID { return false }
+	// TODO ...
+	if equal := maps.Equal(p.DTAPs, o.DTAPs); !equal { return false }
+	if equal := p.ObjectMatcher.equals(o.ObjectMatcher); !equal { return false }
 	// interfaces
 	for k_p, v_p := range p.Interfaces {
 		v_o, ok := o.Interfaces[k_p]

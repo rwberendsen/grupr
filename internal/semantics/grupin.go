@@ -13,18 +13,17 @@ type Grupin struct {
 	// TODO: Classification: enable user to supply classifications with short name, long name, and integer value
 	AllowedUserGroups map[string]bool
 	Products map[string]Product
-	Interfaces map[syntax.InterfaceID]InterfaceMetadata
-	// TODO: ConsumingServices (e.g., a virtualisation tool, or, a file export tool)
-	// TODO: Are we going to do anything with the BusinessPartner concept, where it could take the value of big customers, for example?
+	// NB: ConsumingServices (e.g., a virtualisation tool, or, a file export tool) can be handled in a different top level YAML format
+	// NB: Are we going to do anything with the BusinessPartner concept, where it could take the value of big customers, for example?
 	// 	 And the ThirdParty concept, for when we ship data to a third party?
 	// 	 And the Application concept (app), for when we ship data intended for a downstream application, a logical app, could be operational one, being outside of our system?
+        //	 For now, these bigger changes are outside of the scope, and even when in scope, perhaps they can be handled outside of the Grupin data structure.
 }
 
 func NewGrupin(gSyn syntax.Grupin) (Grupin, error) {
 	gSem := Grupin{
 		AllowedUserGroups: gSyn.AllowedUserGroups,
 		Products: map[string]Product{},
-		Interfaces: map[syntax.InterfaceID]Interface,
 	}
 	for k, v := range gSyn.Products {
 		if p, err := newProduct(v, gSem.AllowedUserGroups); err != nil {
@@ -61,7 +60,7 @@ func (g Grupin) allConsumedOk() error {
 			if _, ok := g.Products[iid.ProductID][iid.ID]; !ok {
 				return SetLogicError{fmt.Sprintf("product '%s': consumed interface '%s': interface not found", p.ID, iid)}
 			}
-			// TODO: think: this policy also is already checked when creating the product semantic object, perhaps remove check in one of these places.
+			// TODO: think: this policy is also checked when creating the product semantic object, perhaps remove check in one of these places.
 			if iid.ProductID == p.ID {
 				return PolicyError{fmt.Sprintf("product '%s' not allowed to consume own interface '%s'", iid.ProductID, iid.ID)}
 			}
