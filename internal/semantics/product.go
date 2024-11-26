@@ -42,30 +42,11 @@ func (lhs Product) disjoint(rhs Product) bool {
 	return lhs.ObjectMatcher.disjoint(rhs.ObjectMatcher)
 }
 
-func (p Product) equals(o Product) bool {
-	if p.ID != o.ID { return false }
-	// TODO ...
-	if equal := maps.Equal(p.DTAPs, o.DTAPs); !equal { return false }
-	if equal := p.ObjectMatcher.equals(o.ObjectMatcher); !equal { return false }
-	// interfaces
-	for k_p, v_p := range p.Interfaces {
-		v_o, ok := o.Interfaces[k_p]
-		if !ok {
-			return false
-		}
-		if equal := v_p.equals(v_o); !equal {
-			return false
-		}
-	}
-	for k_o := range o.Interfaces {
-		_, ok := p.Interfaces[k_o]
-		if !ok {
-			return false
-		}
-	}
-	// consumes
-	if equal := maps.Equal(p.Consumes, o.Consumes); !equal {
-		return false
-	}
+func (lhs Product) Equal(rhs Product) bool {
+	if lhs.ID != rhs.ID { return false }
+	if !lhs.DTAPs.Equal(rhs.DTAPs) { return false }
+	if !maps.Equal(lhs.Consumes, rhs.Consumes) { return false }
+	if !lhs.InterfaceMetadata.Equal(rhs.InterfaceMetadata) { return false }
+	if !maps.EqualFunc(lhs.Interfaces, rhs.Interfaces, InterfaceMetadata.Equal) { return false }
 	return true
 }

@@ -8,10 +8,6 @@ import (
 	"github.com/rwberendsen/grupr/internal/syntax"
 )
 
-type ObjExprAttr struct {
-	DTAP       string `yaml:"dtap,omitempty"`
-	UserGroups map[string]string `yaml:"user_groups,omitempty"`
-}
 type ObjExprs map[ObjExpr]ObjExprAttr
 
 const (
@@ -45,7 +41,7 @@ func newObjExprs(s string, dtaps syntax.Rendering, userGroups syntax.Rendering) 
 				return exprs, fmt.Errorf("expanding user groups in '%s': no user groups found", k)
 			}
 			for u, renderedUserGroup := range userGroups {
-				userGroupExpanded[strings.ReplaceAll(k, UserGroupTemplate, renderedUserGroup)] = ObjExprAttr{DTAP: v.DTAP, UserGroups: map[string]string{u: renderedUserGroup}}
+				userGroupExpanded[strings.ReplaceAll(k, UserGroupTemplate, renderedUserGroup)] = ObjExprAttr{DTAP: v.DTAP, UserGroups: syntax.Rendering{u: renderedUserGroup}}
 			}
 		} else {
 			userGroupExpanded[k] = ObjExprAttr{DTAP: v.DTAP, UserGroups: userGroups} // Objects matched by expression are shared between user groups
@@ -74,4 +70,8 @@ func (m ObjExprs) allDisjoint() bool {
 		}
 	}
 	return true
+}
+
+func (lhs ObjExprs) Equal(rhs ObjExprs) bool {
+	return maps.EqualFunc(lhs, rhs, ObjExprAttr.Equal)
 }

@@ -2,6 +2,7 @@ package syntax
 
 import (
 	"fmt"
+	"golang.org/x/exp/maps"
 )
 
 // Renderings may contain upper-case characters, so they can be used inside quoted fields
@@ -19,4 +20,8 @@ func (r Rendering) validate() error {
 		renderings[v] = true
 	}
 	return nil
+}
+
+func (lhs Rendering) Equal(rhs Rendering) {
+	return maps.Equal(lhs, rhs)
 }

@@ -8,7 +8,7 @@ import (
 type InterfaceMetadata struct {
 	ObjectMatcher	ObjMatcher
 	Classification Classification
-	Usergroups syntax.Rendering
+	UserGroups syntax.Rendering
 	UserGroupColumn ColMatcher
 	MaskColumns ColMatcher
 	HashColumns ColMatcher
@@ -163,4 +163,21 @@ func (imSem *InterfaceMetadata) setForProduct(imSyn syntax.InterfaceMetadata, pa
 	}
 	imSem.ForProduct = imSyn.ForProduct
 	return nil
+}
+
+func (lhs InterfaceMetadata) Equal(rhs InterfaceMetadata) bool {
+	if !lhs.ObjectMatcher.Equal(rhs.ObjectMatcher) { return false }
+	if !lhs.Classification == rhs.Classification { return false }
+	if !maps.Equal(lhs.UserGroups, rhs.UserGroups) { return false }
+	if !lhs.UserGroupColumn.Equal(rhs.UserGroupColumn) { return false }
+	if !lhs.MaskColumns.Equal(rhs.MaskColumns) { return false }
+	if !lhs.HashColumns.Equal(rhs.HashColumns) { return false }
+	if !maps.Equal(lhs.ExposeDTAPs, rhs.ExposeDTAPs) { return false }
+	if !maps.Equal(lhs.DTAPRendering, rhs.DTAPRendering) { return false }
+	// TODO: check if a simple generic exists for the three lines below, and if so, use it.
+	if lhs.ForProduct != rhs.ForProduct {
+		if lhs.ForProduct == nil || rhs.ForProduct == nil { return false }
+		if *lhs.ForProduct != *rhs.ForProduct { return false }
+	}
+	return true
 }

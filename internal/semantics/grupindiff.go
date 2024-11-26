@@ -22,7 +22,7 @@ func NewGrupinDiff(old Grupin, new Grupin) GrupinDiff {
 		v_new, ok := new.Products[k_old]
 		if !ok {
 			diff.Deleted[k_old] = v_old
-		} else if equal := v_old.equals(v_new); !equal {
+		} else if !v_old.Equal(v_new) {
 			diff.Updated[k_old] = ProductDiff{v_old, v_new}
 		}
 	}

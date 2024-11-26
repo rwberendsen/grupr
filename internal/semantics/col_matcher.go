@@ -35,3 +35,7 @@ func newColMatcher(l []string, dtaps syntax.Rendering, userGroups syntax.Renderi
 	}
 	return m, nil
 }
+
+func (lhs ColMatcher) Equal(rhs Colmatcher) bool {
+	return lhs.ColExprs.Equal(rhs.ColExprs)
+}

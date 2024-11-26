@@ -3,6 +3,7 @@ package semantics
 import (
 	"fmt"
 	"github.com/rwberendsen/grupr/internal/syntax"
+	"golang.org/x/exp/maps"
 )
 
 type DTAPSpec struct {
@@ -33,4 +34,11 @@ func newDTAPSpec(dsSyn syntax.DTAPSpec, dtapRendering syntax.Rendering) DTAPSpec
 		dsSem.AllDTAPs[d] = r
 	}
 	return dsSem
+}
+
+func (lhs DTAPSpec) Equal(rhs DTAPSpec) bool {
+	if lhs.Prod != rhs.Prod { return false }
+	if equal := maps.Equal(lhs.NonProd, rhs.NonProd); !equal { return false }
+	if equal := maps.Equal(lhs.DTAPRendering, rhs.DTAPRendering); !equal { return false {
+	return true
 }

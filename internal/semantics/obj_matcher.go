@@ -64,8 +64,9 @@ func newObjMatcher(include []string, exclude []string, dtaps syntax.Rendering, u
 	return m, nil
 }
 
-func (lhs ObjMatcher) equals(rhs ObjMatcher) bool {
-	return maps.Equal(lhs.Include, rhs.Include) && maps.Equal(lhs.Exclude, rhs.Exclude)
+func (lhs ObjMatcher) Equal(rhs ObjMatcher) bool {
+	return lhs.Include.Equal(rhs.Include) && lhs.Exclude.Equal(rhs.Exclude)
+	// StrictSuperset and StrictSubset are derived from include and exclude, no need to compare
 }
 
 func (lhs ObjMatcher) disjoint(rhs ObjMatcher) bool {

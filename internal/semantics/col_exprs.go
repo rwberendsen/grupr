@@ -8,10 +8,6 @@ import (
 	"github.com/rwberendsen/grupr/internal/syntax"
 )
 
-type ColExprAttr struct {
-	DTAPs      syntax.Rendering `yaml:"dtaps,omitempty"`
-	UserGroups syntax.Rendering`yaml:"user_groups,omitempty"`
-}
 type ColExprs map[ColExpr]ColExprAttr
 
 func newColExprs(s string, dtaps syntax.Rendering, userGroups syntax.Rendering) (ColExprs, error) {
@@ -75,4 +71,8 @@ func (m ColExprs) allDisjoint() bool {
 		}
 	}
 	return true
+}
+
+func (lhs ColExprs) Equal(rhs ColExprs) bool {
+	return maps.Equal(lhs, rhs, ColExprAttr.Equal)
 }
