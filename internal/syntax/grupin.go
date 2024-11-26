@@ -14,8 +14,8 @@ type Grupin struct {
 	Interfaces	map[InterfaceID]Interface
 }
 
-func NewGrupin(r io.Reader) (*Grupin, error) {
-	dec := yaml.NewDecoder(f)
+func NewGrupin(r io.Reader) (Grupin, error) {
+	dec := yaml.NewDecoder(r)
 	dec.KnownFields(true)
 	var g Grupin
 	for {
@@ -25,22 +25,22 @@ func NewGrupin(r io.Reader) (*Grupin, error) {
 			break
 		}
 		if err != nil {
-			return g, fmt.Errrorf("decoding YAML: %w", err)
+			return g, fmt.Errorf("decoding YAML: %w", err)
 		}
 		if err := e.validateAndAdd(&g); err != nil {
 			return g, fmt.Errorf("decoding YAML: %w", err)
 		}
 	}
-	return &g, nil
+	return g, nil
 }
 
 func (g *Grupin) String() string {
-	w strings.Builder()
+	var w *strings.Builder
 	enc := yaml.NewEncoder(w)
-	for e := range g {
+	for e := range g.Products {
 		err := enc.Encode(e)
 		if err != nil {
-			panic("gruping could not be encoded")
+			panic("grupin could not be encoded")
 		}
 	}
 	return w.String()

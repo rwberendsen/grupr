@@ -13,14 +13,14 @@ type ColExprs map[ColExpr]ColExprAttr
 func newColExprs(s string, dtaps syntax.Rendering, userGroups syntax.Rendering) (ColExprs, error) {
 	exprs := ColExprs{}
 	if strings.ContainsRune(s, '\n') {
-		return exprs, syntax.FormattingError{"object expression has newline"}
+		return exprs, &syntax.FormattingError{"object expression has newline"}
 	}
 	dtapExpanded := map[string]ColExprAttr{}
 	if strings.Contains(s, DTAPTemplate) {
 		// If object exists only in, say, a dev env, that's okay. Cause it's okay if the production rendition of the object does not match any existing objects.
 		// What counts is that if they would exist, then they would be matched.
 		if len(dtaps) == 0 {
-			return exprs, SetLogicError{fmt.Sprintf("expanding dtaps in '%s': no dtaps found", s)}
+			return exprs, &SetLogicError{fmt.Sprintf("expanding dtaps in '%s': no dtaps found", s)}
 		}
 		for d, renderedDTAP := range dtaps {
 			dtapExpanded[strings.ReplaceAll(s, DTAPTemplate, renderedDTAP)] = ColExprAttr{DTAPs: syntax.Rendering{d: renderedDTAP}}

@@ -1,4 +1,4 @@
-ackage semantics
+package semantics
 
 import (
 	"regexp"

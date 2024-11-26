@@ -19,25 +19,25 @@ type InterfaceMetadata struct {
 }
 
 func (i InterfaceMetadata) validate() error {
-	if Classification != "" {
+	if i.Classification != "" {
 		if err := validateClassification(i.Classification, i.CanLeaveGroup); err != nil { return err }
-	} else if CanLeaveGroup != nil {
+	} else if i.CanLeaveGroup != nil {
 		return fmt.Errorf("Classification not specified but CanLeaveGroup was specified")
 	}
-	for u := range i.UserGroups {
+	for _, u := range i.UserGroups {
 		if err := validateID(u); err != nil { return fmt.Errorf("UserGroup %s: %w", u, err) }
 	}
 	if i.UserGroupColumn != "" {
 		if len(i.UserGroups) == 0 { return fmt.Errorf("UserGroupColumn specified but not UserGroups") }
 	}
 	if i.Objects == nil && i.ObjectsExclude != nil {
-		return fmt.Errorf("no objects specified, but objects to exclude were specified", p.ID)
+		return fmt.Errorf("no objects specified, but objects to exclude were specified")
 	}
-	for d := range i.ExposeDTAPs {
+	for _, d := range i.ExposeDTAPs {
 		if err := validateID(d); err != nil { return fmt.Errorf("ExposeDTAPs: %w", err) }
 	}
 	if err := i.UserGroupRendering.validate(); err != nil { return fmt.Errorf("UserGroupRendering: %w", err) }
-	if ForProduct != nil {
+	if i.ForProduct != nil {
 		if err := validateID(*i.ForProduct); err != nil { return fmt.Errorf("ForProduct: %w", err) }
 	}
 	return nil

@@ -12,6 +12,6 @@ type Interface struct {
 
 func (i * Interface) validate() error {
 	if err := validateID(i.ID); err != nil { return err }
-	if err := InterfaceMetadata.validate(); err != nil { return fmt.Errorf("interface '%s': %v", iid, err) }
+	if err := i.InterfaceMetadata.validate(); err != nil { return fmt.Errorf("interface '%s' of product '%s': %v", i.ID, i.ProductID, err) }
 	return nil
 }

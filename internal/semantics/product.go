@@ -28,7 +28,7 @@ func newProduct(pSyn syntax.Product, allowedUserGroups map[string]bool) (Product
 	}
 	for _, iid := range pSyn.Consumes {
 		if iid.ProducingService == "" && iid.ProductID == pSem.ID {
-			return PolicyError{fmt.Sprintf("product '%s' not allowed to consume own interface '%s'", iid.ProductID, iid.ID)}
+			return &PolicyError{fmt.Sprintf("product '%s' not allowed to consume own interface '%s'", iid.ProductID, iid.ID)}
 		}
 		if _, ok := pSem.Consumes[iid]; ok {
 			return pSem, fmt.Errorf("duplicate consumed interface id")

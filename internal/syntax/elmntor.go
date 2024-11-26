@@ -1,10 +1,7 @@
 package syntax
 
 import (
-	"io"
 	"fmt"
-
-	"gopkg.in/yaml.v3"
 )
 
 
@@ -23,9 +20,9 @@ func (e ElmntOr) validateAndAdd(g *Grupin) error {
 			return err
 		}
 		if _, ok := g.Products[e.Product.ID]; ok {
-			return FormattingError{fmt.Sprintf("duplicate product id: %s", e.Product.ID)}
+			return &FormattingError{fmt.Sprintf("duplicate product id: %s", e.Product.ID)}
 		}
-		g.Products[e.Product.ID] = e.Product
+		g.Products[e.Product.ID] = *e.Product
 	}
 	if e.Interface != nil {
 		n_elements += 1
@@ -38,25 +35,25 @@ func (e ElmntOr) validateAndAdd(g *Grupin) error {
 			ProductID: e.Interface.ProductID,
 		}
 		if _, ok := g.Interfaces[iid]; ok {
-			return FormattingError{fmt.Sprintf("duplicate interface id: %s", iid)}
+			return &FormattingError{fmt.Sprintf("duplicate interface id: %s", iid)}
 		}
-		g.Interfaces[iid] = e.Interface
+		g.Interfaces[iid] = *e.Interface
 	}
 	if e.AllowedUserGroups != nil {
 		if g.AllowedUserGroups != nil {
-			return FormattingError{"allowed_user_groups specified more than once"}
+			return &FormattingError{"allowed_user_groups specified more than once"}
 		}
 		n_elements += 1
-		ug := map[string]bool
+		ug := map[string]bool{}
 		for _, u := range e.AllowedUserGroups {
 			if err := validateID(u); err != nil { return fmt.Errorf("user_groups: %w", err) }
-			if _, ok := ug[u]; ok { return FormattingError{fmt.Sprintf("duplicate user group: %s", u)} }
+			if _, ok := ug[u]; ok { return &FormattingError{fmt.Sprintf("duplicate user group: %s", u)} }
 			ug[u] = true
 		}
-		g.AllowedUserGroups = u
+		g.AllowedUserGroups = ug
 	}
 	if n_elements != 1 {
-		return FormattingError{"not exactly one element in ElmntOr"}
+		return &FormattingError{"not exactly one element in ElmntOr"}
 	}
 	return nil
 }

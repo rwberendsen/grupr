@@ -15,10 +15,10 @@ func (d DTAPSpec) validate() error {
 		if err := validateID(d.Prod); err != nil { return fmt.Errorf("prod DTAP id: %w", err) }
 	}
 	dtaps[d.Prod] = true
-	for i := range d.NonProd {
+	for _, i := range d.NonProd {
 		if err := validateID(i); err != nil { return fmt.Errorf("non prod DTAP id: %w", err) }
 		if _, ok := dtaps[i]; ok {
-			return FormattingError{fmt.Sprintf("duplicate DTAP: %s", i)}
+			return &FormattingError{fmt.Sprintf("duplicate DTAP: %s", i)}
 		}
 	}
 	return nil
@@ -28,7 +28,7 @@ func (d DTAPSpec) IsEmpty() bool {
 	return d.Prod == "" && len(d.NonProd) == 0
 }
 
-func (d DTAPSpec) HasDTAP(dtap string) {
+func (d DTAPSpec) HasDTAP(dtap string) bool {
 	if dtap == "" { return false } // "" is a zero value we interpret as a non-existent (not specified) DTAP
 	for _, i := range d.NonProd {
 		if dtap == i { return true }

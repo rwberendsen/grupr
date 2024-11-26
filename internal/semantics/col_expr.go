@@ -24,7 +24,7 @@ func newColExpr(s string) (ColExpr, error) {
 		return r, fmt.Errorf("reading csv: %w", err)
 	}
 	if len(record) < 1 || len(record) > 4 {
-		return r, syntax.FormattingError{"column expression number of fields outside [1, 4]"}
+		return r, &syntax.FormattingError{"column expression number of fields outside [1, 4]"}
 	}
 	// figure out which parts were quoted, if any
 	fields := []ExprPart{} make([]ExprPart, 4)
@@ -52,7 +52,7 @@ func newColExpr(s string) (ColExpr, error) {
 	// validate identifier expressions
 	for _, exprPart := range fields {
 		if !exprPart.validate() {
-			return r, syntax.FormattingError{fmt.Sprintf("invalid expr part: %v", exprPart)}
+			return r, &syntax.FormattingError{fmt.Sprintf("invalid expr part: %v", exprPart)}
 		}
 	}
 	// expecting only one line, just checking there was not more

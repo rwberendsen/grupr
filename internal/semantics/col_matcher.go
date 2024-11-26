@@ -18,18 +18,18 @@ func newColMatcher(l []string, dtaps syntax.Rendering, userGroups syntax.Renderi
 		}
 		for e, ea := range exprs {
 			if _, ok := m.ColExprs[e]; ok {
-				return m, SetLogicError{fmt.Sprintf("duplicate column expr: '%v'", e)}
+				return m, &SetLogicError{fmt.Sprintf("duplicate column expr: '%v'", e)}
 			}
 			m.ColExprs[e] = ea
 		}
 	}
 	if ok := m.ColExprs.allDisjoint(); !ok {
-		return m, SetLogicError{"non disjoint set of column exprs"}
+		return m, &SetLogicError{"non disjoint set of column exprs"}
 	}
 	for e, ea range m.ColExprs {
 		for dtap in ea.DTAPs {
 			if objectMatcher.disjointWithColExpr(e, dtap) {
-				return m, SetLogicError{fmt.Sprintf("column expression '%v' disjoint with object matcher", e)}
+				return m, &SetLogicError{fmt.Sprintf("column expression '%v' disjoint with object matcher", e)}
 			}
 		}
 	}
