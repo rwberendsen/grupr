@@ -5,14 +5,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type GrupsDiff struct {
+type GrupinDiff struct {
 	Created map[string]Product
 	Deleted map[string]bool
 	Updated map[string]ProductDiff
 }
 
-func NewGrupsDiff(g semantics.GrupsDiff) GrupsDiff {
-	r := GrupsDiff{map[string]Product{}, map[string]bool{}, map[string]ProductDiff{}}
+func NewGrupinDiff(g semantics.GrupinDiff) GrupinDiff {
+	r := GrupinDiff{map[string]Product{}, map[string]bool{}, map[string]ProductDiff{}}
 	// walk over g, and enrich:
 	// - created products and their interfaces with the exprs they consist of
 	// - for updated products, both the old and new versions with the objects they consist of
@@ -33,10 +33,10 @@ func NewGrupsDiff(g semantics.GrupsDiff) GrupsDiff {
 	return r
 }
 
-func (g GrupsDiff) String() string {
+func (g GrupinDiff) String() string {
 	data, err := yaml.Marshal(g)
 	if err != nil {
-		panic("GrupsDiff could not be marshalled")
+		panic("GrupinDiff could not be marshalled")
 	}
 	return string(data)
 }

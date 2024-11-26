@@ -7,10 +7,10 @@ import (
 )
 
 type Matched struct {
-	Objects map[semantics.Expr]AccountObjs
+	Objects map[semantics.ObjExpr]AccountObjs
 }
 
-func newMatched(m semantics.Matcher, c *accountCache) Matched {
+func newMatched(m semantics.ObjMatcher, c *accountCache) Matched {
 	r := Matched{map[semantics.Expr]AccountObjs{}}
 	for k := range m.Include {
 		r.Objects[k] = match(k, c)
@@ -41,7 +41,7 @@ func matchPart(e semantics.ExprPart, l map[string]bool) map[string]bool {
 	return r
 }
 
-func match(e semantics.Expr, c *accountCache) AccountObjs {
+func match(e semantics.ObjExpr, c *accountCache) AccountObjs {
 	o := AccountObjs{}
 	matchedDBs := matchPart(e[semantics.Database], c.getDBnames())
 	log.Printf("DBnames: %v", c.getDBnames())

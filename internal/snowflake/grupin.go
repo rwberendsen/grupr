@@ -7,21 +7,20 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type Grups struct {
+type Grupin struct {
 	Products map[string]Product
 }
 
-func NewGrups(g semantics.Grups) Grups {
-	r := Grups{map[string]Product{}}
+func NewGrupin(g semantics.Grupin) Grupin {
+	r := Grupin{map[string]Product{}}
 	c := newAccountCache()
 	for k, v := range g.Products {
 		r.Products[k] = newProduct(v, c)
 	}
-	log.Printf("accountCache: %v", *c)
 	return r
 }
 
-func (g Grups) String() string {
+func (g Grupin) String() string {
 	data, err := yaml.Marshal(g)
 	if err != nil {
 		panic("grups could not be marshalled")

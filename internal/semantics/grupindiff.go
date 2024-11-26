@@ -10,7 +10,7 @@ type GrupinDiff struct {
 	DeletedAllowedUserGroups map[string]bool `yaml:"deleted_allowed_user_groups,omitempty"`
 }
 
-func NewGrupinDiff(old Grupin, new Grupin) GrupinDiff {
+func NewGrupinDiff(lhs Grupin, rhs Grupin) GrupinDiff {
 	diff := GrupinDiff{
 		map[string]Product{},
 		map[string]Product{},
@@ -18,27 +18,27 @@ func NewGrupinDiff(old Grupin, new Grupin) GrupinDiff {
 		map[string]bool{},
 		map[string]bool{},
 	}
-	for k_old, v_old := range old.Products {
-		v_new, ok := new.Products[k_old]
+	for k_lhs, v_lhs := range lhs.Products {
+		v_rhs, ok := rhs.Products[k_lhs]
 		if !ok {
-			diff.Deleted[k_old] = v_old
-		} else if !v_old.Equal(v_new) {
-			diff.Updated[k_old] = ProductDiff{v_old, v_new}
+			diff.Deleted[k_lhs] = v_lhs
+		} else if !v_lhs.Equal(v_rhs) {
+			diff.Updated[k_lhs] = ProductDiff{v_lhs, v_rhs}
 		}
 	}
-	for k_new, v_new := range new.Products {
-		if _, ok := old.Products[k_new]; !ok {
-			diff.Created[k_new] = v_new
+	for k_rhs, v_rhs := range rhs.Products {
+		if _, ok := lhs.Products[k_rhs]; !ok {
+			diff.Created[k_rhs] = v_rhs
 		}
 	}
-	for k_old := range old.AllowedUserGroups {
-		if _, ok := new.AllowedUserGroups[k_old]; !ok {
-			diff.DeletedAllowedUserGroups[k_old] = true
+	for k_lhs := range lhs.AllowedUserGroups {
+		if _, ok := rhs.AllowedUserGroups[k_lhs]; !ok {
+			diff.DeletedAllowedUserGroups[k_lhs] = true
 		}
 	}
-	for k_new := range new.AllowedUserGroups {
-		if _, ok := old.AllowedUserGroups[k_new]; !ok {
-			diff.CreatedAllowedUserGroups[k_new] = true
+	for k_rhs := range rhs.AllowedUserGroups {
+		if _, ok := lhs.AllowedUserGroups[k_rhs]; !ok {
+			diff.CreatedAllowedUserGroups[k_rhs] = true
 		}
 	}
 	return diff
@@ -49,7 +49,7 @@ type ProductDiff struct {
 	New Product
 }
 
-func (g GrupsDiff) String() string {
+func (g GrupinDiff) String() string {
 	data, err := yaml.Marshal(g)
 	if err != nil {
 		panic("GrupsDiff could not be marshalled")

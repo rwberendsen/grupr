@@ -2,10 +2,10 @@ package snowflake
 
 // couple of simple data structures to hold matched objects in account
 type AccountObjs struct {
-	Dbs map[string]DbObjs
+	DBs map[string]DBObjs
 }
 
-type DbObjs struct {
+type DBObjs struct {
 	Schemas  map[string]SchemaObjs
 	MatchAll bool
 }
@@ -20,46 +20,46 @@ type SchemaObjs struct {
 }
 
 func (o AccountObjs) addDB(db string, matchAllSchemas bool) AccountObjs {
-	if _, ok := o.Dbs[db]; !ok {
-		if o.Dbs == nil {
-			o.Dbs = map[string]DbObjs{}
+	if _, ok := o.DBs[db]; !ok {
+		if o.DBs == nil {
+			o.DBs = map[string]DBObjs{}
 		}
-		o.Dbs[db] = DbObjs{map[string]SchemaObjs{}, matchAllSchemas}
+		o.DBs[db] = DBObjs{map[string]SchemaObjs{}, matchAllSchemas}
 	}
 	return o
 }
 
 func (o AccountObjs) addSchema(db string, schema string, matchAllTables bool) AccountObjs {
-	if _, ok := o.Dbs[db].Schemas[schema]; !ok {
-		o.Dbs[db].Schemas[schema] = SchemaObjs{map[string]bool{}, map[string]bool{}, matchAllTables}
+	if _, ok := o.DBs[db].Schemas[schema]; !ok {
+		o.DBs[db].Schemas[schema] = SchemaObjs{map[string]bool{}, map[string]bool{}, matchAllTables}
 	}
 	return o
 }
 
 func (o AccountObjs) addTable(db string, schema string, obj string) AccountObjs {
-	o.Dbs[db].Schemas[schema].Tables[obj] = true
+	o.DBs[db].Schemas[schema].Tables[obj] = true
 	return o
 }
 
 func (o AccountObjs) addView(db string, schema string, obj string) AccountObjs {
-	o.Dbs[db].Schemas[schema].Views[obj] = true
+	o.DBs[db].Schemas[schema].Views[obj] = true
 	return o
 }
 
 func (lhs AccountObjs) subtract(rhs AccountObjs) AccountObjs {
-	r := AccountObjs{map[string]DbObjs{}}
-	for k, v := range lhs.Dbs {
-		if v2, ok := rhs.Dbs[k]; !ok {
-			r.Dbs[k] = v
+	r := AccountObjs{map[string]DBObjs{}}
+	for k, v := range lhs.DBs {
+		if v2, ok := rhs.DBs[k]; !ok {
+			r.DBs[k] = v
 		} else {
-			r.Dbs[k] = v.subtract(v2)
+			r.DBs[k] = v.subtract(v2)
 		}
 	}
 	return r
 }
 
-func (lhs DbObjs) subtract(rhs DbObjs) DbObjs {
-	r := DbObjs{map[string]SchemaObjs{}, false}
+func (lhs DBObjs) subtract(rhs DBObjs) DBObjs {
+	r := DBObjs{map[string]SchemaObjs{}, false}
 	for k, v := range lhs.Schemas {
 		if v2, ok := rhs.Schemas[k]; !ok {
 			r.Schemas[k] = v
@@ -87,7 +87,7 @@ func (lhs SchemaObjs) subtract(rhs SchemaObjs) SchemaObjs {
 
 func (o AccountObjs) TableCount() int {
 	r := 0
-	for _, db := range o.Dbs {
+	for _, db := range o.DBs {
 		for _, schema := range db.Schemas {
 			r += len(schema.Tables)
 		}
@@ -97,7 +97,7 @@ func (o AccountObjs) TableCount() int {
 
 func (o AccountObjs) ViewCount() int {
 	r := 0
-	for _, db := range o.Dbs {
+	for _, db := range o.DBs {
 		for _, schema := range db.Schemas {
 			r += len(schema.Views)
 		}

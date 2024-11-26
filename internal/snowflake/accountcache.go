@@ -7,14 +7,15 @@ import (
 )
 
 // caching objects in Snowflake locally
-func newAccountCache() *accountCache {
-	return &accountCache{}
-}
-
 type accountCache struct {
 	dbs     map[string]*dbCache
 	dbNames map[string]bool
 }
+
+func newAccountCache() *accountCache {
+	return &accountCache{}
+}
+
 
 type dbCache struct {
 	dbName      string

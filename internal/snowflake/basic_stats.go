@@ -15,24 +15,23 @@ type BasicStats struct {
 	Expr                  semantics.Expr
 	DTAP                  string
 	DataKind              semantics.KindOfData
-	UserGroup             string // TODO: UserGroups: tables matched by an expr can contain multiple UserGroups
-	UserGroupColumnValues []string // TODO: drop this one in favour of line above; provide way to explicity label an expr with user groups distinct from the product level spec.
+	UserGroups            string // TODO: UserGroups: tables matched by an expr can contain multiple UserGroups
 	TableCount            int
 	ViewCount             int
 	ByteCount             int
 }
 
-func NewBasicStats(grups semantics.Grups, sfGrups Grups) []*BasicStats {
+func NewBasicStats(grupin semantics.Grupin, sfGrupin Grupin) []*BasicStats {
 	r := []*BasicStats{}
-	for prdId, prd := range grups.Products {
+	for prdId, prd := range grupin.Products {
 		for e, ea := range prd.Matcher.Include {
 			stats := &BasicStats{
 				ProductId:  prdId,
 				Expr:       e,
 				DTAP:       ea.DTAP,
 				UserGroup:  ea.UserGroup,
-				TableCount: sfGrups.Products[prdId].Matched.Objects[e].TableCount(),
-				ViewCount:  sfGrups.Products[prdId].Matched.Objects[e].ViewCount(),
+				TableCount: sfGrupin.Products[prdId].Matched.Objects[e].TableCount(),
+				ViewCount:  sfGrupin.Products[prdId].Matched.Objects[e].ViewCount(),
 			}
 			r = append(r, stats)
 		}
@@ -44,8 +43,8 @@ func NewBasicStats(grups semantics.Grups, sfGrups Grups) []*BasicStats {
 					Expr:        e,
 					DTAP:        ea.DTAP,
 					UserGroup:   ea.UserGroup,
-					TableCount:  sfGrups.Products[prdId].Interfaces[intrfId].Matched.Objects[e].TableCount(),
-					ViewCount:   sfGrups.Products[prdId].Interfaces[intrfId].Matched.Objects[e].ViewCount(),
+					TableCount:  sfGrupin.Products[prdId].Interfaces[intrfId].Matched.Objects[e].TableCount(),
+					ViewCount:   sfGrupin.Products[prdId].Interfaces[intrfId].Matched.Objects[e].ViewCount(),
 				}
 				r = append(r, stats)
 			}

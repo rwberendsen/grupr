@@ -10,7 +10,7 @@ import (
 	"github.com/rwberendsen/grupr/internal/syntax"
 )
 
-func getGrupinFromPath(path string) (semantics.Grupin, error) {
+func GetGrupinFromPath(path string) (semantics.Grupin, error) {
 	var r semantics.Grupin
 	f := os.Open(path)
 	g, err := syntax.NewGrupin(f)
