@@ -2,6 +2,7 @@ package semantics
 
 import (
 	"fmt"
+	"golang.org/x/exp/maps"
 	"github.com/rwberendsen/grupr/internal/syntax"
 )
 
@@ -18,36 +19,37 @@ type InterfaceMetadata struct {
 }
 
 
-func newInterfaceMetadata(imSyn syntax.InterfaceMetadata, allowedUserGroups map[string]bool, dtaps syntax.Rendering, parent *InterfaceMetadata) (InterfaceMetadata, error) {
+func newInterfaceMetadata(imSyn syntax.InterfaceMetadata, allowedUserGroups map[string]bool,
+                          dtaps syntax.Rendering, parent *InterfaceMetadata) (InterfaceMetadata, error) {
 	imSem := InterfaceMetadata{}
-	if err := imSem.setClassification(imSyn, parent); err != nil { return err }
-	if err := imSem.setUserGroups(imSyn, parent, allowedUserGroups); err != nil { return err }
-	if err := imSem.setExposeDTAPs(imSyn, parent, dtaps); err != nil { return err }
-	if err := imSem.setUserGroupRendering(imSyn, parent); err != nil { return err }
-	if err := imSem.setObjectMatcher(imSyn, parent, dtaps); err != nil { return err }
-	if err := imSem.setUserGroupColumn(imSyn, parent, dtaps); err != nil { return err }
-	if err := imSem.setMaskColumns(imSyn, parent, dtaps); err != nil { return err }
-	if err := imSem.setHashColumns(imSyn, parent, dtaps); err != nil { return err }
-	if err := imSem.setForProduct(imSyn, parent, dtaps); err != nil { return err }
+	if err := imSem.setClassification(imSyn, parent); err != nil { return imSem, err }
+	if err := imSem.setUserGroups(imSyn, parent, allowedUserGroups); err != nil { return imSem, err }
+	if err := imSem.setExposeDTAPs(imSyn, parent, dtaps); err != nil { return imSem, err }
+	if err := imSem.setObjectMatcher(imSyn, parent, dtaps); err != nil { return imSem, err }
+	if err := imSem.setUserGroupColumn(imSyn, parent, dtaps); err != nil { return imSem, err }
+	if err := imSem.setMaskColumns(imSyn, parent, dtaps); err != nil { return imSem, err }
+	if err := imSem.setHashColumns(imSyn, parent, dtaps); err != nil { return imSem, err }
+	if err := imSem.setForProduct(imSyn, parent, dtaps); err != nil { return imSem, err }
 	return imSem, nil
 }
 
 func (imSem *InterfaceMetadata) setClassification(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata) error {
 	if imSyn.Classification == "" {
 		if parent != nil {
-			imSem.Classification = p.Classification
+			imSem.Classification = parent.Classification
 			return nil
 		}
 		return &PolicyError{"Classfication is a required field on product level"}
 	}
-	imSem.Classification = newClassification(imSyn.Classification)
+	imSem.Classification = newClassification(imSyn.Classification, imSyn.CanLeaveGroup)
 	if parent != nil && parent.Classification < imSem.Classification {
 		return &PolicyError{"Classification on interface higher than product classification"}
 	}
 	return nil
 }
 
-func (imSem *InterfaceMetadata) setUserGroups(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata, allowedUserGroups map[string]bool) error {
+func (imSem *InterfaceMetadata) setUserGroups(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata,
+					      allowedUserGroups map[string]bool) error {
 	if imSyn.UserGroups == nil {
 		if parent != nil {
 			imSem.UserGroups = parent.UserGroups
@@ -72,7 +74,8 @@ func (imSem *InterfaceMetadata) setUserGroups(imSyn syntax.InterfaceMetadata, pa
 	return nil
 }
 
-func (imSem *InterfaceMetadata) setExposeDTAPs(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata, dtaps syntax.Rendering) error {
+func (imSem *InterfaceMetadata) setExposeDTAPs(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata,
+                                               dtaps syntax.Rendering) error {
 	if imSyn.ExposeDTAPs == nil {
 		if parent != nil {
 			imSem.ExposeDTAPs = parent.ExposeDTAPs
@@ -81,14 +84,19 @@ func (imSem *InterfaceMetadata) setExposeDTAPs(imSyn syntax.InterfaceMetadata, p
 	}
 	imSem.ExposeDTAPs = make(map[string]bool, len(dtaps))
 	for _, d := range imSyn.ExposeDTAPs {
-		if _, ok := imSem.ExposeDTAPs[d]; ok { return &syntax.FormattingError{fmt.Sprintf("ExposeDTAPs: duplicate dtap '%s'", d)}
-		if _, ok := dtaps[d]; !ok { return &SetLogicError{fmt.Sprintf("ExposeDTAPs: unknown dtap '%s'", d)}
+		if _, ok := imSem.ExposeDTAPs[d]; ok {
+			return &syntax.FormattingError{fmt.Sprintf("ExposeDTAPs: duplicate dtap '%s'", d)}
+		}
+		if _, ok := dtaps[d]; !ok {
+			return &SetLogicError{fmt.Sprintf("ExposeDTAPs: unknown dtap '%s'", d)}
+		}
 		imSem.ExposeDTAPs[d] = true
 	}
 	return nil
 }
 
-func (imSem *InterfaceMetadata) setObjectMatcher(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata, dtaps syntax.Rendering) error {
+func (imSem *InterfaceMetadata) setObjectMatcher(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata,
+                                                 dtaps syntax.Rendering) error {
 	if imSyn.Objects == nil {
 		if parent != nil {
 			imSem.ObjectMatcher = parent.ObjectMatcher
@@ -99,17 +107,18 @@ func (imSem *InterfaceMetadata) setObjectMatcher(imSyn syntax.InterfaceMetadata,
 	if m, err := newObjMatcher(imSyn.Objects, imSyn.ObjectsExclude, dtaps, imSem.UserGroups); err != nil {
 		return fmt.Errorf("ObjectMatcher: %w", err)
 	} else {
-		pSem.ObjectMatcher = m
+		imSem.ObjectMatcher = m
 	}
 	if parent != nil {
-		if !pSem.ObjectMatcher.subsetOf(parent.ObjectMatcher) {
+		if !imSem.ObjectMatcher.subsetOf(parent.ObjectMatcher) {
 			return &PolicyError{"ObjectMatcher should be a subset of parent ObjectMatcher"}
 		}
 	}
 	return nil
 }
 
-func (imSem *InterfaceMetadata) setUserGroupColumn(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata, dtaps syntax.Rendering) error {
+func (imSem *InterfaceMetadata) setUserGroupColumn(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata,
+                                                   dtaps syntax.Rendering) error {
 	if imSyn.UserGroupColumn == "" {
 		if parent != nil {
 			imSem.UserGroupColumn = parent.UserGroupColumn
@@ -131,7 +140,7 @@ func (imSem *InterfaceMetadata) setHashColumns(imSyn syntax.InterfaceMetadata, p
 		}
 		return nil
 	}
-	if m, err := newColMatcher([]string{imSyn.HashColumns, dtaps, imSem.UserGroups, imSem.ObjectMatcher); err != nil {
+	if m, err := newColMatcher(imSyn.HashColumns, dtaps, imSem.UserGroups, imSem.ObjectMatcher); err != nil {
 		return fmt.Errorf("hash_columns: %w", err)
 	} else {
 		imSem.HashColumns = m
@@ -154,8 +163,8 @@ func (imSem *InterfaceMetadata) setMaskColumns(imSyn syntax.InterfaceMetadata, p
 	return nil
 }
 
-func (imSem *InterfaceMetadata) setForProduct(imSyn syntax.InterfaceMetadata, parent *IntefaceMetadata, dtaps syntax.Rendering) error {
-	if Imsyn.ForProduct == nil {
+func (imSem *InterfaceMetadata) setForProduct(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata, dtaps syntax.Rendering) error {
+	if imSyn.ForProduct == nil {
 		if parent != nil {
 			imSem.ForProduct = parent.ForProduct
 		}
@@ -165,19 +174,23 @@ func (imSem *InterfaceMetadata) setForProduct(imSyn syntax.InterfaceMetadata, pa
 	return nil
 }
 
-func (lhs InterfaceMetadata) Equal(rhs InterfaceMetadata) bool {
-	if !lhs.ObjectMatcher.Equal(rhs.ObjectMatcher) { return false }
-	if !lhs.Classification == rhs.Classification { return false }
-	if !maps.Equal(lhs.UserGroups, rhs.UserGroups) { return false }
-	if !lhs.UserGroupColumn.Equal(rhs.UserGroupColumn) { return false }
-	if !lhs.MaskColumns.Equal(rhs.MaskColumns) { return false }
-	if !lhs.HashColumns.Equal(rhs.HashColumns) { return false }
-	if !maps.Equal(lhs.ExposeDTAPs, rhs.ExposeDTAPs) { return false }
-	if !maps.Equal(lhs.DTAPRendering, rhs.DTAPRendering) { return false }
+func equal_pointer_string(lhs *string, rhs *string) bool {
 	// TODO: check if a simple generic exists for the three lines below, and if so, use it.
-	if lhs.ForProduct != rhs.ForProduct {
-		if lhs.ForProduct == nil || rhs.ForProduct == nil { return false }
-		if *lhs.ForProduct != *rhs.ForProduct { return false }
+	if lhs != rhs {
+		if lhs == nil || rhs == nil { return false }
+		if *lhs != *rhs { return false }
 	}
 	return true
+}
+
+func (lhs InterfaceMetadata) Equal(rhs InterfaceMetadata) bool {
+	return lhs.ObjectMatcher.Equal(rhs.ObjectMatcher) &&
+	       lhs.Classification == rhs.Classification &&
+	       lhs.UserGroups.Equal(rhs.UserGroups) &&
+	       lhs.UserGroupColumn.Equal(rhs.UserGroupColumn) &&
+	       lhs.MaskColumns.Equal(rhs.MaskColumns) &&
+	       lhs.HashColumns.Equal(rhs.MaskColumns) &&
+	       maps.Equal(lhs.ExposeDTAPs, rhs.ExposeDTAPs) &&
+	       lhs.DTAPRendering.Equal(rhs.DTAPRendering) &&
+	       equal_pointer_string(lhs.ForProduct, rhs.ForProduct)
 }

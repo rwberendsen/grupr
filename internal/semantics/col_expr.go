@@ -27,7 +27,7 @@ func newColExpr(s string) (ColExpr, error) {
 		return r, &syntax.FormattingError{"column expression number of fields outside [1, 4]"}
 	}
 	// figure out which parts were quoted, if any
-	fields := []ExprPart{} make([]ExprPart, 4)
+	fields := make([]ExprPart, 4)
 	for i, substr := range record {
 		_, start := reader.FieldPos(i)
 		start = start - 1 // FieldPos columns start numbering from 1
@@ -71,14 +71,9 @@ func newColExpr(s string) (ColExpr, error) {
 
 func (lhs ColExpr) subsetOf(rhs ColExpr) bool {
 	// return true if rhs can match at least all objects that lhs can match
-	if !lhs[Database].subsetOf(rhs[Database]) {
-		return false
-	}
-	if !lhs[Schema].subsetOf(rhs[Schema]) {
-		return false
-	}
-	if !lhs[Table].subsetOf(rhs[Table])
-		return false
+	if !lhs[Database].subsetOf(rhs[Database]) { return false }
+	if !lhs[Schema].subsetOf(rhs[Schema]) { return false }
+	if !lhs[Table].subsetOf(rhs[Table]) { return false }
 	return lhs[Column].subsetOf(rhs[Column])
 }
 
@@ -99,6 +94,24 @@ func (lhs ColExpr) disjoint(rhs ColExpr) bool {
 func (c ColExpr) subsetOfObjExprs(objExprs ObjExprs) bool {
 	objExpr := ObjExpr{c[0], c[1], c[2]}
 	return objExpr.subsetOfObjExprs(objExprs)
+}
+
+func (c ColExpr) disjointWithObjExpr(e ObjExpr) bool {
+	objExpr := ObjExpr{c[0], c[1], c[2]}
+	return objExpr.disjoint(e)
+}
+
+func (c ColExpr) disjointWithObjMatcher(om ObjMatcher, dtap string) bool {
+	for o, attr := range om.Include {
+		if attr.DTAP == dtap {
+			if !c.disjointWithObjExpr(o) {
+				if !c.subsetOfObjExprs(om.Exclude) {
+					return false
+				}
+			}
+		}
+	}
+	return true
 }
 
 

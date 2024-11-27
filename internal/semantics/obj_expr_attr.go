@@ -10,6 +10,6 @@ type ObjExprAttr struct {
 	UserGroups syntax.Rendering `yaml:"user_groups,omitempty"`
 }
 
-func (lhs ObjExprAttr) Equal(rhs ObjExprAttr) {
+func (lhs ObjExprAttr) Equal(rhs ObjExprAttr) bool {
 	return lhs.DTAP == rhs.DTAP && lhs.UserGroups.Equal(rhs.UserGroups)
 }

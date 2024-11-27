@@ -1,7 +1,6 @@
 package semantics
 
 import (
-	"fmt"
 	"github.com/rwberendsen/grupr/internal/syntax"
 	"golang.org/x/exp/maps"
 )
@@ -25,20 +24,19 @@ func newDTAPSpec(dsSyn syntax.DTAPSpec, dtapRendering syntax.Rendering) DTAPSpec
 		NonProd: make(map[string]bool, len(dsSyn.NonProd)),
 		DTAPRendering: make(syntax.Rendering, len(dsSyn.NonProd) + 1),
 	}
-	dsSem.AllDTAPs[dsSem.Prod] = dsSem.Prod
+	dsSem.DTAPRendering[dsSem.Prod] = dsSem.Prod
 	for _, d := range dsSyn.NonProd {
 		dsSem.NonProd[d] = true
-		dsSem.AllDTAPs[d] = d
+		dsSem.DTAPRendering[d] = d
 	}
 	for d, r := range dtapRendering {
-		dsSem.AllDTAPs[d] = r
+		dsSem.DTAPRendering[d] = r
 	}
 	return dsSem
 }
 
 func (lhs DTAPSpec) Equal(rhs DTAPSpec) bool {
-	if lhs.Prod != rhs.Prod { return false }
-	if equal := maps.Equal(lhs.NonProd, rhs.NonProd); !equal { return false }
-	if equal := maps.Equal(lhs.DTAPRendering, rhs.DTAPRendering); !equal { return false {
-	return true
+	return lhs.Prod == rhs.Prod &&
+	       maps.Equal(lhs.NonProd, rhs.NonProd) &&
+               maps.Equal(lhs.DTAPRendering, rhs.DTAPRendering)
 }

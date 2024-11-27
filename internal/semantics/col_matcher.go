@@ -9,7 +9,7 @@ type ColMatcher struct {
 	ColExprs ColExprs
 }
 
-func newColMatcher(l []string, dtaps syntax.Rendering, userGroups syntax.Rendering, objectMatcher objMatcher) (ColMatcher, error) {
+func newColMatcher(l []string, dtaps syntax.Rendering, userGroups syntax.Rendering, objectMatcher ObjMatcher) (ColMatcher, error) {
 	m := ColMatcher{ColExprs{}}
 	for _, expr := range l {
 		exprs, err := newColExprs(expr, dtaps, userGroups)
@@ -26,9 +26,9 @@ func newColMatcher(l []string, dtaps syntax.Rendering, userGroups syntax.Renderi
 	if ok := m.ColExprs.allDisjoint(); !ok {
 		return m, &SetLogicError{"non disjoint set of column exprs"}
 	}
-	for e, ea range m.ColExprs {
-		for dtap in ea.DTAPs {
-			if objectMatcher.disjointWithColExpr(e, dtap) {
+	for e, ea := range m.ColExprs {
+		for dtap := range ea.DTAPs {
+			if e.disjointWithObjMatcher(objectMatcher, dtap) {
 				return m, &SetLogicError{fmt.Sprintf("column expression '%v' disjoint with object matcher", e)}
 			}
 		}
@@ -36,6 +36,6 @@ func newColMatcher(l []string, dtaps syntax.Rendering, userGroups syntax.Renderi
 	return m, nil
 }
 
-func (lhs ColMatcher) Equal(rhs Colmatcher) bool {
+func (lhs ColMatcher) Equal(rhs ColMatcher) bool {
 	return lhs.ColExprs.Equal(rhs.ColExprs)
 }

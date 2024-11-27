@@ -17,18 +17,21 @@ type Product struct {
 
 func newProduct(pSyn syntax.Product, allowedUserGroups map[string]bool) (Product, error) {
 	pSem := Product{
-		ID: pSyn.ID,
-		DTAPs:      pSyn.DTAPs,
+		ID:         pSyn.ID,
+		DTAPs:      newDTAPSpec(pSyn.DTAPs, pSyn.DTAPRendering),
 		Consumes:   map[syntax.InterfaceID]bool{},
-		Interfaces map[string]InterfaceMetadata{},
+		Interfaces: map[string]InterfaceMetadata{},
 	}
-	pSem.DTAPs = newDTAPSpec(pSyn.DTAPs, pSyn.DTAPRendering)
-	if pSem.InterfaceMetadata, err := newInterfaceMetadata(pSyn.InterfaceMetadata, allowedUserGroups, pSem.DTAPs.DTAPRendering, nil); err != nil {
+	if im, err := newInterfaceMetadata(pSyn.InterfaceMetadata, allowedUserGroups, pSem.DTAPs.DTAPRendering, nil); err != nil {
 		return pSem, fmt.Errorf("product id %s: interface metadata: %w", pSem.ID, err)
+	} else {
+		pSem.InterfaceMetadata = im
 	}
 	for _, iid := range pSyn.Consumes {
-		if iid.ProducingService == "" && iid.ProductID == pSem.ID {
-			return &PolicyError{fmt.Sprintf("product '%s' not allowed to consume own interface '%s'", iid.ProductID, iid.ID)}
+		if iid.ProductID == pSem.ID {
+			return pSem, &PolicyError{
+				fmt.Sprintf("product '%s' not allowed to consume own interface '%s'", iid.ProductID, iid.ID),
+			}
 		}
 		if _, ok := pSem.Consumes[iid]; ok {
 			return pSem, fmt.Errorf("duplicate consumed interface id")

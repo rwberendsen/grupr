@@ -2,7 +2,6 @@ package semantics
 
 import (
 	"fmt"
-	"regexp"
 
 	"github.com/rwberendsen/grupr/internal/syntax"
 	"golang.org/x/exp/maps"
@@ -34,12 +33,12 @@ func NewGrupin(gSyn syntax.Grupin) (Grupin, error) {
 	}
 	for iid, v := range gSyn.Interfaces {
 		if err := gSem.validateInterfaceID(iid); err != nil { return gSem, err }
-		parent := &gSem.Products[iid.ProductID].InterfaceMetadata
 		dtaps := gSem.Products[iid.ProductID].DTAPs.DTAPRendering
-		if im, err := newInterfaceMetadata(v.InterfaceMetadata, gSem.AllowedUserGroups, dtaps, parent) {
-			return fmt.Errorf("interface '%s': %w", iid, err)
+		parent := gSem.Products[iid.ProductID].InterfaceMetadata
+		if im, err := newInterfaceMetadata(v.InterfaceMetadata, gSem.AllowedUserGroups, dtaps, &parent); err != nil {
+			return gSem, fmt.Errorf("interface '%s': %w", iid, err)
 		} else {
-			gSem.Products[iid.ProductID][iid.ID] = im
+			gSem.Products[iid.ProductID].Interfaces[iid.ID] = im
 		}
 	}
 	if err := gSem.allConsumedOk(); err != nil {
@@ -57,14 +56,16 @@ func (g Grupin) allConsumedOk() error {
 			if _, ok := g.Products[iid.ProductID]; !ok {
 				return &SetLogicError{fmt.Sprintf("product '%s': consumed interface '%s': product not found", p.ID, iid)}
 			}
-			if _, ok := g.Products[iid.ProductID][iid.ID]; !ok {
-				return &SetLogicError{fmt.Sprintf("product '%s': consumed interface '%s': interface not found", p.ID, iid)}
+			if _, ok := g.Products[iid.ProductID].Interfaces[iid.ID]; !ok {
+				return &SetLogicError{
+						fmt.Sprintf("product '%s': consumed interface '%s': interface not found", p.ID, iid),
+				}
 			}
 			// TODO: think: this policy is also checked when creating the product semantic object, perhaps remove check in one of these places.
 			if iid.ProductID == p.ID {
 				return &PolicyError{fmt.Sprintf("product '%s' not allowed to consume own interface '%s'", iid.ProductID, iid.ID)}
 			}
-			if p.Classification < g.Interfaces[iid].Classification {
+			if p.Classification < g.Products[iid.ProductID].Interfaces[iid.ID].Classification {
 				return &PolicyError{fmt.Sprintf("product '%s' consumes interface with higher classification", p.ID)}
 			}
 		}
@@ -90,7 +91,7 @@ func (g Grupin) allDisjoint() error {
 	for i := 0; i < len(keys)-1; i++ {
 		for j := i + 1; j < len(keys); j++ {
 			if !g.Products[keys[i]].disjoint(g.Products[keys[j]]) {
-				return SetLogicError{fmt.Sprintf("overlapping products '%s' and '%s'", keys[i], keys[j])}
+				return &SetLogicError{fmt.Sprintf("overlapping products '%s' and '%s'", keys[i], keys[j])}
 			}
 		}
 	}
@@ -99,7 +100,7 @@ func (g Grupin) allDisjoint() error {
 
 func (g Grupin) validateInterfaceID(iid syntax.InterfaceID) error {
 	if _, ok := g.Products[iid.ProductID]; !ok {
-		return SetLogicError{fmt.Sprintf("interface id '%s': product not found", iid)}
+		return &SetLogicError{fmt.Sprintf("interface id '%s': product not found", iid)}
 	}
 	return nil
 }

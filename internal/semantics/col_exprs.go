@@ -28,7 +28,7 @@ func newColExprs(s string, dtaps syntax.Rendering, userGroups syntax.Rendering) 
 	} else {
 		// In a column matcher expression it is okay to omit a DTAP expansion, the column expressions are evaluated per DTAP,
 		// for overlap with the object expressions. So, the column expression is just associated with all DTAPs
-		dtapExpanded[s] = ColExprAttr{DTAPs: DTAPs}
+		dtapExpanded[s] = ColExprAttr{DTAPs: dtaps}
 	}
 	userGroupExpanded := map[string]ColExprAttr{}
 	for k, v := range dtapExpanded {
@@ -74,5 +74,5 @@ func (m ColExprs) allDisjoint() bool {
 }
 
 func (lhs ColExprs) Equal(rhs ColExprs) bool {
-	return maps.Equal(lhs, rhs, ColExprAttr.Equal)
+	return maps.EqualFunc(lhs, rhs, ColExprAttr.Equal)
 }

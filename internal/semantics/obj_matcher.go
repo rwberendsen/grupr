@@ -3,7 +3,6 @@ package semantics
 import (
 	"fmt"
 
-	"golang.org/x/exp/maps"
 	"github.com/rwberendsen/grupr/internal/syntax"
 )
 
@@ -14,11 +13,10 @@ type ObjMatcher struct {
 	StrictSubset map[ObjExpr]ObjExpr `yaml:"strict_subset,omitempty"` // value is strict subset of key
 }
 
-func newObjMatcher(include []string, exclude []string, dtaps syntax.Rendering, userGroups syntax.Rendering,
-		   dtapRendering syntax.Rendering) (ObjMatcher, error) {
-	m := ObjMatcher{Exprs{}, Exprs{}, map[ObjExpr]ObjExpr{}, map[ObjExpr]ObjExpr{}}
+func newObjMatcher(include []string, exclude []string, dtaps syntax.Rendering, userGroups syntax.Rendering) (ObjMatcher, error) {
+	m := ObjMatcher{ObjExprs{}, ObjExprs{}, map[ObjExpr]ObjExpr{}, map[ObjExpr]ObjExpr{}}
 	for _, expr := range include {
-		objExprs, err := newObjExprs(expr, dtaps, userGroups, dtapRendering)
+		objExprs, err := newObjExprs(expr, dtaps, userGroups)
 		if err != nil {
 			return m, fmt.Errorf("parsing obj expr: %s", err)
 		}
@@ -33,7 +31,7 @@ func newObjMatcher(include []string, exclude []string, dtaps syntax.Rendering, u
 		return m, fmt.Errorf("non disjoint set of include exprs")
 	}
 	for _, expr := range exclude {
-		objExprs, err := newObjExprs(expr, dtaps, userGroups, dtapRendering)
+		objExprs, err := newObjExprs(expr, dtaps, userGroups)
 		if err != nil {
 			return m, fmt.Errorf("parsing obj expr: %s", err)
 		}
@@ -73,7 +71,7 @@ func (lhs ObjMatcher) disjoint(rhs ObjMatcher) bool {
 	for l := range lhs.Include {
 		for r := range rhs.Include {
 			if !l.disjoint(r) {
-				if !l.subsetOfExprs(rhs.Exclude) && !r.subsetOfExprs(lhs.Exclude) {
+				if !l.subsetOfObjExprs(rhs.Exclude) && !r.subsetOfObjExprs(lhs.Exclude) {
 					return false
 				}
 			}
@@ -82,11 +80,11 @@ func (lhs ObjMatcher) disjoint(rhs ObjMatcher) bool {
 	return true
 }
 
-func (lhs ObjMatcher) subsetOf(rhs ObjectMatcher) bool {
+func (lhs ObjMatcher) subsetOf(rhs ObjMatcher) bool {
 	for l := range lhs.Include {
 		hasSuperset := false
 		for r := range rhs.Include {
-			if l.subSetOf(r) {
+			if l.subsetOf(r) {
 				if rExclude, ok := rhs.StrictSubset[r]; ok {
 					if !l.subsetOf(rExclude) {
 						hasSuperset = true
@@ -96,19 +94,6 @@ func (lhs ObjMatcher) subsetOf(rhs ObjectMatcher) bool {
 			}
 		}
 		if !hasSuperset { return false }
-	}
-	return true
-}
-
-func (om ObjMatcher) disjointWithColumnExpr(c ColExpr, dtap string) {
-	for o, attr := range om.Include {
-		if attr.DTAP == dtap {
-			if !c.disjointWithExpr(o) {
-				if !c.subsetOfObjExprs(om.Exclude) {
-					return false
-				}
-			}
-		}
 	}
 	return true
 }

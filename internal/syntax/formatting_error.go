@@ -1,9 +1,9 @@
 package syntax
 
 type FormattingError struct {
-	s string
+	S string
 }
 
 func (e *FormattingError) Error() string {
-	return e.s
+	return e.S
 }
