@@ -3,8 +3,10 @@ package snowflake
 import (
 	"fmt"
 	"log"
+	"sort"
 	"strings"
 
+	"golang.org/x/exp/maps"
 	"github.com/rwberendsen/grupr/internal/config"
 	"github.com/rwberendsen/grupr/internal/semantics"
 )
@@ -12,10 +14,9 @@ import (
 type BasicStats struct {
 	ProductId             string
 	InterfaceId           string
-	Expr                  semantics.Expr
+	ObjExpr               semantics.ObjExpr
 	DTAP                  string
-	DataKind              semantics.KindOfData
-	UserGroups            string // TODO: UserGroups: tables matched by an expr can contain multiple UserGroups
+	UserGroups            string
 	TableCount            int
 	ViewCount             int
 	ByteCount             int
@@ -24,28 +25,32 @@ type BasicStats struct {
 func NewBasicStats(grupin semantics.Grupin, sfGrupin Grupin) []*BasicStats {
 	r := []*BasicStats{}
 	for prdId, prd := range grupin.Products {
-		for e, ea := range prd.Matcher.Include {
+		for e, ea := range prd.ObjectMatcher.Include {
 			stats := &BasicStats{
 				ProductId:  prdId,
-				Expr:       e,
+				ObjExpr:    e,
 				DTAP:       ea.DTAP,
-				UserGroup:  ea.UserGroup,
 				TableCount: sfGrupin.Products[prdId].Matched.Objects[e].TableCount(),
 				ViewCount:  sfGrupin.Products[prdId].Matched.Objects[e].ViewCount(),
 			}
+			userGroups := maps.Keys(ea.UserGroups)
+			sort.Strings(userGroups)
+			stats.UserGroups = strings.Join(userGroups, ",")
 			r = append(r, stats)
 		}
 		for intrfId, intrf := range prd.Interfaces {
-			for e, ea := range intrf.Matcher.Include {
+			for e, ea := range intrf.ObjectMatcher.Include {
 				stats := &BasicStats{
 					ProductId:   prdId,
 					InterfaceId: intrfId,
-					Expr:        e,
+					ObjExpr:     e,
 					DTAP:        ea.DTAP,
-					UserGroup:   ea.UserGroup,
 					TableCount:  sfGrupin.Products[prdId].Interfaces[intrfId].Matched.Objects[e].TableCount(),
 					ViewCount:   sfGrupin.Products[prdId].Interfaces[intrfId].Matched.Objects[e].ViewCount(),
 				}
+				userGroups := maps.Keys(ea.UserGroups)
+				sort.Strings(userGroups)
+				stats.UserGroups = strings.Join(userGroups, ",")
 				r = append(r, stats)
 			}
 		}
@@ -57,8 +62,8 @@ func PersistInSnowflake(stats []*BasicStats) error {
 	getValuesSQL := func(stats []*BasicStats) []string {
 		r := []string{}
 		for _, s := range stats {
-			r = append(r, fmt.Sprintf("('%s', '%s', '%v', '%s', '%v', '%s', %d, %d)",
-				s.ProductId, s.InterfaceId, s.Expr, s.DTAP, s.DataKind, s.UserGroup, s.TableCount, s.ViewCount))
+			r = append(r, fmt.Sprintf("('%s', '%s', '%v', '%s', '%s', %d, %d)",
+				s.ProductId, s.InterfaceId, s.ObjExpr, s.DTAP, s.UserGroups, s.TableCount, s.ViewCount))
 		}
 		return r
 	}
@@ -69,15 +74,13 @@ func PersistInSnowflake(stats []*BasicStats) error {
 CREATE OR REPLACE TABLE %v.%v.%vbasic_stats (
 	product_id varchar,
 	interface_id varchar,
-	expr varchar,
+	obj_expr varchar,
 	dtap varchar,
-	kind_of_data varchar,
-	user_group varchar,
-	user_group_column_values array,
+	user_groups varchar,
 	table_count integer,
 	view_count integer,
 	byte_count integer
-) 
+)
 `,
 		dbName, schema, gruprPrefix)
 	log.Printf("sql:\n%s", sql)
@@ -89,10 +92,9 @@ CREATE OR REPLACE TABLE %v.%v.%vbasic_stats (
 INSERT INTO %v.%v.%vbasic_stats (
 	product_id,
 	interface_id,
-	expr,
+	obj_expr,
 	dtap,
-	kind_of_data,
-	user_group,
+	user_groups,
 	table_count,
 	view_count
 )

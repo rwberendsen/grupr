@@ -1,18 +1,18 @@
 package util
 
 import (
-	"io"
 	"os"
 
-	"gopkg.in/yaml.v3"
 	"github.com/rwberendsen/grupr/internal/semantics"
-	"github.com/rwberendsen/grupr/internal/snowflake"
 	"github.com/rwberendsen/grupr/internal/syntax"
 )
 
 func GetGrupinFromPath(path string) (semantics.Grupin, error) {
 	var r semantics.Grupin
-	f := os.Open(path)
+	f, err := os.Open(path)
+	if err != nil {
+		return r, err
+	}
 	g, err := syntax.NewGrupin(f)
 	f.Close()
 	if err != nil {

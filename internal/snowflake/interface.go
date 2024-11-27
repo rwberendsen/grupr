@@ -10,5 +10,5 @@ type Interface struct {
 
 func newInterface(i semantics.InterfaceMetadata, c *accountCache) Interface {
 	// lazily reads which objects exist in Snowflake and adds them to c, modifying c
-	return Interface{newMatched(i.ObjMatcher, c)}
+	return Interface{newMatched(i.ObjectMatcher, c)}
 }

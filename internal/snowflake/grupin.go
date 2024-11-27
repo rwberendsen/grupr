@@ -1,8 +1,6 @@
 package snowflake
 
 import (
-	"log"
-
 	"github.com/rwberendsen/grupr/internal/semantics"
 	"gopkg.in/yaml.v3"
 )

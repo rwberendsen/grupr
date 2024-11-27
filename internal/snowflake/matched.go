@@ -11,7 +11,7 @@ type Matched struct {
 }
 
 func newMatched(m semantics.ObjMatcher, c *accountCache) Matched {
-	r := Matched{map[semantics.Expr]AccountObjs{}}
+	r := Matched{map[semantics.ObjExpr]AccountObjs{}}
 	for k := range m.Include {
 		r.Objects[k] = match(k, c)
 	}
