@@ -1,8 +1,9 @@
 package semantics
 
 import (
+	"maps"
+
 	"github.com/rwberendsen/grupr/internal/syntax"
-	"golang.org/x/exp/maps"
 )
 
 type DTAPSpec struct {

@@ -3,10 +3,10 @@ package snowflake
 import (
 	"fmt"
 	"log"
-	"sort"
+	"maps"
+	"slices"
 	"strings"
 
-	"golang.org/x/exp/maps"
 	"github.com/rwberendsen/grupr/internal/config"
 	"github.com/rwberendsen/grupr/internal/semantics"
 )
@@ -30,12 +30,10 @@ func NewBasicStats(grupin semantics.Grupin, sfGrupin Grupin) []*BasicStats {
 				ProductId:  prdId,
 				ObjExpr:    e,
 				DTAP:       ea.DTAP,
+				UserGroups: strings.Join(slices.Sorted(maps.Keys(ea.UserGroups)), ","),
 				TableCount: sfGrupin.Products[prdId].Matched.Objects[e].TableCount(),
 				ViewCount:  sfGrupin.Products[prdId].Matched.Objects[e].ViewCount(),
 			}
-			userGroups := maps.Keys(ea.UserGroups)
-			sort.Strings(userGroups)
-			stats.UserGroups = strings.Join(userGroups, ",")
 			r = append(r, stats)
 		}
 		for intrfId, intrf := range prd.Interfaces {
@@ -45,12 +43,10 @@ func NewBasicStats(grupin semantics.Grupin, sfGrupin Grupin) []*BasicStats {
 					InterfaceId: intrfId,
 					ObjExpr:     e,
 					DTAP:        ea.DTAP,
+					UserGroups: strings.Join(slices.Sorted(maps.Keys(ea.UserGroups)), ","),
 					TableCount:  sfGrupin.Products[prdId].Interfaces[intrfId].Matched.Objects[e].TableCount(),
 					ViewCount:   sfGrupin.Products[prdId].Interfaces[intrfId].Matched.Objects[e].ViewCount(),
 				}
-				userGroups := maps.Keys(ea.UserGroups)
-				sort.Strings(userGroups)
-				stats.UserGroups = strings.Join(userGroups, ",")
 				r = append(r, stats)
 			}
 		}

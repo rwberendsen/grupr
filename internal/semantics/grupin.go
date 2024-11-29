@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/rwberendsen/grupr/internal/syntax"
-	"golang.org/x/exp/maps"
 	"gopkg.in/yaml.v3"
 )
 
@@ -84,9 +83,12 @@ func (g Grupin) allConsumedOk() error {
 }
 
 func (g Grupin) allDisjoint() error {
-	keys := maps.Keys(g.Products)
-	if len(keys) < 2 {
+	if len(g.Products) < 2 {
 		return nil
+	}
+	var keys []string
+	for k := range g.Products {
+		keys = append(keys, k)
 	}
 	for i := 0; i < len(keys)-1; i++ {
 		for j := i + 1; j < len(keys); j++ {

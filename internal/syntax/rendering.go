@@ -2,8 +2,8 @@ package syntax
 
 import (
 	"fmt"
+	"maps"
 	"regexp"
-	"golang.org/x/exp/maps"
 )
 
 // Renderings may contain upper-case characters, so they can be used inside quoted fields

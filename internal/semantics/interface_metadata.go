@@ -2,7 +2,8 @@ package semantics
 
 import (
 	"fmt"
-	"golang.org/x/exp/maps"
+	"maps"
+
 	"github.com/rwberendsen/grupr/internal/syntax"
 )
 

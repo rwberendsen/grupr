@@ -2,9 +2,9 @@ package semantics
 
 import (
 	"fmt"
+	"maps"
 
 	"github.com/rwberendsen/grupr/internal/syntax"
-	"golang.org/x/exp/maps"
 )
 
 type Product struct {

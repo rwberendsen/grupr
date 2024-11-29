@@ -2,9 +2,9 @@ package semantics
 
 import (
 	"fmt"
+	"maps"
 	"strings"
 
-	"golang.org/x/exp/maps"
 	"github.com/rwberendsen/grupr/internal/syntax"
 )
 
@@ -58,9 +58,12 @@ func newObjExprs(s string, dtaps syntax.Rendering, userGroups syntax.Rendering) 
 }
 
 func (m ObjExprs) allDisjoint() bool {
-	keys := maps.Keys(m)
-	if len(keys) < 2 {
+	if len(m) < 2 {
 		return true
+	}
+	var keys []ObjExpr
+	for i := range m {
+		keys = append(keys, i)
 	}
 	for i := 0; i < len(keys)-1; i++ {
 		for j := i + 1; j < len(keys); j++ {

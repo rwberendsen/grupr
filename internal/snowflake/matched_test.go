@@ -1,9 +1,8 @@
 package snowflake
 
 import (
+	"maps"
 	"testing"
-
-	"golang.org/x/exp/maps"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
 )
