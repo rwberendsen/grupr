@@ -6,7 +6,7 @@ import (
 
 type InterfaceID struct {
 	ID string
-	ProductID string
+	ProductID string `yaml:"product_id"`
 }
 
 func (iid InterfaceID) validate() error {

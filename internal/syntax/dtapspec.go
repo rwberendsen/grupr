@@ -5,7 +5,7 @@ import (
 )
 
 type DTAPSpec struct {
-	NonProd		[]string		`yaml:"non_prod,flow,omitempty`
+	NonProd		[]string		`yaml:"non_prod,flow,omitempty"`
 	Prod		string `yaml:",omitempty"` // "" means no prod DTAP exists
 }
 
