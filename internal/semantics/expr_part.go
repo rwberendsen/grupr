@@ -62,15 +62,6 @@ func (lhs ExprPart) subsetOf(rhs ExprPart) bool {
 	}
 	// both lhs.s and rhs.s contain a wildcard suffix
 	return strings.HasPrefix(lhs.S[0:len(lhs.S)-1], rhs.S[0:len(rhs.S)-1])
-	// TODO implement tests, e.g.:
-	// abc	abc*	subset
-	// abc	ab*	subset
-	// abc*	abc	!subset
-	// abc*	ab*	subset
-	// ab*	abc*	!subset
-	// ab	abc*	!subset
-	// a*	*	subset
-	// *	a*	!subset
 }
 
 func (lhs ExprPart) disjoint(rhs ExprPart) bool {
