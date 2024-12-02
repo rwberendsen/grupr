@@ -85,7 +85,10 @@ func (lhs ObjMatcher) subsetOf(rhs ObjMatcher) bool {
 		hasSuperset := false
 		for r := range rhs.Include {
 			if l.subsetOf(r) {
-				if rExclude, ok := rhs.StrictSubset[r]; ok {
+				if rExclude, ok := rhs.StrictSubset[r]; !ok {
+					hasSuperset = true
+					break
+				} else {
 					if !l.subsetOf(rExclude) {
 						hasSuperset = true
 						break

@@ -20,14 +20,14 @@ func main() {
 
 	newGrupin, err := util.GetGrupinFromPath(flag.Arg(0))
 	if err != nil {
-		log.Fatalf("get new grupin: %w", err)
+		log.Fatalf("get new grupin: %v", err)
 	}
 	fmt.Printf("--- newGrupin:\n%v\n\n", newGrupin)
 
 	if *oldFlag != "" {
 		oldGrupin, err := util.GetGrupinFromPath(*oldFlag)
 		if err != nil {
-			log.Fatalf("get old grupin: %w", err)
+			log.Fatalf("get old grupin: %v", err)
 		}
 		fmt.Printf("--- oldGrupin:\n%v\n\n", oldGrupin)
 

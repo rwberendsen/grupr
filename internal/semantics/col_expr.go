@@ -27,7 +27,7 @@ func newColExpr(s string) (ColExpr, error) {
 		return r, &syntax.FormattingError{"column expression number of fields outside [1, 4]"}
 	}
 	// figure out which parts were quoted, if any
-	fields := make([]ExprPart, 4)
+	fields := []ExprPart{}
 	for i, substr := range record {
 		_, start := reader.FieldPos(i)
 		start = start - 1 // FieldPos columns start numbering from 1
@@ -37,22 +37,22 @@ func newColExpr(s string) (ColExpr, error) {
 			if end == len(s) || s[end] != '"' {
 				panic("did not find quote at end of parsed quoted CSV field")
 			}
-			fields[i].IsQuoted = true
-			fields[i].S = substr
+			fields = append(fields, ExprPart{IsQuoted: true, S: substr})
 		} else {
 			// this is an unquoted field
 			end := start + len(substr)
 			if end != len(s) && s[end] != '.' {
 				panic("unquoted field not ending with end of line or period")
 			}
-			fields[i].S = strings.ToLower(substr) // unquoted identifiers match in a case insensitive way
+			fields = append(fields, ExprPart{S: strings.ToLower(substr)})
+				// unquoted identifiers match in a case insensitive way
 				// TODO: create a function newExprPart and introduce this tricky detail ToLower there
 		}
 	}
 	// validate identifier expressions
 	for _, exprPart := range fields {
 		if !exprPart.validate() {
-			return r, &syntax.FormattingError{fmt.Sprintf("invalid expr part: %v", exprPart)}
+			return r, &syntax.FormattingError{fmt.Sprintf("invalid expr part: '%v'", exprPart)}
 		}
 	}
 	// expecting only one line, just checking there was not more

@@ -17,7 +17,10 @@ type Grupin struct {
 func NewGrupin(r io.Reader) (Grupin, error) {
 	dec := yaml.NewDecoder(r)
 	dec.KnownFields(true)
-	var g Grupin
+	g := Grupin{
+		Products: map[string]Product{},
+		Interfaces: map[InterfaceID]Interface{},
+	}
 	for {
 		var e ElmntOr;
 		err := dec.Decode(&e)
