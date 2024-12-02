@@ -55,6 +55,21 @@ func TestSubsetOf(t * testing.T) {
 			rhs: ExprPart{S: "b"},
 			want: false,
 		},
+		{
+			lhs: ExprPart{S: "a", IsQuoted: true},
+			rhs: ExprPart{S: "a"},
+			want: true,
+		},
+		{
+			lhs: ExprPart{S: "a"},
+			rhs: ExprPart{S: "a", IsQuoted: true},
+			want: false,
+		},
+		{
+			lhs: ExprPart{S: "A", IsQuoted: true},
+			rhs: ExprPart{S: "a"},
+			want: true,
+		},
 	}
 	for _, test := range tests {
 		if test.want != test.lhs.subsetOf(test.rhs) {
