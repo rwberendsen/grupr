@@ -1,13 +1,16 @@
 package semantics
 
+import (
+	"fmt"
+
+	"github.com/rwberendsen/grupr/internal/syntax"
+)
+
 type Classification int
 
-func newClassification(Classification string, CanLeaveGroup *bool) Classification {
-	if Classification == "c0" { return 10 }
-	if Classification == "c1" { return 20 }
-	// during syntactical validation it has been checked that the pointer is not nil in the case of c2 Classification
-	if Classification == "c2" && *CanLeaveGroup { return 30 }
-	if Classification == "c2" && !*CanLeaveGroup { return 40 }
-	if Classification == "c3" { return 50 }
-	panic("Invalid validated classification")
+func newClassification(classification string, classes map[string]syntax.Class) (Classification, error) {
+	if c, ok := classes[classification]; ok {
+		return Classification(c.Level), nil
+	}
+	return 0, &SetLogicError{fmt.Sprintf("Unknown classification: '%s'", classification)}
 }

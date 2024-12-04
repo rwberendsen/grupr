@@ -20,10 +20,10 @@ type InterfaceMetadata struct {
 }
 
 
-func newInterfaceMetadata(imSyn syntax.InterfaceMetadata, allowedUserGroups map[string]bool,
+func newInterfaceMetadata(imSyn syntax.InterfaceMetadata, classes map[string]syntax.Class, allowedUserGroups map[string]bool,
                           dtaps syntax.Rendering, parent *InterfaceMetadata) (InterfaceMetadata, error) {
 	imSem := InterfaceMetadata{}
-	if err := imSem.setClassification(imSyn, parent); err != nil { return imSem, err }
+	if err := imSem.setClassification(imSyn, parent, classes); err != nil { return imSem, err }
 	if err := imSem.setUserGroups(imSyn, parent, allowedUserGroups); err != nil { return imSem, err }
 	if err := imSem.setExposeDTAPs(imSyn, parent, dtaps); err != nil { return imSem, err }
 	if err := imSem.setObjectMatcher(imSyn, parent, dtaps); err != nil { return imSem, err }
@@ -34,7 +34,7 @@ func newInterfaceMetadata(imSyn syntax.InterfaceMetadata, allowedUserGroups map[
 	return imSem, nil
 }
 
-func (imSem *InterfaceMetadata) setClassification(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata) error {
+func (imSem *InterfaceMetadata) setClassification(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata, classes map[string]syntax.Class) error {
 	if imSyn.Classification == "" {
 		if parent != nil {
 			imSem.Classification = parent.Classification
@@ -42,7 +42,11 @@ func (imSem *InterfaceMetadata) setClassification(imSyn syntax.InterfaceMetadata
 		}
 		return &PolicyError{"Classfication is a required field on product level"}
 	}
-	imSem.Classification = newClassification(imSyn.Classification, imSyn.CanLeaveGroup)
+	if c, err := newClassification(imSyn.Classification, classes); err != nil {
+		return err
+	} else {
+		imSem.Classification = c
+	}
 	if parent != nil && parent.Classification < imSem.Classification {
 		return &PolicyError{"Classification on interface higher than product classification"}
 	}
