@@ -17,12 +17,6 @@ func TestObjExprSubsetOf(t * testing.T) {
 		rhs ObjExpr
 		want bool
 	}{
-	// TODO implement tests
-	// *.*.*	whatever	!disjoint
-	// a.*.*	b.*.*		disjoint
-	// a.*.c	a.b.c		!disjoint
-	// a.*.c	a.b.d		disjoint
-	// ...
 		{
 			lhs: newObjExprOrPanic("*.*.*"),
 			rhs: newObjExprOrPanic("a.b.c"),
