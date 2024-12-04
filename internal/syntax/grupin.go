@@ -9,6 +9,7 @@ import (
 )
 
 type Grupin struct {
+	Classes			map[string]Class
 	AllowedUserGroups	map[string]bool
 	Products	map[string]Product
 	Interfaces	map[InterfaceID]Interface

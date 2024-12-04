@@ -5,24 +5,21 @@ import (
 )
 
 type InterfaceMetadata struct {
-	Classification string `yaml:",omitempty"`
-	CanLeaveGroup  *bool                `yaml:"can_leave_group,omitempty"`
-	UserGroups     []string             `yaml:"user_groups,flow,omitempty"`
-	UserGroupColumn string		    `yaml:"user_group_column,omitempty"`
-	Objects        []string             `yaml:",omitempty"`
-	ObjectsExclude []string             `yaml:"objects_exclude,omitempty"`
-	MaskColumns	[]string	    `yaml:"mask_columns,omitempty"`
-	HashColumns	[]string	    `yaml:"hash_columns,omitempty"`
-	ExposeDTAPs	[]string	    `yaml:"expose_dtaps,flow,omitempty"`
-        UserGroupRendering Rendering `yaml:"user_group_rendering,omitempty"`
-	ForProduct *string                  `yaml:"for_product",omitempty"`
+	Classification string 		`yaml:",omitempty"`
+	UserGroups     []string		`yaml:"user_groups,flow,omitempty"`
+	UserGroupColumn string		`yaml:"user_group_column,omitempty"`
+	Objects        []string		`yaml:",omitempty"`
+	ObjectsExclude []string		`yaml:"objects_exclude,omitempty"`
+	MaskColumns	[]string	`yaml:"mask_columns,omitempty"`
+	HashColumns	[]string	`yaml:"hash_columns,omitempty"`
+	ExposeDTAPs	[]string	`yaml:"expose_dtaps,flow,omitempty"`
+        UserGroupRendering Rendering	`yaml:"user_group_rendering,omitempty"`
+	ForProduct *string		`yaml:"for_product",omitempty"`
 }
 
 func (i InterfaceMetadata) validate() error {
 	if i.Classification != "" {
-		if err := validateClassification(i.Classification, i.CanLeaveGroup); err != nil { return err }
-	} else if i.CanLeaveGroup != nil {
-		return fmt.Errorf("Classification not specified but CanLeaveGroup was specified")
+		if err := validateID(i.Classification); err != nil { return fmt.Errorf("classification: '%w'", i.Classification) }
 	}
 	for _, u := range i.UserGroups {
 		if err := validateID(u); err != nil { return fmt.Errorf("UserGroup %s: %w", u, err) }
