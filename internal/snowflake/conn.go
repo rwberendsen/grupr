@@ -25,21 +25,6 @@ func getDB() *sql.DB {
 	dbName := config.GetEnvOrDie("GRUPR_SNOWFLAKE_DB")
 	useSQLOpen := config.GetEnvOrDie("GRUPR_SNOWFLAKE_USE_SQL_OPEN")
 
-	// Not able to connect, whereas I was a while back;
-	// Since then, company is now managing this device with JamF
-	// Maybe issue with ZScaler?
-	// Strategies to tackle:
-	// - Check if TLS works on its own with Snowflake (elimination; hand-craft lower level code to get more info on what is going on)
-	// - Try and get even more debugging info out of the Snowflake driver (already used Config with tracing and implemented RoundTrip interface logging the HTTP requests)
-	// - Add ZScaler root key to Systems keychain (done with command):
-	//     sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ~/Downloads/Zscaler\ Root\ CA.pem
-	// - Prove that it is ZScaler
-	// - Checking OS stuff like sockets
-	// - Play with Wireshark to see what is happening
-	// - Check what is the TLS protocol version
-	// Grokking the code and docs learning how it works
-	// Use a different code platform (Python) to connect; this works
-
 	var rsaKey *rsa.PrivateKey
 	if useSQLOpen == "true" {
 		dsn := user + "@" + account + "/" + dbName + "?authenticator=" + gosnowflake.AuthTypeExternalBrowser.String()
