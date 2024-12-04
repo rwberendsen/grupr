@@ -15,14 +15,14 @@ type Product struct {
 	Interfaces map[string]InterfaceMetadata
 }
 
-func newProduct(pSyn syntax.Product, classes map[string]syntax.Class, allowedUserGroups map[string]bool) (Product, error) {
+func newProduct(pSyn syntax.Product, classes map[string]syntax.Class, userGroups map[string]bool) (Product, error) {
 	pSem := Product{
 		ID:         pSyn.ID,
 		DTAPs:      newDTAPSpec(pSyn.DTAPs, pSyn.DTAPRendering),
 		Consumes:   map[syntax.InterfaceID]bool{},
 		Interfaces: map[string]InterfaceMetadata{},
 	}
-	if im, err := newInterfaceMetadata(pSyn.InterfaceMetadata, classes, allowedUserGroups, pSem.DTAPs.DTAPRendering, nil); err != nil {
+	if im, err := newInterfaceMetadata(pSyn.InterfaceMetadata, classes, userGroups, pSem.DTAPs.DTAPRendering, nil); err != nil {
 		return pSem, fmt.Errorf("product id %s: interface metadata: %w", pSem.ID, err)
 	} else {
 		pSem.InterfaceMetadata = im

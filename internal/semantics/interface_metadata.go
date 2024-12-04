@@ -20,11 +20,11 @@ type InterfaceMetadata struct {
 }
 
 
-func newInterfaceMetadata(imSyn syntax.InterfaceMetadata, classes map[string]syntax.Class, allowedUserGroups map[string]bool,
+func newInterfaceMetadata(imSyn syntax.InterfaceMetadata, classes map[string]syntax.Class, userGroups map[string]bool,
                           dtaps syntax.Rendering, parent *InterfaceMetadata) (InterfaceMetadata, error) {
 	imSem := InterfaceMetadata{}
 	if err := imSem.setClassification(imSyn, parent, classes); err != nil { return imSem, err }
-	if err := imSem.setUserGroups(imSyn, parent, allowedUserGroups); err != nil { return imSem, err }
+	if err := imSem.setUserGroups(imSyn, parent, userGroups); err != nil { return imSem, err }
 	if err := imSem.setExposeDTAPs(imSyn, parent, dtaps); err != nil { return imSem, err }
 	if err := imSem.setObjectMatcher(imSyn, parent, dtaps); err != nil { return imSem, err }
 	if err := imSem.setUserGroupColumn(imSyn, parent, dtaps); err != nil { return imSem, err }
@@ -54,7 +54,7 @@ func (imSem *InterfaceMetadata) setClassification(imSyn syntax.InterfaceMetadata
 }
 
 func (imSem *InterfaceMetadata) setUserGroups(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata,
-					      allowedUserGroups map[string]bool) error {
+					      userGroups map[string]bool) error {
 	if imSyn.UserGroups == nil {
 		if parent != nil {
 			imSem.UserGroups = parent.UserGroups
@@ -63,7 +63,7 @@ func (imSem *InterfaceMetadata) setUserGroups(imSyn syntax.InterfaceMetadata, pa
 	}
 	imSem.UserGroups = syntax.Rendering{}
 	for _, u := range imSyn.UserGroups {
-		if _, ok := allowedUserGroups[u]; !ok { return &SetLogicError{fmt.Sprintf("Unknown user group: %s", u)} }
+		if _, ok := userGroups[u]; !ok { return &SetLogicError{fmt.Sprintf("Unknown user group: %s", u)} }
 		if _, ok := imSem.UserGroups[u]; ok { return &SetLogicError{fmt.Sprintf("Duplicate user group: %s", u) } }
 		imSem.UserGroups[u] = u
 	}

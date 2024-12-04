@@ -7,7 +7,8 @@ import (
 
 type ElmntOr struct {
 	Classes map[string]Class
-	AllowedUserGroups []string `yaml:"allowed_user_groups"`
+	UserGroups *UserGroups `yaml:"user_groups,omitempty"`
+	UserGroupMapping *UserGroupMapping `yaml:"user_group_mapping,omitempty"`
 	Product *Product `yaml:",omitempty"`
 	Interface *Interface`yaml:"interface,omitempty"`
 }
@@ -25,25 +26,25 @@ func (e ElmntOr) validateAndAdd(g *Grupin) error {
 		}
 		g.Classes = e.Classes
 	}
-	if e.AllowedUserGroups != nil {
-		if g.AllowedUserGroups != nil {
-			return &FormattingError{"allowed_user_groups specified more than once"}
+	if e.UserGroups != nil {
+		if g.UserGroups != nil {
+			return &FormattingError{"user_groups specified more than once"}
 		}
+		if err := e.UserGroups.validate(); err != nil { return err }
 		n_elements += 1
-		ug := map[string]bool{}
-		for _, u := range e.AllowedUserGroups {
-			if err := validateID(u); err != nil { return fmt.Errorf("user_groups: %w", err) }
-			if _, ok := ug[u]; ok { return &FormattingError{fmt.Sprintf("duplicate user group: %s", u)} }
-			ug[u] = true
+		g.UserGroups = *e.UserGroups
+	}
+	if e.UserGroupMapping != nil {
+		n_elements += 1
+		if err := e.UserGroupMapping.validate(); err != nil { return err }
+		if _, ok := g.UserGroupMappings[e.UserGroupMapping.ID]; ok {
+			return &FormattingError{fmt.Sprintf("duplicate user group mapping: '%s'", e.UserGroupMapping.ID)}
 		}
-		g.AllowedUserGroups = ug
+		g.UserGroupMappings[e.UserGroupMapping.ID] = *e.UserGroupMapping
 	}
 	if e.Product != nil {
 		n_elements += 1
-		err := e.Product.validate()
-		if err != nil {
-			return err
-		}
+		if err := e.Product.validate(); err != nil { return err }
 		if _, ok := g.Products[e.Product.ID]; ok {
 			return &FormattingError{fmt.Sprintf("duplicate product id: %s", e.Product.ID)}
 		}
@@ -51,10 +52,7 @@ func (e ElmntOr) validateAndAdd(g *Grupin) error {
 	}
 	if e.Interface != nil {
 		n_elements += 1
-		err := e.Interface.validate()
-		if err != nil {
-			return err
-		}
+		if err := e.Interface.validate(); err != nil { return err }
 		iid := InterfaceID{
 			ID: e.Interface.ID,
 			ProductID: e.Interface.ProductID,

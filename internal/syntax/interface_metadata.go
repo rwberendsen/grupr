@@ -6,6 +6,7 @@ import (
 
 type InterfaceMetadata struct {
 	Classification string 		`yaml:",omitempty"`
+	UserGroupMapping string		`yaml:"user_group_mapping,omitempty"`
 	UserGroups     []string		`yaml:"user_groups,flow,omitempty"`
 	UserGroupColumn string		`yaml:"user_group_column,omitempty"`
 	Objects        []string		`yaml:",omitempty"`
@@ -19,7 +20,10 @@ type InterfaceMetadata struct {
 
 func (i InterfaceMetadata) validate() error {
 	if i.Classification != "" {
-		if err := validateID(i.Classification); err != nil { return fmt.Errorf("classification: '%w'", i.Classification) }
+		if err := validateID(i.Classification); err != nil { return fmt.Errorf("classification: %w", err) }
+	}
+	if i.UserGroupMapping != "" {
+		if err := validateID(i.UserGroupMapping); err != nil { return fmt.Errorf("user_group_mapping: %w", err) }
 	}
 	for _, u := range i.UserGroups {
 		if err := validateID(u); err != nil { return fmt.Errorf("UserGroup %s: %w", u, err) }

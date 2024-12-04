@@ -10,15 +10,17 @@ import (
 
 type Grupin struct {
 	Classes			map[string]Class
-	AllowedUserGroups	map[string]bool
-	Products	map[string]Product
-	Interfaces	map[InterfaceID]Interface
+	UserGroups		UserGroups
+	UserGroupMappings	map[string]UserGroupMapping
+	Products		map[string]Product
+	Interfaces		map[InterfaceID]Interface
 }
 
 func NewGrupin(r io.Reader) (Grupin, error) {
 	dec := yaml.NewDecoder(r)
 	dec.KnownFields(true)
 	g := Grupin{
+		UserGroupMappings: map[string]UserGroupMapping{},
 		Products: map[string]Product{},
 		Interfaces: map[InterfaceID]Interface{},
 	}
