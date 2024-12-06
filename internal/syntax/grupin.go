@@ -10,7 +10,7 @@ import (
 
 type Grupin struct {
 	Classes			map[string]Class
-	UserGroups		UserGroups
+	GlobalUserGroups	*GlobalUserGroups
 	UserGroupMappings	map[string]UserGroupMapping
 	Products		map[string]Product
 	Interfaces		map[InterfaceID]Interface

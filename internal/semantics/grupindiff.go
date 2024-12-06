@@ -6,8 +6,9 @@ type GrupinDiff struct {
 	Created map[string]Product     `yaml:",omitempty"`
 	Deleted map[string]Product     `yaml:",omitempty"`
 	Updated map[string]ProductDiff `yaml:",omitempty"`
-	CreatedUserGroups map[string]bool `yaml:"created_allowed_user_groups,omitempty"`
-	DeletedUserGroups map[string]bool `yaml:"deleted_allowed_user_groups,omitempty"`
+	// TODO: GlobalUserGroups, UserGroupMappings, when use cases need to compare them, expose them here somehow.
+	Old Grupin
+	New Grupin
 }
 
 func NewGrupinDiff(lhs Grupin, rhs Grupin) GrupinDiff {
@@ -15,8 +16,8 @@ func NewGrupinDiff(lhs Grupin, rhs Grupin) GrupinDiff {
 		map[string]Product{},
 		map[string]Product{},
 		map[string]ProductDiff{},
-		map[string]bool{},
-		map[string]bool{},
+		lhs,
+		rhs,
 	}
 	for k_lhs, v_lhs := range lhs.Products {
 		v_rhs, ok := rhs.Products[k_lhs]
@@ -29,17 +30,6 @@ func NewGrupinDiff(lhs Grupin, rhs Grupin) GrupinDiff {
 	for k_rhs, v_rhs := range rhs.Products {
 		if _, ok := lhs.Products[k_rhs]; !ok {
 			diff.Created[k_rhs] = v_rhs
-		}
-	}
-	for k_lhs := range lhs.UserGroups {
-		if _, ok := rhs.UserGroups[k_lhs]; !ok {
-			diff.DeletedUserGroups[k_lhs] = true
-		}
-	}
-	// TODO: UserGroupMappings
-	for k_rhs := range rhs.UserGroups {
-		if _, ok := lhs.UserGroups[k_rhs]; !ok {
-			diff.CreatedUserGroups[k_rhs] = true
 		}
 	}
 	return diff

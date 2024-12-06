@@ -2,6 +2,7 @@ package syntax
 
 import (
 	"fmt"
+	"slices"
 )
 
 type InterfaceMetadata struct {
@@ -27,6 +28,7 @@ func (i InterfaceMetadata) validate() error {
 	}
 	for _, u := range i.UserGroups {
 		if err := validateID(u); err != nil { return fmt.Errorf("UserGroup %s: %w", u, err) }
+		if err := hasUniqueStrings(i.UserGroups); err != nil { return fmt.Errorf("usergroups: %w", err) }
 	}
 	if i.UserGroupColumn != "" {
 		if len(i.UserGroups) == 0 { return fmt.Errorf("UserGroupColumn specified but not UserGroups") }
@@ -38,6 +40,9 @@ func (i InterfaceMetadata) validate() error {
 		if err := validateID(d); err != nil { return fmt.Errorf("ExposeDTAPs: %w", err) }
 	}
 	if err := i.UserGroupRendering.validate(); err != nil { return fmt.Errorf("UserGroupRendering: %w", err) }
+	for k, _ := range i.UserGroupRendering {
+		if !slices.Contains(i.UserGroups, k) { return fmt.Errorf("user_group_rendering: unknown user group: '%s'", k) }
+	}
 	if i.ForProduct != nil {
 		if err := validateID(*i.ForProduct); err != nil { return fmt.Errorf("ForProduct: %w", err) }
 	}

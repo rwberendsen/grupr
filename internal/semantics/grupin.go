@@ -9,7 +9,7 @@ import (
 
 type Grupin struct {
 	Classes map[string]syntax.Class
-	UserGroups UserGroups
+	GlobalUserGroups GlobalUserGroups
 	UserGroupMappings map[string]UserGroupMapping
 	Products map[string]Product
 	// NB: ConsumingServices (e.g., a virtualisation tool, or, a file export tool) can be handled in a different top level YAML format
@@ -22,19 +22,19 @@ type Grupin struct {
 func NewGrupin(gSyn syntax.Grupin) (Grupin, error) {
 	gSem := Grupin{
 		Classes: gSyn.Classes,
-		UserGroups: newUserGroups(gSyn.UserGroups),
+		GlobalUserGroups: newGlobalUserGroups(*gSyn.GlobalUserGroups),
 		UserGroupMappings: map[string]UserGroupMapping{},
 		Products: map[string]Product{},
 	}
 	for k, v := range gSyn.UserGroupMappings {
-		if ugm, err := newUserGroupMapping(v, gSem.UserGroups); err != nil {
+		if ugm, err := newUserGroupMapping(v, gSem.GlobalUserGroups); err != nil {
 			return gSem, err
 		} else {
 			gSem.UserGroupMappings[k] = ugm
 		}
 	}
 	for k, v := range gSyn.Products {
-		if p, err := newProduct(v, gSem.Classes, gSem.UserGroups); err != nil {
+		if p, err := newProduct(v, gSem.Classes, gSem.GlobalUserGroups, gSem.UserGroupMappings); err != nil {
 			return gSem,  err
 		} else {
 			gSem.Products[k] = p
@@ -44,7 +44,7 @@ func NewGrupin(gSyn syntax.Grupin) (Grupin, error) {
 		if err := gSem.validateInterfaceID(iid); err != nil { return gSem, err }
 		dtaps := gSem.Products[iid.ProductID].DTAPs.DTAPRendering
 		parent := gSem.Products[iid.ProductID].InterfaceMetadata
-		if im, err := newInterfaceMetadata(v.InterfaceMetadata, gSem.Classes, gSem.UserGroups, dtaps, &parent); err != nil {
+		if im, err := newInterfaceMetadata(v.InterfaceMetadata, gSem.Classes, gSem.GlobalUserGroups, gSem.UserGroupMappings, dtaps, &parent); err != nil {
 			return gSem, fmt.Errorf("interface '%s': %w", iid, err)
 		} else {
 			gSem.Products[iid.ProductID].Interfaces[iid.ID] = im

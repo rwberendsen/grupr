@@ -7,7 +7,7 @@ import (
 
 type ElmntOr struct {
 	Classes map[string]Class
-	UserGroups *UserGroups `yaml:"user_groups,omitempty"`
+	GlobalUserGroups *GlobalUserGroups `yaml:"global_user_groups,omitempty"`
 	UserGroupMapping *UserGroupMapping `yaml:"user_group_mapping,omitempty"`
 	Product *Product `yaml:",omitempty"`
 	Interface *Interface`yaml:"interface,omitempty"`
@@ -26,13 +26,13 @@ func (e ElmntOr) validateAndAdd(g *Grupin) error {
 		}
 		g.Classes = e.Classes
 	}
-	if e.UserGroups != nil {
-		if g.UserGroups != nil {
+	if e.GlobalUserGroups != nil {
+		if g.GlobalUserGroups != nil {
 			return &FormattingError{"user_groups specified more than once"}
 		}
-		if err := e.UserGroups.validate(); err != nil { return err }
+		if err := e.GlobalUserGroups.validate(); err != nil { return err }
 		n_elements += 1
-		g.UserGroups = *e.UserGroups
+		g.GlobalUserGroups = e.GlobalUserGroups
 	}
 	if e.UserGroupMapping != nil {
 		n_elements += 1
