@@ -65,7 +65,7 @@ func PersistInSnowflake(stats []*BasicStats) error {
 	}
 	dbName := config.GetEnvOrDie("GRUPR_SNOWFLAKE_DB")
 	schema := config.GetEnvOrDie("GRUPR_SNOWFLAKE_SCHEMA")
-	gruprPrefix := config.GetEnvOrDefault("GRUPR_SNOWFLAKE_PREFIX", "_grupr")
+	gruprPrefix := config.GetEnvOrDefault("GRUPR_SNOWFLAKE_PREFIX", "_grupr_")
 	sql := fmt.Sprintf(`
 CREATE OR REPLACE TABLE %v.%v.%vbasic_stats (
 	product_id varchar,
