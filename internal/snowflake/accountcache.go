@@ -2,7 +2,9 @@ package snowflake
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"database/sql"
 	"strings"
 )
 
@@ -122,20 +124,24 @@ func (c *accountCache) addSchema(dbName string, schemaName string) {
 }
 
 func addTables(ctx context.Context, c *accountCache, errc chan<- error) {
+    invalidEntries := 0
 	rows, err := getDB().QueryContext(ctx, `SELECT table_catalog, table_schema, table_name FROM snowflake.account_usage.tables where deleted is null`)
 	if err != nil {
 		errc <- err
 		return
 	}
 	for rows.Next() {
-		var dbName string
-		var schemaName string
-		var tableName string
+		var dbName sql.NullString
+		var schemaName sql.NullString
+		var tableName sql.NullString
 		if err = rows.Scan(&dbName, &schemaName, &tableName); err != nil {
 			errc <- err
 			return
 		}
-		c.addTable(dbName, schemaName, tableName)
+		if !dbName.Valid || !schemaName.Valid || !tableName.Valid {
+			invalidEntries++
+		}
+		c.addTable(dbName.String, schemaName.String, tableName.String)
 	}
 	if err := rows.Close(); err != nil {
 		errc <- err
@@ -144,6 +150,9 @@ func addTables(ctx context.Context, c *accountCache, errc chan<- error) {
 	if err = rows.Err(); err != nil {
 		errc <- err
 		return
+	}
+	if invalidEntries > 0 {
+		fmt.Printf("WARN: there were invalid entries in tables retrieved from snowflake.account_usage.tables")
 	}
 	errc <- nil // caller will block on receiving err
 }
