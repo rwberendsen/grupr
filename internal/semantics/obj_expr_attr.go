@@ -5,7 +5,7 @@ import (
 )
 
 type ObjExprAttr struct {
-	DTAP       string `yaml:"dtap,omitempty"`
+	DTAP string `yaml:"dtap,omitempty"`
 	// TODO: consider if we really need the renderings here?
 	UserGroups syntax.Rendering `yaml:"user_groups,omitempty"`
 }

@@ -8,15 +8,15 @@ import (
 )
 
 type Product struct {
-	ID	 string `yaml:"id"`
-	DTAPs      DTAPSpec `yaml:"dtaps,flow,omitempty"`
-	Consumes   map[syntax.InterfaceID]bool `yaml:",omitempty"`
+	ID       string                      `yaml:"id"`
+	DTAPs    DTAPSpec                    `yaml:"dtaps,flow,omitempty"`
+	Consumes map[syntax.InterfaceID]bool `yaml:",omitempty"`
 	InterfaceMetadata
 	Interfaces map[string]InterfaceMetadata
 }
 
 func newProduct(pSyn syntax.Product, classes map[string]syntax.Class, globalUserGroups map[string]bool,
-		userGroupMappings map[string]UserGroupMapping) (Product, error) {
+	userGroupMappings map[string]UserGroupMapping) (Product, error) {
 	pSem := Product{
 		ID:         pSyn.ID,
 		DTAPs:      newDTAPSpec(pSyn.DTAPs, pSyn.DTAPRendering),
@@ -47,10 +47,20 @@ func (lhs Product) disjoint(rhs Product) bool {
 }
 
 func (lhs Product) Equal(rhs Product) bool {
-	if lhs.ID != rhs.ID { return false }
-	if !lhs.DTAPs.Equal(rhs.DTAPs) { return false }
-	if !maps.Equal(lhs.Consumes, rhs.Consumes) { return false }
-	if !lhs.InterfaceMetadata.Equal(rhs.InterfaceMetadata) { return false }
-	if !maps.EqualFunc(lhs.Interfaces, rhs.Interfaces, InterfaceMetadata.Equal) { return false }
+	if lhs.ID != rhs.ID {
+		return false
+	}
+	if !lhs.DTAPs.Equal(rhs.DTAPs) {
+		return false
+	}
+	if !maps.Equal(lhs.Consumes, rhs.Consumes) {
+		return false
+	}
+	if !lhs.InterfaceMetadata.Equal(rhs.InterfaceMetadata) {
+		return false
+	}
+	if !maps.EqualFunc(lhs.Interfaces, rhs.Interfaces, InterfaceMetadata.Equal) {
+		return false
+	}
 	return true
 }

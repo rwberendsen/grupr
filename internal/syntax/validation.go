@@ -12,7 +12,9 @@ func hasUniqueStrings(l []string) error {
 	// TODO: consider using generics for simple util functions like this
 	m := map[string]bool{}
 	for _, i := range l {
-		if _, ok := m[i]; ok { return fmt.Errorf("duplicate: '%s'", i) }
+		if _, ok := m[i]; ok {
+			return fmt.Errorf("duplicate: '%s'", i)
+		}
 		m[i] = true
 	}
 	return nil

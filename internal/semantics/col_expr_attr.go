@@ -7,7 +7,7 @@ import (
 type ColExprAttr struct {
 	// TODO: consider if we really need the renderings here?
 	DTAPs      syntax.Rendering `yaml:"dtaps,omitempty"`
-	UserGroups syntax.Rendering`yaml:"user_groups,omitempty"`
+	UserGroups syntax.Rendering `yaml:"user_groups,omitempty"`
 }
 
 func (lhs ColExprAttr) Equal(rhs ColExprAttr) bool {

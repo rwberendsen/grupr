@@ -5,18 +5,22 @@ import (
 )
 
 type DTAPSpec struct {
-	NonProd		[]string		`yaml:"non_prod,flow,omitempty"`
-	Prod		string `yaml:",omitempty"` // "" means no prod DTAP exists
+	NonProd []string `yaml:"non_prod,flow,omitempty"`
+	Prod    string   `yaml:",omitempty"` // "" means no prod DTAP exists
 }
 
 func (d DTAPSpec) validate() error {
 	dtaps := map[string]bool{}
 	if d.Prod != "" {
-		if err := validateID(d.Prod); err != nil { return fmt.Errorf("prod DTAP id: %w", err) }
+		if err := validateID(d.Prod); err != nil {
+			return fmt.Errorf("prod DTAP id: %w", err)
+		}
 	}
 	dtaps[d.Prod] = true
 	for _, i := range d.NonProd {
-		if err := validateID(i); err != nil { return fmt.Errorf("non prod DTAP id: %w", err) }
+		if err := validateID(i); err != nil {
+			return fmt.Errorf("non prod DTAP id: %w", err)
+		}
 		if _, ok := dtaps[i]; ok {
 			return &FormattingError{fmt.Sprintf("duplicate DTAP: %s", i)}
 		}
@@ -29,9 +33,13 @@ func (d DTAPSpec) IsEmpty() bool {
 }
 
 func (d DTAPSpec) HasDTAP(dtap string) bool {
-	if dtap == "" { return false } // "" is a zero value we interpret as a non-existent (not specified) DTAP
+	if dtap == "" {
+		return false
+	} // "" is a zero value we interpret as a non-existent (not specified) DTAP
 	for _, i := range d.NonProd {
-		if dtap == i { return true }
+		if dtap == i {
+			return true
+		}
 	}
 	return dtap == d.Prod
 }

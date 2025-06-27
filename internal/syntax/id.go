@@ -1,8 +1,8 @@
 package syntax
 
 import (
-    "fmt"
-    "regexp"
+	"fmt"
+	"regexp"
 )
 
 var validID *regexp.Regexp = regexp.MustCompile(`^[a-z0-9_]+$`)

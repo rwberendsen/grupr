@@ -13,7 +13,9 @@ func newUserGroupMapping(ugmSyn syntax.UserGroupMapping, globalUserGroups Global
 	var ugm UserGroupMapping
 	ugm = ugmSyn.Mapping
 	for _, v := range ugm {
-		if _, ok := globalUserGroups[v]; !ok { return ugm, &SetLogicError{fmt.Sprintf("user group mapping '%s': unknown user group '%s'", ugmSyn.ID, v)} }
+		if _, ok := globalUserGroups[v]; !ok {
+			return ugm, &SetLogicError{fmt.Sprintf("user group mapping '%s': unknown user group '%s'", ugmSyn.ID, v)}
+		}
 	}
 	return ugm, nil
 }

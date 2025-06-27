@@ -5,11 +5,13 @@ import (
 )
 
 type Class struct {
-	Name string
+	Name  string
 	Level int
 }
 
 func (c Class) validate() error {
-	if c.Level < 0 { return &FormattingError{fmt.Sprintf("Level '%v' should be a positive integer", c.Level)} }
+	if c.Level < 0 {
+		return &FormattingError{fmt.Sprintf("Level '%v' should be a positive integer", c.Level)}
+	}
 	return nil
 }

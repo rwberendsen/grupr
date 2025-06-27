@@ -78,7 +78,7 @@ func getDB() *sql.DB {
 		if err = rows.Scan(&s); err != nil {
 			log.Fatalf("error scanning rows: %v", err)
 		}
-		log.Printf("connection is open with user %s", s)
+		log.Printf("Connection is open with user %s", s)
 	}
 	if err = rows.Err(); err != nil {
 		log.Fatalf("errors found during scanning: %s", err)

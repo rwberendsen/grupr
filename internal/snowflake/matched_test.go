@@ -14,9 +14,9 @@ func TestMatchPart(t *testing.T) {
 		want        map[string]bool
 	}{
 		{
-			exprPart: semantics.ExprPart{S: "prd_staging", IsQuoted: false},
+			exprPart:    semantics.ExprPart{S: "prd_staging", IsQuoted: false},
 			identifiers: map[string]bool{"PRD_STAGING": true},
-			want: map[string]bool{"PRD_STAGING": true},
+			want:        map[string]bool{"PRD_STAGING": true},
 		},
 	}
 	for _, test := range tests {

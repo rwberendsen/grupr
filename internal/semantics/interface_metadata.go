@@ -8,32 +8,49 @@ import (
 )
 
 type InterfaceMetadata struct {
-	ObjectMatcher	ObjMatcher
-	Classification Classification
+	ObjectMatcher    ObjMatcher
+	Classification   Classification
 	GlobalUserGroups map[string]bool
 	UserGroupMapping string
-	UserGroups syntax.Rendering
-	UserGroupColumn ColMatcher
-	MaskColumns ColMatcher
-	HashColumns ColMatcher
-	ExposeDTAPs map[string]bool
-	DTAPRendering syntax.Rendering
-        ForProduct *string
+	UserGroups       syntax.Rendering
+	UserGroupColumn  ColMatcher
+	MaskColumns      ColMatcher
+	HashColumns      ColMatcher
+	ExposeDTAPs      map[string]bool
+	DTAPRendering    syntax.Rendering
+	ForProduct       *string
 }
 
-
 func newInterfaceMetadata(imSyn syntax.InterfaceMetadata, classes map[string]syntax.Class, globalUserGroups map[string]bool,
-                          userGroupMappings map[string]UserGroupMapping, dtaps syntax.Rendering, parent *InterfaceMetadata) (InterfaceMetadata, error) {
+	userGroupMappings map[string]UserGroupMapping, dtaps syntax.Rendering, parent *InterfaceMetadata) (InterfaceMetadata, error) {
 	imSem := InterfaceMetadata{}
-	if err := imSem.setClassification(imSyn, parent, classes); err != nil { return imSem, err }
-	if err := imSem.setUserGroupMapping(imSyn, parent, userGroupMappings); err != nil { return imSem, err }
-	if err := imSem.setUserGroups(imSyn, parent, globalUserGroups, userGroupMappings); err != nil { return imSem, err }
-	if err := imSem.setExposeDTAPs(imSyn, parent, dtaps); err != nil { return imSem, err }
-	if err := imSem.setObjectMatcher(imSyn, parent, dtaps); err != nil { return imSem, err }
-	if err := imSem.setUserGroupColumn(imSyn, parent, dtaps); err != nil { return imSem, err }
-	if err := imSem.setMaskColumns(imSyn, parent, dtaps); err != nil { return imSem, err }
-	if err := imSem.setHashColumns(imSyn, parent, dtaps); err != nil { return imSem, err }
-	if err := imSem.setForProduct(imSyn, parent, dtaps); err != nil { return imSem, err }
+	if err := imSem.setClassification(imSyn, parent, classes); err != nil {
+		return imSem, err
+	}
+	if err := imSem.setUserGroupMapping(imSyn, parent, userGroupMappings); err != nil {
+		return imSem, err
+	}
+	if err := imSem.setUserGroups(imSyn, parent, globalUserGroups, userGroupMappings); err != nil {
+		return imSem, err
+	}
+	if err := imSem.setExposeDTAPs(imSyn, parent, dtaps); err != nil {
+		return imSem, err
+	}
+	if err := imSem.setObjectMatcher(imSyn, parent, dtaps); err != nil {
+		return imSem, err
+	}
+	if err := imSem.setUserGroupColumn(imSyn, parent, dtaps); err != nil {
+		return imSem, err
+	}
+	if err := imSem.setMaskColumns(imSyn, parent, dtaps); err != nil {
+		return imSem, err
+	}
+	if err := imSem.setHashColumns(imSyn, parent, dtaps); err != nil {
+		return imSem, err
+	}
+	if err := imSem.setForProduct(imSyn, parent, dtaps); err != nil {
+		return imSem, err
+	}
 	return imSem, nil
 }
 
@@ -57,7 +74,7 @@ func (imSem *InterfaceMetadata) setClassification(imSyn syntax.InterfaceMetadata
 }
 
 func (imSem *InterfaceMetadata) setUserGroupMapping(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata,
-						    userGroupMappings map[string]UserGroupMapping) error {
+	userGroupMappings map[string]UserGroupMapping) error {
 	if imSyn.UserGroupMapping == "" {
 		if parent != nil {
 			imSem.UserGroupMapping = parent.UserGroupMapping
@@ -74,7 +91,7 @@ func (imSem *InterfaceMetadata) setUserGroupMapping(imSyn syntax.InterfaceMetada
 
 func getGlobalUserGroup(userGroup string, userGroupMapping string, globalUserGroups map[string]bool, userGroupMappings map[string]UserGroupMapping) (string, bool) {
 	if userGroupMapping == "" {
-		_, ok := globalUserGroups[userGroup];
+		_, ok := globalUserGroups[userGroup]
 		return userGroup, ok // userGroup is a global user group
 	}
 	globalUserGroup, ok := userGroupMappings[userGroupMapping][userGroup]
@@ -82,7 +99,7 @@ func getGlobalUserGroup(userGroup string, userGroupMapping string, globalUserGro
 }
 
 func (imSem *InterfaceMetadata) setUserGroups(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata,
-					      globalUserGroups map[string]bool, userGroupMappings map[string]UserGroupMapping) error {
+	globalUserGroups map[string]bool, userGroupMappings map[string]UserGroupMapping) error {
 	if imSyn.UserGroups == nil {
 		if parent != nil {
 			imSem.UserGroups = parent.UserGroups
@@ -105,14 +122,16 @@ func (imSem *InterfaceMetadata) setUserGroups(imSyn syntax.InterfaceMetadata, pa
 	}
 	if parent != nil {
 		for u := range imSem.GlobalUserGroups {
-			if _, ok := parent.GlobalUserGroups[u]; !ok { return &PolicyError{fmt.Sprintf("Interface should not have global user group '%s' that product does not have", u)} }
+			if _, ok := parent.GlobalUserGroups[u]; !ok {
+				return &PolicyError{fmt.Sprintf("Interface should not have global user group '%s' that product does not have", u)}
+			}
 		}
 	}
 	return nil
 }
 
 func (imSem *InterfaceMetadata) setExposeDTAPs(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata,
-                                               dtaps syntax.Rendering) error {
+	dtaps syntax.Rendering) error {
 	if imSyn.ExposeDTAPs == nil {
 		if parent != nil {
 			imSem.ExposeDTAPs = parent.ExposeDTAPs
@@ -133,7 +152,7 @@ func (imSem *InterfaceMetadata) setExposeDTAPs(imSyn syntax.InterfaceMetadata, p
 }
 
 func (imSem *InterfaceMetadata) setObjectMatcher(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata,
-                                                 dtaps syntax.Rendering) error {
+	dtaps syntax.Rendering) error {
 	if imSyn.Objects == nil {
 		if parent != nil {
 			imSem.ObjectMatcher = parent.ObjectMatcher
@@ -155,7 +174,7 @@ func (imSem *InterfaceMetadata) setObjectMatcher(imSyn syntax.InterfaceMetadata,
 }
 
 func (imSem *InterfaceMetadata) setUserGroupColumn(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata,
-                                                   dtaps syntax.Rendering) error {
+	dtaps syntax.Rendering) error {
 	if imSyn.UserGroupColumn == "" {
 		if parent != nil {
 			imSem.UserGroupColumn = parent.UserGroupColumn
@@ -214,22 +233,26 @@ func (imSem *InterfaceMetadata) setForProduct(imSyn syntax.InterfaceMetadata, pa
 func equal_pointer_string(lhs *string, rhs *string) bool {
 	// TODO: check if a simple generic exists for the three lines below, and if so, use it.
 	if lhs != rhs {
-		if lhs == nil || rhs == nil { return false }
-		if *lhs != *rhs { return false }
+		if lhs == nil || rhs == nil {
+			return false
+		}
+		if *lhs != *rhs {
+			return false
+		}
 	}
 	return true
 }
 
 func (lhs InterfaceMetadata) Equal(rhs InterfaceMetadata) bool {
 	return lhs.ObjectMatcher.Equal(rhs.ObjectMatcher) &&
-	       lhs.Classification == rhs.Classification &&
-	       maps.Equal(lhs.GlobalUserGroups, rhs.GlobalUserGroups) &&
-	       lhs.UserGroupMapping == rhs.UserGroupMapping &&
-	       lhs.UserGroups.Equal(rhs.UserGroups) &&
-	       lhs.UserGroupColumn.Equal(rhs.UserGroupColumn) &&
-	       lhs.MaskColumns.Equal(rhs.MaskColumns) &&
-	       lhs.HashColumns.Equal(rhs.MaskColumns) &&
-	       maps.Equal(lhs.ExposeDTAPs, rhs.ExposeDTAPs) &&
-	       lhs.DTAPRendering.Equal(rhs.DTAPRendering) &&
-	       equal_pointer_string(lhs.ForProduct, rhs.ForProduct)
+		lhs.Classification == rhs.Classification &&
+		maps.Equal(lhs.GlobalUserGroups, rhs.GlobalUserGroups) &&
+		lhs.UserGroupMapping == rhs.UserGroupMapping &&
+		lhs.UserGroups.Equal(rhs.UserGroups) &&
+		lhs.UserGroupColumn.Equal(rhs.UserGroupColumn) &&
+		lhs.MaskColumns.Equal(rhs.MaskColumns) &&
+		lhs.HashColumns.Equal(rhs.MaskColumns) &&
+		maps.Equal(lhs.ExposeDTAPs, rhs.ExposeDTAPs) &&
+		lhs.DTAPRendering.Equal(rhs.DTAPRendering) &&
+		equal_pointer_string(lhs.ForProduct, rhs.ForProduct)
 }

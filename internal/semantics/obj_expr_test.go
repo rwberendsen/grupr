@@ -11,55 +11,55 @@ func newObjExprOrPanic(s string) ObjExpr {
 	panic("error instantiating ObjExpr")
 }
 
-func TestObjExprSubsetOf(t * testing.T) {
-	tests := []struct{
-		lhs ObjExpr
-		rhs ObjExpr
+func TestObjExprSubsetOf(t *testing.T) {
+	tests := []struct {
+		lhs  ObjExpr
+		rhs  ObjExpr
 		want bool
 	}{
 		{
-			lhs: newObjExprOrPanic("*.*.*"),
-			rhs: newObjExprOrPanic("a.b.c"),
+			lhs:  newObjExprOrPanic("*.*.*"),
+			rhs:  newObjExprOrPanic("a.b.c"),
 			want: false,
 		},
 		{
-			lhs: newObjExprOrPanic("a.b.c"),
-			rhs: newObjExprOrPanic("*.*.*"),
+			lhs:  newObjExprOrPanic("a.b.c"),
+			rhs:  newObjExprOrPanic("*.*.*"),
 			want: true,
 		},
 		{
-			lhs: newObjExprOrPanic("*.*.c"),
-			rhs: newObjExprOrPanic("*.*.*"),
+			lhs:  newObjExprOrPanic("*.*.c"),
+			rhs:  newObjExprOrPanic("*.*.*"),
 			want: true,
 		},
 		{
-			lhs: newObjExprOrPanic("a.*.*"),
-			rhs: newObjExprOrPanic("*.*.*"),
+			lhs:  newObjExprOrPanic("a.*.*"),
+			rhs:  newObjExprOrPanic("*.*.*"),
 			want: true,
 		},
 		{
-			lhs: newObjExprOrPanic("a.*.*"),
-			rhs: newObjExprOrPanic("*.b.*"),
+			lhs:  newObjExprOrPanic("a.*.*"),
+			rhs:  newObjExprOrPanic("*.b.*"),
 			want: false,
 		},
 		{
-			lhs: newObjExprOrPanic("a.b.*"),
-			rhs: newObjExprOrPanic("*.b.*"),
+			lhs:  newObjExprOrPanic("a.b.*"),
+			rhs:  newObjExprOrPanic("*.b.*"),
 			want: true,
 		},
 		{
-			lhs: newObjExprOrPanic("a.b.c"),
-			rhs: newObjExprOrPanic("*.b.*"),
+			lhs:  newObjExprOrPanic("a.b.c"),
+			rhs:  newObjExprOrPanic("*.b.*"),
 			want: true,
 		},
 		{
-			lhs: newObjExprOrPanic("a.b.c"),
-			rhs: newObjExprOrPanic("*.b.c"),
+			lhs:  newObjExprOrPanic("a.b.c"),
+			rhs:  newObjExprOrPanic("*.b.c"),
 			want: true,
 		},
 		{
-			lhs: newObjExprOrPanic("a.a.c"),
-			rhs: newObjExprOrPanic("*.b.c"),
+			lhs:  newObjExprOrPanic("a.a.c"),
+			rhs:  newObjExprOrPanic("*.b.c"),
 			want: false,
 		},
 	}
@@ -69,4 +69,3 @@ func TestObjExprSubsetOf(t * testing.T) {
 		}
 	}
 }
-

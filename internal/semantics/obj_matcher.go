@@ -7,10 +7,10 @@ import (
 )
 
 type ObjMatcher struct {
-	Include  ObjExprs
-	Exclude  ObjExprs         `yaml:",omitempty"`
+	Include        ObjExprs
+	Exclude        ObjExprs            `yaml:",omitempty"`
 	StrictSuperset map[ObjExpr]ObjExpr `yaml:"strict_superset,omitempty"` // value is strict superset of key
-	StrictSubset map[ObjExpr]ObjExpr `yaml:"strict_subset,omitempty"` // value is strict subset of key
+	StrictSubset   map[ObjExpr]ObjExpr `yaml:"strict_subset,omitempty"`   // value is strict subset of key
 }
 
 func newObjMatcher(include []string, exclude []string, dtaps syntax.Rendering, userGroups syntax.Rendering) (ObjMatcher, error) {
@@ -96,7 +96,9 @@ func (lhs ObjMatcher) subsetOf(rhs ObjMatcher) bool {
 				}
 			}
 		}
-		if !hasSuperset { return false }
+		if !hasSuperset {
+			return false
+		}
 	}
 	return true
 }

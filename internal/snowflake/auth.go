@@ -9,7 +9,6 @@ import (
 )
 
 func getPrivateRSAKey(keyPath string) (*rsa.PrivateKey, error) {
-	fmt.Printf("attempting to read private key from path: %s\n", keyPath)
 	data, err := os.ReadFile(keyPath)
 	if err != nil {
 		return nil, err

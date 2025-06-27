@@ -2,10 +2,10 @@ package snowflake
 
 import (
 	"context"
-	"fmt"
-	"log"
 	"database/sql"
+	"log"
 	"strings"
+	"time"
 )
 
 // caching objects in Snowflake locally
@@ -45,26 +45,28 @@ func escapeString(s string) string {
 func (c *accountCache) addDBs() {
 	c.dbs = map[string]*dbCache{}
 	c.dbNames = map[string]bool{}
-	c.addDBs_()     // we'd like to capture empty db's as well
-	c.addSchemas()  // and empty schema's
+	c.addDBs_()    // we'd like to capture empty db's as well
+	c.addSchemas() // and empty schema's
 
-	// query tables and views in parallel	
+	// query tables and views in parallel
 	ctx, cancel := context.WithCancel(context.Background())
 	errc := make(chan error, 2) // both routines can send once to errc without blocking
-	go addTables(ctx, c, errc) 
+	go addTables(ctx, c, errc)
 	go addViews(ctx, c, errc)
 
 	// receive twice from errc to wait for both routines
 	for i := 0; i < 2; i++ {
 		err := <-errc
 		if err != nil {
-			cancel() // in case the other routine was still running, it can stop now
-			log.Fatalf("%w", err) // TODO: behave and return error instead
+			cancel()              // in case the other routine was still running, it can stop now
+			log.Fatalf("%s", err) // TODO: behave and return error instead
 		}
 	}
 }
 
 func (c *accountCache) addDBs_() {
+	start := time.Now()
+	log.Printf("Querying Snowflake for database names...\n")
 	rows, err := getDB().Query(`SELECT database_name FROM snowflake.account_usage.databases`)
 	if err != nil {
 		log.Fatalf("querying snowflake: %s", err)
@@ -79,26 +81,30 @@ func (c *accountCache) addDBs_() {
 	if err = rows.Err(); err != nil {
 		log.Fatal(err)
 	}
+	t := time.Now()
+	log.Printf("Querying Snowflake for database names took %v\n", t.Sub(start))
 }
 
 func (c *accountCache) addDB(dbName string) {
 	if _, ok := c.dbNames[dbName]; !ok {
 		c.dbNames[dbName] = true
 		c.dbs[dbName] = &dbCache{
-			dbName: dbName,
-			schemas: map[string]*schemaCache{},
+			dbName:      dbName,
+			schemas:     map[string]*schemaCache{},
 			schemaNames: map[string]bool{},
 		}
 	}
 }
 
 func (c *accountCache) addSchemas() {
+	start := time.Now()
+	log.Printf("Querying Snowflake for schema names...\n")
 	rows, err := getDB().Query(`select catalog_name, schema_name from snowflake.account_usage.schemata where deleted is null`)
 	if err != nil {
 		log.Fatalf("querying snowflake: %s", err)
 	}
 	for rows.Next() {
-	    var dbName string
+		var dbName string
 		var schemaName string
 		if err = rows.Scan(&dbName, &schemaName); err != nil {
 			log.Fatalf("error scanning row: %s", err)
@@ -108,6 +114,8 @@ func (c *accountCache) addSchemas() {
 	if err = rows.Err(); err != nil {
 		log.Fatal(err)
 	}
+	t := time.Now()
+	log.Printf("Querying Snowflake for schema names took %v\n", t.Sub(start))
 }
 
 func (c *accountCache) addSchema(dbName string, schemaName string) {
@@ -115,16 +123,18 @@ func (c *accountCache) addSchema(dbName string, schemaName string) {
 	if _, ok := c.dbs[dbName].schemas[schemaName]; !ok {
 		c.dbs[dbName].schemaNames[schemaName] = true
 		c.dbs[dbName].schemas[schemaName] = &schemaCache{
-			dbName: dbName,
+			dbName:     dbName,
 			schemaName: schemaName,
 			tableNames: map[string]bool{},
-			viewNames: map[string]bool{},
+			viewNames:  map[string]bool{},
 		}
 	}
 }
 
 func addTables(ctx context.Context, c *accountCache, errc chan<- error) {
-    invalidEntries := 0
+	start := time.Now()
+	log.Printf("Querying Snowflake for table names...\n")
+	invalidEntries := 0
 	rows, err := getDB().QueryContext(ctx, `SELECT table_catalog, table_schema, table_name FROM snowflake.account_usage.tables where deleted is null`)
 	if err != nil {
 		errc <- err
@@ -152,9 +162,11 @@ func addTables(ctx context.Context, c *accountCache, errc chan<- error) {
 		return
 	}
 	if invalidEntries > 0 {
-		fmt.Printf("WARN: there were invalid entries in tables retrieved from snowflake.account_usage.tables")
+		log.Printf("WARN: there were entries in snowflake.account_usage.tables where table_catalog, table_schema, or table_name were null")
 	}
 	errc <- nil // caller will block on receiving err
+	t := time.Now()
+	log.Printf("Querying Snowflake for table names took %v\n", t.Sub(start))
 }
 
 func (c *accountCache) addTable(dbName, schemaName, tableName string) {
@@ -167,6 +179,8 @@ func (c *accountCache) addTable(dbName, schemaName, tableName string) {
 }
 
 func addViews(ctx context.Context, c *accountCache, errc chan<- error) {
+	start := time.Now()
+	log.Printf("Querying Snowflake for view names...\n")
 	rows, err := getDB().QueryContext(ctx, `SELECT table_catalog, table_schema, table_name FROM snowflake.account_usage.views where deleted is null`)
 	if err != nil {
 		errc <- err
@@ -191,8 +205,9 @@ func addViews(ctx context.Context, c *accountCache, errc chan<- error) {
 		return
 	}
 	errc <- nil // caller will block on receiving err
+	t := time.Now()
+	log.Printf("Querying Snowflake for view names took %v\n", t.Sub(start))
 }
-
 
 func (c *accountCache) addView(dbName, schemaName, viewName string) {
 	if dbc, ok := c.dbs[dbName]; ok {

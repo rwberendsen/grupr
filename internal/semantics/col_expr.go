@@ -45,8 +45,8 @@ func newColExpr(s string) (ColExpr, error) {
 				panic("unquoted field not ending with end of line or period")
 			}
 			fields = append(fields, ExprPart{S: strings.ToLower(substr)})
-				// unquoted identifiers match in a case insensitive way
-				// TODO: create a function newExprPart and introduce this tricky detail ToLower there
+			// unquoted identifiers match in a case insensitive way
+			// TODO: create a function newExprPart and introduce this tricky detail ToLower there
 		}
 	}
 	// validate identifier expressions
@@ -60,20 +60,26 @@ func newColExpr(s string) (ColExpr, error) {
 		panic("parsing obj expr did not result in single result")
 	}
 	// left-padding fields with * matchers until we have Database, Schema, Table, Column
-	for i := 0; i < 4 - len(fields); i++ {
+	for i := 0; i < 4-len(fields); i++ {
 		r[i] = ExprPart{S: "*", IsQuoted: false}
 	}
 	for i := 0; i < len(fields); i++ {
-		r[4 - len(fields) + i] = fields[i]
+		r[4-len(fields)+i] = fields[i]
 	}
 	return r, nil
 }
 
 func (lhs ColExpr) subsetOf(rhs ColExpr) bool {
 	// return true if rhs can match at least all objects that lhs can match
-	if !lhs[Database].subsetOf(rhs[Database]) { return false }
-	if !lhs[Schema].subsetOf(rhs[Schema]) { return false }
-	if !lhs[Table].subsetOf(rhs[Table]) { return false }
+	if !lhs[Database].subsetOf(rhs[Database]) {
+		return false
+	}
+	if !lhs[Schema].subsetOf(rhs[Schema]) {
+		return false
+	}
+	if !lhs[Table].subsetOf(rhs[Table]) {
+		return false
+	}
 	return lhs[Column].subsetOf(rhs[Column])
 }
 
@@ -113,7 +119,6 @@ func (c ColExpr) disjointWithObjMatcher(om ObjMatcher, dtap string) bool {
 	}
 	return true
 }
-
 
 func (e ColExpr) String() string {
 	a := []string{}

@@ -14,7 +14,7 @@ func newColMatcher(l []string, dtaps syntax.Rendering, userGroups syntax.Renderi
 	for _, expr := range l {
 		exprs, err := newColExprs(expr, dtaps, userGroups)
 		if err != nil {
-			return m,  err
+			return m, err
 		}
 		for e, ea := range exprs {
 			if _, ok := m.ColExprs[e]; ok {

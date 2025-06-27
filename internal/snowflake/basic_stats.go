@@ -6,20 +6,21 @@ import (
 	"maps"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/rwberendsen/grupr/internal/config"
 	"github.com/rwberendsen/grupr/internal/semantics"
 )
 
 type BasicStats struct {
-	ProductId             string
-	InterfaceId           string
-	ObjExpr               semantics.ObjExpr
-	DTAP                  string
-	UserGroups            string
-	TableCount            int
-	ViewCount             int
-	ByteCount             int
+	ProductId   string
+	InterfaceId string
+	ObjExpr     semantics.ObjExpr
+	DTAP        string
+	UserGroups  string
+	TableCount  int
+	ViewCount   int
+	ByteCount   int
 }
 
 func NewBasicStats(grupin semantics.Grupin, sfGrupin Grupin) []*BasicStats {
@@ -43,7 +44,7 @@ func NewBasicStats(grupin semantics.Grupin, sfGrupin Grupin) []*BasicStats {
 					InterfaceId: intrfId,
 					ObjExpr:     e,
 					DTAP:        ea.DTAP,
-					UserGroups: strings.Join(slices.Sorted(maps.Keys(ea.UserGroups)), ","),
+					UserGroups:  strings.Join(slices.Sorted(maps.Keys(ea.UserGroups)), ","),
 					TableCount:  sfGrupin.Products[prdId].Interfaces[intrfId].Matched.Objects[e].TableCount(),
 					ViewCount:   sfGrupin.Products[prdId].Interfaces[intrfId].Matched.Objects[e].ViewCount(),
 				}
@@ -55,6 +56,8 @@ func NewBasicStats(grupin semantics.Grupin, sfGrupin Grupin) []*BasicStats {
 }
 
 func PersistInSnowflake(stats []*BasicStats) error {
+	start := time.Now()
+	log.Printf("Storing basic stats in Snowflake...\n")
 	getValuesSQL := func(stats []*BasicStats) []string {
 		r := []string{}
 		for _, s := range stats {
@@ -79,7 +82,6 @@ CREATE OR REPLACE TABLE %v.%v.%vbasic_stats (
 )
 `,
 		dbName, schema, gruprPrefix)
-	log.Printf("sql:\n%s", sql)
 	_, err := getDB().Exec(sql)
 	if err != nil {
 		return fmt.Errorf("create table: %v", err)
@@ -98,10 +100,11 @@ VALUES
 `,
 		dbName, schema, gruprPrefix)
 	sql += strings.Join(getValuesSQL(stats), ",\n")
-	log.Printf("sql:\n%s", sql)
 	_, err = getDB().Exec(sql)
 	if err != nil {
 		return fmt.Errorf("insert stats: %v", err)
 	}
+	t := time.Now()
+	log.Printf("Storing basic stats in Snowflake took %v\n", t.Sub(start))
 	return nil
 }

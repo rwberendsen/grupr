@@ -41,7 +41,7 @@ func newColExprs(s string, dtaps syntax.Rendering, userGroups syntax.Rendering) 
 			}
 			for u, renderedUserGroup := range userGroups {
 				userGroupExpanded[strings.ReplaceAll(k, UserGroupTemplate, renderedUserGroup)] =
-						ColExprAttr{DTAPs: v.DTAPs, UserGroups: syntax.Rendering{u: renderedUserGroup}}
+					ColExprAttr{DTAPs: v.DTAPs, UserGroups: syntax.Rendering{u: renderedUserGroup}}
 			}
 		} else {
 			// Objects matched by expression are shared between user groups
@@ -59,7 +59,9 @@ func newColExprs(s string, dtaps syntax.Rendering, userGroups syntax.Rendering) 
 }
 
 func (m ColExprs) allDisjoint() bool {
-	if len(m) < 2 { return true }
+	if len(m) < 2 {
+		return true
+	}
 	var keys []ColExpr
 	for i := range m {
 		keys = append(keys, i)

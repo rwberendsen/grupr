@@ -2,29 +2,33 @@ package semantics
 
 import (
 	"fmt"
+	"log"
+	"time"
 
 	"github.com/rwberendsen/grupr/internal/syntax"
 	"gopkg.in/yaml.v3"
 )
 
 type Grupin struct {
-	Classes map[string]syntax.Class
-	GlobalUserGroups GlobalUserGroups
+	Classes           map[string]syntax.Class
+	GlobalUserGroups  GlobalUserGroups
 	UserGroupMappings map[string]UserGroupMapping
-	Products map[string]Product
+	Products          map[string]Product
 	// NB: ConsumingServices (e.g., a virtualisation tool, or, a file export tool) can be handled in a different top level YAML format
 	// NB: Are we going to do anything with the BusinessPartner concept, where it could take the value of big customers, for example?
 	// 	 And the ThirdParty concept, for when we ship data to a third party?
 	// 	 And the Application concept (app), for when we ship data intended for a downstream application, a logical app, could be operational one, being outside of our system?
-        //	 For now, these bigger changes are outside of the scope, and even when in scope, perhaps they can be handled outside of the Grupin data structure.
+	//	 For now, these bigger changes are outside of the scope, and even when in scope, perhaps they can be handled outside of the Grupin data structure.
 }
 
 func NewGrupin(gSyn syntax.Grupin) (Grupin, error) {
+	start := time.Now()
+	log.Printf("Validating deserialized YAML documents...\n")
 	gSem := Grupin{
-		Classes: gSyn.Classes,
-		GlobalUserGroups: newGlobalUserGroups(*gSyn.GlobalUserGroups),
+		Classes:           gSyn.Classes,
+		GlobalUserGroups:  newGlobalUserGroups(*gSyn.GlobalUserGroups),
 		UserGroupMappings: map[string]UserGroupMapping{},
-		Products: map[string]Product{},
+		Products:          map[string]Product{},
 	}
 	for k, v := range gSyn.UserGroupMappings {
 		if ugm, err := newUserGroupMapping(v, gSem.GlobalUserGroups); err != nil {
@@ -35,13 +39,15 @@ func NewGrupin(gSyn syntax.Grupin) (Grupin, error) {
 	}
 	for k, v := range gSyn.Products {
 		if p, err := newProduct(v, gSem.Classes, gSem.GlobalUserGroups, gSem.UserGroupMappings); err != nil {
-			return gSem,  err
+			return gSem, err
 		} else {
 			gSem.Products[k] = p
 		}
 	}
 	for iid, v := range gSyn.Interfaces {
-		if err := gSem.validateInterfaceID(iid); err != nil { return gSem, err }
+		if err := gSem.validateInterfaceID(iid); err != nil {
+			return gSem, err
+		}
 		dtaps := gSem.Products[iid.ProductID].DTAPs.DTAPRendering
 		parent := gSem.Products[iid.ProductID].InterfaceMetadata
 		if im, err := newInterfaceMetadata(v.InterfaceMetadata, gSem.Classes, gSem.GlobalUserGroups, gSem.UserGroupMappings, dtaps, &parent); err != nil {
@@ -56,6 +62,8 @@ func NewGrupin(gSyn syntax.Grupin) (Grupin, error) {
 	if err := gSem.allDisjoint(); err != nil {
 		return gSem, err
 	}
+	t := time.Now()
+	log.Printf("Validating deserialized YAML documents took %v\n", t.Sub(start))
 	return gSem, nil
 }
 
@@ -67,7 +75,7 @@ func (g Grupin) allConsumedOk() error {
 			}
 			if _, ok := g.Products[iid.ProductID].Interfaces[iid.ID]; !ok {
 				return &SetLogicError{
-						fmt.Sprintf("product '%s': consumed interface '%s': interface not found", p.ID, iid),
+					fmt.Sprintf("product '%s': consumed interface '%s': interface not found", p.ID, iid),
 				}
 			}
 			// TODO: think: this policy is also checked when creating the product semantic object, perhaps remove check in one of these places.
