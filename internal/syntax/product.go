@@ -5,11 +5,11 @@ import (
 )
 
 type Product struct {
-	ID                string        `yaml:"id"`
-	DTAPs             DTAPSpec      `yaml:"dtaps,flow,omitempty"`
-	DTAPRendering     Rendering     `yaml:"dtap_rendering,omitempty"`
-	Consumes          []InterfaceID `yaml:",omitempty"`
-	InterfaceMetadata `yaml:"product_interface,inline"`
+	ID                string            `yaml:"id"`
+	DTAPs             DTAPSpec          `yaml:"dtaps,flow,omitempty"`
+	DTAPRendering     Rendering         `yaml:"dtap_rendering,omitempty"`
+	Consumes          []ConsumptionSpec `yaml:"consumption_spec",omitempty"`
+	InterfaceMetadata                   `yaml:"product_interface,inline"`
 }
 
 func (p *Product) validate() error {
@@ -26,6 +26,9 @@ func (p *Product) validate() error {
 		if !p.DTAPs.HasDTAP(d) {
 			return &FormattingError{fmt.Sprintf("product '%s': DTAPRendering: unknown dtap '%s'", p.ID, d)}
 		}
+	}
+	for cs := range p.Consumes {
+		if err := cs.validate(); err != nil { return err }
 	}
 	if err := p.InterfaceMetadata.validate(); err != nil {
 		return fmt.Errorf("product %s: %w", p.ID, err)
