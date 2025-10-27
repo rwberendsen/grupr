@@ -8,9 +8,9 @@ import (
 )
 
 type Product struct {
-	ID       string                      `yaml:"id"`
-	DTAPs    DTAPSpec                    `yaml:"dtaps,flow,omitempty"`
-	Consumes []syntax.ConsumptionSpec    `yaml:",omitempty"`
+	ID       string                      		  `yaml:"id"`
+	DTAPs    DTAPSpec                    		  `yaml:"dtaps,flow,omitempty"`
+	Consumes map[syntax.InterfaceID]map[string]string `yaml:",omitempty"`
 	InterfaceMetadata
 	Interfaces map[string]InterfaceMetadata
 }
@@ -20,7 +20,6 @@ func newProduct(pSyn syntax.Product, classes map[string]syntax.Class, globalUser
 	pSem := Product{
 		ID:         pSyn.ID,
 		DTAPs:      newDTAPSpec(pSyn.DTAPs, pSyn.DTAPRendering),
-		Consumes:   pSyn.Consumes,
 		Interfaces: map[string]InterfaceMetadata{},
 	}
 	if im, err := newInterfaceMetadata(pSyn.InterfaceMetadata, classes, globalUserGroups, userGroupMappings, pSem.DTAPs.DTAPRendering, nil); err != nil {
@@ -28,17 +27,16 @@ func newProduct(pSyn syntax.Product, classes map[string]syntax.Class, globalUser
 	} else {
 		pSem.InterfaceMetadata = im
 	}
-	iids := map[syntax.InterfaceID]bool
+	pSem.Consumes = map[syntax.InterfaceID]map[string]string{}
 	for _, cs := range pSyn.Consumes {
+		if _, ok := pSem.Consumes[cs.InterfaceID]; ok {
+			return pSem, fmt.Errorf("duplicate consumed interface id")
+		}
 		if cs.ProductID == pSem.ID {
 			return pSem, &PolicyError{
 				fmt.Sprintf("product '%s' not allowed to consume own interface '%s'", cs.ProductID, cs.ID),
 			}
 		}
-		if _, ok := iids[cs.InterfaceID]; ok {
-			return pSem, fmt.Errorf("duplicate consumed interface id")
-		}
-		iids[iid] = true
 		if cs.DTAPMapping != nil {
 			for k, _ := range cs.DTAPMapping {
 				if _, ok := pSem.DTAPs.NonProd[k]; !ok {
@@ -46,6 +44,7 @@ func newProduct(pSyn syntax.Product, classes map[string]syntax.Class, globalUser
 				}
 			}
 		}
+		pSem.Consumes[cs.InterfaceID] = cs.DTAPMapping
 	}
 	return pSem, nil
 }
@@ -61,8 +60,15 @@ func (lhs Product) Equal(rhs Product) bool {
 	if !lhs.DTAPs.Equal(rhs.DTAPs) {
 		return false
 	}
-	if !maps.Equal(lhs.Consumes, rhs.Consumes) {
-		return false
+	for lhsKey, lhsValue := range lhs.Consumes {
+		if rhsValue, ok := rhs.Consumes[lhsKey]; !ok {
+			return false
+		} else {
+			if !maps.Equal(lhsValue, rhsValue) { return false }
+		}
+	}
+	for rhsKey, _ := range rhs.Consumes {
+		if _, ok := lhs.Consumes[rhsKey]; !ok { return false }
 	}
 	if !lhs.InterfaceMetadata.Equal(rhs.InterfaceMetadata) {
 		return false

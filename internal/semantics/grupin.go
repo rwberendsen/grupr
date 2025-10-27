@@ -69,7 +69,7 @@ func NewGrupin(gSyn syntax.Grupin) (Grupin, error) {
 
 func (g Grupin) allConsumedOk() error {
 	for _, p := range g.Products {
-		for iid := range p.Consumes {
+		for iid, dtapMapping := range p.Consumes {
 			if _, ok := g.Products[iid.ProductID]; !ok {
 				return &SetLogicError{fmt.Sprintf("product '%s': consumed interface '%s': product not found", p.ID, iid)}
 			}
@@ -84,6 +84,14 @@ func (g Grupin) allConsumedOk() error {
 			}
 			if p.Classification < g.Products[iid.ProductID].Interfaces[iid.ID].Classification {
 				return &PolicyError{fmt.Sprintf("product '%s' consumes interface with higher classification", p.ID)}
+			}
+			// check DTAP mapping
+			for _, dtap_source := range dtapMapping {
+				hasDTAP := dtap_source == g.Products[iid.ProductID].DTAPs.Prod
+				if _, ok := g.Products[iid.ProductID].DTAPs.NonProd[dtap_source]; ok { hasDTAP = true }
+				if !hasDTAP {
+					return &SetLogicError{fmt.Sprintf("product '%s': consumed interface '%s': dtap '%s': dtap not found", p.ID, iid, dtap_source)}
+				}
 			}
 		}
 		for id, im := range p.Interfaces {

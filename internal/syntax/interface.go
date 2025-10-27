@@ -7,7 +7,7 @@ import (
 type Interface struct {
 	ID                string `yaml:"id"`
 	ProductID         string `yaml:"product_id"`
-	InterfaceMetadata `yaml:"interface_metadata,inline"`
+	InterfaceMetadata `yaml:",inline"`
 }
 
 func (i *Interface) validate() error {
