@@ -86,11 +86,18 @@ func (g Grupin) allConsumedOk() error {
 				return &PolicyError{fmt.Sprintf("product '%s' consumes interface with higher classification", p.ID)}
 			}
 			// check DTAP mapping
-			for _, dtap_source := range dtapMapping {
-				hasDTAP := dtap_source == g.Products[iid.ProductID].DTAPs.Prod
-				if _, ok := g.Products[iid.ProductID].DTAPs.NonProd[dtap_source]; ok { hasDTAP = true }
+			for _, dtapSource := range dtapMapping {
+				hasDTAP := dtapSource == g.Products[iid.ProductID].DTAPs.Prod
+				if _, ok := g.Products[iid.ProductID].DTAPs.NonProd[dtapSource]; ok { hasDTAP = true }
 				if !hasDTAP {
-					return &SetLogicError{fmt.Sprintf("product '%s': consumed interface '%s': dtap '%s': dtap not found", p.ID, iid, dtap_source)}
+					return &SetLogicError{fmt.Sprintf("product '%s': consumed interface '%s': dtap '%s': dtap not found", p.ID, iid, dtapSource)}
+				}
+			}
+			for dtapSelf, _ := range p.DTAPs.NonProd {
+				if _, ok := dtapMapping[dtapSelf]; !ok {
+					if _, ok := g.Products[iid.ProductID].DTAPs.NonProd[dtapSelf]; !ok {
+						return &SetLogicError{fmt.Sprintf("product '%s': consumed interface '%s': dtap '%s': dtap not found", p.ID, iid, dtapSelf)}
+					}
 				}
 			}
 		}

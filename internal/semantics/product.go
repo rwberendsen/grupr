@@ -37,14 +37,16 @@ func newProduct(pSyn syntax.Product, classes map[string]syntax.Class, globalUser
 				fmt.Sprintf("product '%s' not allowed to consume own interface '%s'", cs.ProductID, cs.ID),
 			}
 		}
-		if cs.DTAPMapping != nil {
-			for k, _ := range cs.DTAPMapping {
-				if _, ok := pSem.DTAPs.NonProd[k]; !ok {
-					return pSem, fmt.Errorf("Unknown non-production DTAP specified in consumption spec dtap mapping")
-				}
+		for k, _ := range cs.DTAPMapping {
+			if _, ok := pSem.DTAPs.NonProd[k]; !ok {
+				return pSem, fmt.Errorf("Unknown non-production DTAP specified in consumption spec dtap mapping")
 			}
 		}
-		pSem.Consumes[cs.InterfaceID] = cs.DTAPMapping
+		if cs.DTAPMapping == nil {
+			pSem.Consumes[cs.InterfaceID] = map[string]string{} 
+		} else {
+			pSem.Consumes[cs.InterfaceID] = cs.DTAPMapping
+		}
 	}
 	return pSem, nil
 }
