@@ -26,12 +26,12 @@ func (i InterfaceMetadata) validate() error {
 		}
 	}
 	if i.UserGroupMapping != "" {
-		if err := validateID(i.UserGroupMapping); err != nil {
+		if err := validateIDPart(i.UserGroupMapping); err != nil {
 			return fmt.Errorf("user_group_mapping: %w", err)
 		}
 	}
 	for _, u := range i.UserGroups {
-		if err := validateID(u); err != nil {
+		if err := validateIDPart(u); err != nil {
 			return fmt.Errorf("UserGroup %s: %w", u, err)
 		}
 		if err := hasUniqueStrings(i.UserGroups); err != nil {
@@ -47,7 +47,7 @@ func (i InterfaceMetadata) validate() error {
 		return fmt.Errorf("no objects specified, but objects to exclude were specified")
 	}
 	for _, d := range i.ExposeDTAPs {
-		if err := validateID(d); err != nil {
+		if err := validateIDPart(d); err != nil {
 			return fmt.Errorf("ExposeDTAPs: %w", err)
 		}
 	}
@@ -60,7 +60,7 @@ func (i InterfaceMetadata) validate() error {
 		}
 	}
 	if i.ForProduct != nil {
-		if err := validateID(*i.ForProduct); err != nil {
+		if err := validateIDPart(*i.ForProduct); err != nil {
 			return fmt.Errorf("ForProduct: %w", err)
 		}
 	}

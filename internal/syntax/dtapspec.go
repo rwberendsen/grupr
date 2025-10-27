@@ -12,13 +12,13 @@ type DTAPSpec struct {
 func (d DTAPSpec) validate() error {
 	dtaps := map[string]bool{}
 	if d.Prod != "" {
-		if err := validateID(d.Prod); err != nil {
+		if err := validateIDPart(d.Prod); err != nil {
 			return fmt.Errorf("prod DTAP id: %w", err)
 		}
 	}
 	dtaps[d.Prod] = true
 	for _, i := range d.NonProd {
-		if err := validateID(i); err != nil {
+		if err := validateIDPart(i); err != nil {
 			return fmt.Errorf("non prod DTAP id: %w", err)
 		}
 		if _, ok := dtaps[i]; ok {

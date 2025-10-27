@@ -18,3 +18,18 @@ also one or more database roles are created (one per database).
 
 Every data product business role is granted all database roles that group its own objects, and is granted all database roles that group objects
 of interfaces it consumes.
+
+Example database role names:
+
+```
+_X_MY_PRODUCT_X_MY_DTAP_X_MY_INTERFACE_X_R
+```
+
+Note that `_X_` acts like an infix. We have here a role name that has three parts: a product name, a dtap, an interface name, and a mode (`R`, for read-only, in this case).
+Also note that here we use `_X_` also as a prefix. This way we can mark all roles that grupr is managing.
+
+An example business role name:
+
+```
+_X_MY_PRODUCT_X_MY_DTAP_X_R
+```

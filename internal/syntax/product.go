@@ -13,7 +13,7 @@ type Product struct {
 }
 
 func (p *Product) validate() error {
-	if err := validateID(p.ID); err != nil {
+	if err := validateIDPart(p.ID); err != nil {
 		return err
 	}
 	if err := p.DTAPs.validate(); err != nil {
