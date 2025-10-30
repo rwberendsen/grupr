@@ -3,11 +3,13 @@ package snowflake
 // couple of simple data structures to hold matched objects in account
 type AccountObjs struct {
 	DBs map[string]DBObjs
+	Version int
 }
 
 type DBObjs struct {
 	Schemas  map[string]SchemaObjs
 	MatchAll bool
+	Version int
 }
 
 type SchemaObjs struct {
@@ -17,6 +19,7 @@ type SchemaObjs struct {
 	Tables   map[string]bool
 	Views    map[string]bool
 	MatchAll bool
+	Version int
 }
 
 func (o AccountObjs) addDB(db string, matchAllSchemas bool) AccountObjs {

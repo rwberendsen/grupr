@@ -10,8 +10,9 @@ import (
 
 // caching objects in Snowflake locally
 type accountCache struct {
+	// TODO: think about whether it makes sense to cache also privileges granted to (database) roles
 	dbs     map[string]*dbCache
-	dbNames map[string]bool
+	version int // 0, 1, 2, ..
 }
 
 func newAccountCache() *accountCache {
@@ -21,7 +22,7 @@ func newAccountCache() *accountCache {
 type dbCache struct {
 	dbName      string
 	schemas     map[string]*schemaCache
-	schemaNames map[string]bool
+	version int
 }
 
 type schemaCache struct {
@@ -32,6 +33,7 @@ type schemaCache struct {
 	// viewNames can contain duplicate keys wrt each other
 	tableNames map[string]bool
 	viewNames  map[string]bool
+	version int
 }
 
 func escapeIdentifier(s string) string {
@@ -44,7 +46,6 @@ func escapeString(s string) string {
 
 func (c *accountCache) addDBs() {
 	c.dbs = map[string]*dbCache{}
-	c.dbNames = map[string]bool{}
 	c.addDBs_()    // we'd like to capture empty db's as well
 	c.addSchemas() // and empty schema's
 
@@ -87,11 +88,9 @@ func (c *accountCache) addDBs_() {
 
 func (c *accountCache) addDB(dbName string) {
 	if _, ok := c.dbNames[dbName]; !ok {
-		c.dbNames[dbName] = true
 		c.dbs[dbName] = &dbCache{
 			dbName:      dbName,
 			schemas:     map[string]*schemaCache{},
-			schemaNames: map[string]bool{},
 		}
 	}
 }
@@ -218,18 +217,18 @@ func (c *accountCache) addView(dbName, schemaName, viewName string) {
 	// ignore, view must have been created after we queried dbNames and schemaNames
 }
 
-func (c *accountCache) getDBs() map[string]*dbCache {
-	if c.dbs == nil {
+func (c *accountCache) getDBsNewerThan(AccountVersion int) map[string]bool, int {
+	sync.mu.Lock()
+	if c.version == newerThanAccountVersion {
 		c.addDBs()
+		c.version += 1
 	}
-	return c.dbs
+	defer sync.mu.UnLock()
+	return c.dbNames, c.version
 }
 
-func (c *accountCache) getDBnames() map[string]bool {
-	if c.dbNames == nil {
-		c.addDBs()
-	}
-	return c.dbNames
+func (c *accountCache) getDBs() (map[string]bool, int) {
+	return getDBsNewerThan(0)
 }
 
 // below methods are wrappers around attributes, they could be used to
@@ -239,11 +238,8 @@ func (c *dbCache) getSchemas() map[string]*schemaCache {
 	return c.schemas
 }
 
-func (c *dbCache) getSchemaNames() map[string]bool {
-	return c.schemaNames
-}
-
 func (c *schemaCache) getTableNames() map[string]bool {
+	// TODO 1: also check if schema / database is still there
 	return c.tableNames
 }
 

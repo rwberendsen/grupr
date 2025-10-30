@@ -41,14 +41,17 @@ func matchPart(e semantics.ExprPart, l map[string]bool) map[string]bool {
 
 func match(e semantics.ObjExpr, c *accountCache) AccountObjs {
 	o := AccountObjs{}
-	matchedDBs := matchPart(e[semantics.Database], c.getDBnames())
+	dbs, accountVersion := c.getDBs()
+	matchedDBs := matchPart(e[semantics.Database], dbNames)
+	o.Version = accountVersion
 	for db := range matchedDBs {
-		o = o.addDB(db, e[semantics.Schema].MatchAll())
-		matchedSchemas := matchPart(e[semantics.Schema], c.getDBs()[db].getSchemaNames())
+		schemaNames, dbVersion := c.getDBs()[db].getSchemas()
+		matchedSchemas := matchPart(e[semantics.Schema], schemaNames)
+		o = o.addDB(db, e[semantics.Schema].MatchAll(), dbVersion)
 		for schema := range matchedSchemas {
-			o = o.addSchema(db, schema, e[semantics.Table].MatchAll())
-			matchedTables := matchPart(e[semantics.Table], c.getDBs()[db].getSchemas()[schema].getTableNames())
-			matchedViews := matchPart(e[semantics.Table], c.getDBs()[db].getSchemas()[schema].getViewNames())
+			objectNames, schemaVersion := c.getDBs()[db].getSchemas()[schema].getObjectNames()
+			matchedObjects := matchPart(e[semantics.Table], objectNames)
+			o = o.addSchema(db, schema, e[semantics.Table].MatchAll(), schemaVersion)
 			for t := range matchedTables {
 				o = o.addTable(db, schema, t)
 			}
