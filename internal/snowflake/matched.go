@@ -45,11 +45,11 @@ func match(e semantics.ObjExpr, c *accountCache) AccountObjs {
 	matchedDBs := matchPart(e[semantics.Database], dbNames)
 	o.Version = accountVersion
 	for db := range matchedDBs {
-		schemaNames, dbVersion := c.getDBs()[db].getSchemas()
+		schemas, dbVersion := dbs[db].getSchemas(c)
 		matchedSchemas := matchPart(e[semantics.Schema], schemaNames)
 		o = o.addDB(db, e[semantics.Schema].MatchAll(), dbVersion)
 		for schema := range matchedSchemas {
-			objectNames, schemaVersion := c.getDBs()[db].getSchemas()[schema].getObjectNames()
+			objectNames, schemaVersion := schemas[schema].getObjectNames(c)
 			matchedObjects := matchPart(e[semantics.Table], objectNames)
 			o = o.addSchema(db, schema, e[semantics.Table].MatchAll(), schemaVersion)
 			for t := range matchedTables {

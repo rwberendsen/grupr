@@ -5,12 +5,14 @@ import (
 	"database/sql"
 	"log"
 	"strings"
+	"sync"
 	"time"
 )
 
 // caching objects in Snowflake locally
 type accountCache struct {
 	// TODO: think about whether it makes sense to cache also privileges granted to (database) roles
+	mu	sync.Mutex // guards dbs and version
 	dbs     map[string]*dbCache
 	version int // 0, 1, 2, ..
 }
@@ -21,6 +23,7 @@ func newAccountCache() *accountCache {
 
 type dbCache struct {
 	dbName      string
+	mu 		sync.Mutex // guards schemas and version
 	schemas     map[string]*schemaCache
 	version int
 }
@@ -28,11 +31,8 @@ type dbCache struct {
 type schemaCache struct {
 	dbName     string
 	schemaName string
-	// note that if during run time a table is removed, and a view is
-	// created with the same name or vice versa then tableNames and
-	// viewNames can contain duplicate keys wrt each other
-	tableNames map[string]bool
-	viewNames  map[string]bool
+	mu		sync.Mutex // guards objects and version
+	objects		map[string]int // 0: table, 1: view
 	version int
 }
 
@@ -218,12 +218,12 @@ func (c *accountCache) addView(dbName, schemaName, viewName string) {
 }
 
 func (c *accountCache) getDBsNewerThan(AccountVersion int) map[string]bool, int {
-	sync.mu.Lock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.version == newerThanAccountVersion {
 		c.addDBs()
 		c.version += 1
 	}
-	defer sync.mu.UnLock()
 	return c.dbNames, c.version
 }
 
@@ -238,9 +238,50 @@ func (c *dbCache) getSchemas() map[string]*schemaCache {
 	return c.schemas
 }
 
-func (c *schemaCache) getTableNames() map[string]bool {
-	// TODO 1: also check if schema / database is still there
-	return c.tableNames
+func (c *schemaCache) getObjectsNewerThan(a *accountCache, accountVersion, db, dbVersion, schema, schemaVersion) map[string]bool {
+	dbs, accountVersion := a.getDBsNewerThan(accountVersion)
+	if _, ok := dbs[db]; !ok { return (map[string]bool{}, 0) }
+	schemas, dbVersion := dbs[db].getSchemasNewerThan(db, dbVersion)
+	if _, ok := schemas[schema]; !ok { return (map[string]bool{}, 0) }
+	c.mu.Lock()
+	defer c.mu.Unlock
+	c.getObjectsHelper()
+}
+
+func (c *schemaCache) getObjects() map[string]bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.getObjectsHelper()
+	// here, or in helper
+	start := time.Now()
+	log.Printf("Querying Snowflake for view names...\n")
+	rows, err := getDB().QueryContext(ctx, `SHOW TERSE OBJECTS IN SCHEMA database.schema`)
+	// prepare for error where db or schema no longer exists, can be normal, just return empty list
+	if err != nil {
+		errc <- err
+		return
+	}
+	for rows.Next() {
+		var dbName string
+		var schemaName string
+		var viewName string
+		if err = rows.Scan(&dbName, &schemaName, &viewName); err != nil {
+			errc <- err
+			return
+		}
+		c.addView(dbName, schemaName, viewName)
+	}
+	if err := rows.Close(); err != nil {
+		errc <- err
+		return
+	}
+	if err = rows.Err(); err != nil {
+		errc <- err
+		return
+	}
+	errc <- nil // caller will block on receiving err
+	t := time.Now()
+	log.Printf("Querying Snowflake for view names took %v\n", t.Sub(start))
 }
 
 func (c *schemaCache) getViewNames() map[string]bool {
