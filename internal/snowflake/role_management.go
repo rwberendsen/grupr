@@ -4,7 +4,11 @@ const Prefix = "_x_"
 
 func DryRun(grupin semantics.Grupin, sfGrupin Grupin) []*BasicStats {
 	/*
+
+	TODO: somewhere (main package?) subscribe to SIGTERM and cancel DB context upon recpetion
+
 	for every product,
+		go ... (do each product in parallel? while within a product do stuff sequentially?)
 		for every dtap in product
 			create read-only business role if it does not exist
 			for every database in matched Snowflake objects

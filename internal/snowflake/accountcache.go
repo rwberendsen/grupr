@@ -282,6 +282,8 @@ func (c *schemaCache) getObjects() map[string]bool {
 	errc <- nil // caller will block on receiving err
 	t := time.Now()
 	log.Printf("Querying Snowflake for view names took %v\n", t.Sub(start))
+	// TODO: also delete existing objects from cache that are no longer there.
+	// TODO: and leave alone entries that are already there.
 }
 
 func (c *schemaCache) getViewNames() map[string]bool {
