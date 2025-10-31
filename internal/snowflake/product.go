@@ -1,6 +1,8 @@
 package snowflake
 
 import (
+	"context"
+
 	"github.com/rwberendsen/grupr/internal/semantics"
 )
 
@@ -9,7 +11,7 @@ type Product struct {
 	Interfaces map[string]Interface
 }
 
-func newProduct(p semantics.Product, c *accountCache) Product {
+func newProduct(ctx context.Context, p semantics.Product, c *accountCache) (Product, error) {
 	// lazily reads which objects exist in Snowflake and adds them to c, modifying c
 	r := Product{Interfaces: map[string]Interface{}}
 	r.Matched = newMatched(p.ObjectMatcher, c)
