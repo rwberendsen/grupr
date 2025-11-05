@@ -169,12 +169,13 @@ lot.
 ### Removing objects from the YAML
 If we remove objects from the YAML, then Grupr will take action accordingly.
 If we remove object matching expressions from a product, then Grupr will revoke
-privileges on those objects from the product role. If we move an object expression
-from one product to another, then Grupr will first grant the other product read-only
-privileges, before revoking them from the the first product, to prevent downtime
-of consuming processes. When it comes to transferring ownership while moving an
-object expression from product A to B, then yes, this may have to be coordinated
-in a tight time period with a change in the processes creating tables. 
+privileges on those objects from the product role. If we move an object
+expression from one product to another, then Grupr will first grant the other
+product read-only privileges, before revoking them from the the first product,
+to prevent downtime of consuming processes. When it comes to transferring
+ownership while moving an object expression from product A to B, then yes, this
+may have to be coordinated in a tight time period with a change in the
+processes creating tables. 
 
 As an example, what happens when we move an object X from product A to product B?
 Grupr will:
@@ -194,9 +195,16 @@ dropped product, but are now no longer matched by any product, then what
 happens?  Ownership will now be transferred to the role that DROPs the
 previously owning role: the Grupr role will become the new owner. If the
 product role had been granted to other roles, those roles now lose all the
-privileges they had been granted through it. In a subsequent run, these objects
-could be included in a new product, and then Grupr would transfer ownership of
-the objects from its own role to the new product role.
+privileges they had been granted through it. And if the former product role was
+the grantor of any grants to other roles, then these grants will be revoked.
+This could impact business continuity. As a best practice, if you caused the
+product role Grupr was managing to appear as the grantor or grantee in any
+additional grants, on top of what Grupr did, then before you remove this
+product from the YAML, you should evaluate what to do about these additional
+grants. If you do remove a product from the YAML, then, in a subsequent run,
+the previsouly matched objects could be included in a new product, and then
+Grupr would transfer ownership of the objects from its own role to the new
+product role.
 
 ### Discussion
 
