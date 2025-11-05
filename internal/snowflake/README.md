@@ -42,7 +42,25 @@ This means products can combine certain data sources only. If a skilled
 employee is a member of several teams, or even if one team works on several
 data products, still, in any particular session, only one product role should
 be active. Because only a product role can give the context in which the
-specific combination of data sources is authorised. For that reason, it is
+specific combination of data sources is authorised. 
+
+Also generic roles, such as an orchestrator role for all ETL pipelines, 
+should ideally not own all the objects that happened to be created by jobs
+on the orchestration platform. These objects, part of different data products,
+should be owned by specific data product roles, so that they can be managed
+effectively as being part of that data product. While you may require in your
+organisation an actual service account per data product, it may suffice also
+to still use a simple generic service account, and grant it a separate role
+for each data product. This way, you don't have that many users to manage, 
+but you still enjoy some separattion of concerns. Similarly, a visualisation
+platform should ideally not have access to the union of all the objects used 
+in any of the reports built on this platform. These reports may have very
+different classifications and sensitivity. Again, perhaps managing a multitude
+of users may not be necessary, but at least, separate access to objects in 
+distinct roles to assume. This works, as long as no secondary roles are activated
+by these service accounts.
+
+For these reasons, it is
 recommended to *set an account wide default session policy that would not allow
 secondary roles to be activated*. If needed in particular contexts, this can be
 overridden on the user level. Or, if you have certain roles in your
@@ -51,8 +69,8 @@ roles, then you can allow the activation of only those roles.
 
 ### Read-only priveleges
 For each data product, per dtap environment, a read-only business role is
-created. It uses a prefix like `_grupr_` so that grupr can enumerate all the
-roles it is managing. 
+created. It uses a configurable prefix like `_X_` so that grupr can enumerate
+all the roles it is managing. 
 
 All objects that belong to a data product are grouped in per-product per-dtap
 database roles. If the data product has interfaces, for each interface also one
@@ -69,10 +87,10 @@ _X_MY_PRODUCT_X_MY_DTAP_X_MY_INTERFACE_X_R
 _X_MY_PRODUCT_X_MY_DTAP_X_R
 ```
 
-Note that `_X_` acts like an infix. We have here a role name that has three
-parts: a product name, a dtap, an interface name, and a mode (`R`, for
-read-only, in this case).  Also note that here we use `_X_` also as a prefix.
-This way we can mark all roles that grupr is managing.
+Note that `_X_` acts like a (configurable) infix. We have here a role name that
+has three parts: a product name, a dtap, an interface name, and a mode (`R`,
+for read-only, in this case).  Also note that here we use `_X_` also as a
+prefix.  This way we can mark all roles that grupr is managing.
 
 Privileges granted to the database roles: USAGE on DATABASE and SCHEMA; SELECT
 and REFERENCES on objects. If all objects in a schema or database are matched
