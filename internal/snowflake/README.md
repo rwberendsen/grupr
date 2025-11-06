@@ -204,6 +204,13 @@ Grupr will:
 - revoke read access on X from product A (by revoking the database role)
 - transfer ownership of X from product A to product B, copying outbound grants
 
+TODO: check if it makes sense to transfer ownership first thing, because it
+appears that when we grant privileges on objects using the grupr role, the
+grantor listed is the owner of the object, not the role issuing the grant.  It
+will be more correct if the grantor would be the product write role, rather
+than whatever role existed before that originally created the objects in
+question. Validate this behaviour in Snowflake.
+
 Between these steps, odd situations can exist, where product B has read access,
 but no ownership yet. Eventually though, even if Grupr for some reason crashed
 in between, it will converge on the desired end state.
