@@ -138,18 +138,20 @@ Privileges granted to this role:
 
 - USAGE of the read-only database roles of the product
 - USAGE of the read-only database roles of the interfaces consumed by the product
-- OWNERSHIP of objects: TODO: test this: if CREATE is allowed in a database
-  role, and a business role that has been granted the CREATE privilege through
-  the database role: will the database role be listed as owner of the object or
-  will the business role be listed? In the former case, we could group OWNERSHIP
-  grants in database roles, it would be easier to manage.  But it seems more
-  likely that Snowflake would list a business role as the owner, in that case, we
-  should directly transfer ownership on objects to this business role.
+- OWNERSHIP of objects:
 - If all objects in a schema or database are matched in the YAML object
   expression, then OWNERSHIP is granted on future objects as well.
 - CREATE SCHEMA on the database level
 - CREATE TABLE / VIEW on the schema level (as of now, dynamic, event, and
   iceberg tables are not yet in scope of Grupr)
+
+Note that we are directly granting ownership to the business role, rather than
+to database roles granted to the business role. That is because if CREATE is
+allowed in a database role, and a business role that has been granted the
+CREATE privilege through the database role creates an object, then the business
+role is going to be listed as the owner; not the database role. Perhaps it is
+more intuitive then if the ownership of existing objects would also be
+transferred directly to the business role.
 
 Transferring ownership is tricky business. For certain object types, specific
 requirements apply, such as that pipes must be paused, and tasks are suspended
@@ -172,10 +174,10 @@ role. That's why the grupr service account user has to have a session policy
 overriding the recommended account level session policy that allows no
 secondary roles; the Grupr service account should be allowed to activate all
 roles it has been granted as a secondary role. As an intricate detail, a side
-effect of the COPY GRANTS action is that if any of the outbound privileges
-had been re-granted by the grantees, then these grants can no longer be revoked
-in one go by a REVOKE FROM ROLE statemetent with the CASCADE option, because
-they have a different grantor (the previous owner).
+effect of the COPY GRANTS action is that if any of the outbound privileges had
+been re-granted by the grantees, then these grants can no longer be revoked in
+one go by a REVOKE FROM ROLE statemetent with the CASCADE option, because they
+have a different grantor (the previous owner).
 
 Note that, apart from OWNERSHIP, Grupr will leave additional outbound
 privileges granted on objects alone, it will even copy them, ensuring they are
@@ -244,6 +246,12 @@ practices. For example, atomic deployments, where we first clone a production
 schema to a staging schema (copying grants), run a transformation job
 consisting of numerous queries in batch fashion, and then swap the production
 schema with the staging schema using an ALTER SCHEMA ... SWAP WITH statement.
+Incidentally, allowing a product write role to do this pattern, including
+copying grants, and then potentially running a complicated transformation job
+for an extended period of time has consequences for Grupr. Grupr could allow
+grants to exist on tables not part of interfaces defined in the YAML, when the
+grantor is the data product write role itself, and the grantee is a consumer of
+one of the data product its interfaces.
 
 What operations teams can expect from adopting grupr is a way of working in
 which they can report to enterprise governance teams on the data they are 
