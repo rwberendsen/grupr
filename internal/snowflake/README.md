@@ -177,7 +177,10 @@ roles it has been granted as a secondary role. As an intricate detail, a side
 effect of the COPY GRANTS action is that if any of the outbound privileges had
 been re-granted by the grantees, then these grants can no longer be revoked in
 one go by a REVOKE FROM ROLE statemetent with the CASCADE option, because they
-have a different grantor (the previous owner).
+have a different grantor (the previous owner). Finally, note that the COPY
+GRANTS bit may take a long time, and the GRANT OWNERSHIP query may time out
+as a result; Snowflake documentation suggests in that case to retry the 
+statement, saying it will continue where it left off.
 
 Note that, apart from OWNERSHIP, Grupr will leave additional outbound
 privileges granted on objects alone, it will even copy them, ensuring they are
