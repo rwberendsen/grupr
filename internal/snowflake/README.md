@@ -201,18 +201,32 @@ may have to be coordinated in a tight time period with a change in the
 processes creating tables. 
 
 As an example, what happens when we move an object X from product A to product B?
-Grupr will:
+Grupr will, when it is working on product B:
 
-- grant read access on X to product B (by granting the database role)
-- revoke read access on X from product A (by revoking the database role)
-- transfer ownership of X from product A to product B, copying outbound grants
+- GRANT read privileges on X to product B its database role.
+- If X is part of any interfaces in product B, GRANT read privileges on X to
+  the respective database roles in product B.
+- GRANT OWNERSHIP of X to product B: this will affect also product A; copy
+  outbound grants.
+- GRANT CREATE SCHEMA on the database level to product B.
+- GRANT CREATE TABLE / VIEW on the schema level to product B.
+- If all objects in a schema or database are matched by X its object
+  expression, then OWNERSHIP is granted to product B on future objects as well.
 
-TODO: check if it makes sense to transfer ownership first thing, because it
-appears that when we grant privileges on objects using the grupr role, the
-grantor listed is the owner of the object, not the role issuing the grant.  It
-will be more correct if the grantor would be the product write role, rather
-than whatever role existed before that originally created the objects in
-question. Validate this behaviour in Snowflake.
+Concurrently, when Grupr is working on product A, nothing is changed at first,
+because if we were to REVOKE concurrently any rights from A, it could happen 
+before product B is worked on by GRUPR, an in the meantime, no role would have
+CREATE rights, and no consumers would have read rights.
+
+Suppose also there is a consumer product C that was consuming an interface from
+product A before, which contained X. In the new YAML, suppose C is now consuming
+an interface from product B that contains X. When treating product C, Grupr will:
+
+- GRANT read only database roles of the interfaces in product B that product C
+  is consuming.
+
+Only when all products have been granted the necessary privileges for the new
+situation will grupr run another round to revoke redundant privileges.
 
 Between these steps, odd situations can exist, where product B has read access,
 but no ownership yet. Eventually though, even if Grupr for some reason crashed
