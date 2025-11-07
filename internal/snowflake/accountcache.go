@@ -14,11 +14,11 @@ type accountCache struct {
 	// TODO: think about whether it makes sense to cache also privileges granted to (database) roles
 	mu	sync.Mutex // guards dbs and version
 	dbs     map[string]*dbCache
-	version int // 0, 1, 2, ..
+	version int
 }
 
 func newAccountCache() *accountCache {
-	return &accountCache{}
+	return &accountCache{dbs: map[string]*dbCache{}, version: 0}
 }
 
 type dbCache struct {
@@ -44,55 +44,50 @@ func escapeString(s string) string {
 	return strings.ReplaceAll(s, "'", "\\'")
 }
 
-func (c *accountCache) addDBs() {
-	c.dbs = map[string]*dbCache{}
-	c.addDBs_()    // we'd like to capture empty db's as well
-	c.addSchemas() // and empty schema's
+func (c *accountCache) getDBs(accountVersion int) (map[string]*dbCache, int, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if accountVersion < c.version {
+		return c.dbs, c.version, nil
+	}
+	err := c.addDBs()
+	if err != nil { return c.dbs, c.version, err }
+	c.version += 1
+	return c.dbs, c.version, nil
+}
 
-	// query tables and views in parallel
-	ctx, cancel := context.WithCancel(context.Background())
-	errc := make(chan error, 2) // both routines can send once to errc without blocking
-	go addTables(ctx, c, errc)
-	go addViews(ctx, c, errc)
+func (c *accountCache) addDBs() error {
+	dbNames, err := queryDBs()
+	if err != nil { return err }
+	c.processDBs(dbNames)
+}
 
-	// receive twice from errc to wait for both routines
-	for i := 0; i < 2; i++ {
-		err := <-errc
-		if err != nil {
-			cancel()              // in case the other routine was still running, it can stop now
-			log.Fatalf("%s", err) // TODO: behave and return error instead
+func (c *accountCache) processDBs(dbNames map[string]bool) {
+	for dbName, _ := range dbNames {
+		if _, ok := c.dbs[dbName]; !ok {
+			c.dbs[dbName] = &dbCache{
+				dbName:      dbName,
+			}
+		}
+	}
+	for dbName, _ := range c.dbs {
+		if _, ok := dbNames[dbName]; !ok {
+			delete(c.dbs, dbName)
 		}
 	}
 }
 
-func (c *accountCache) addDBs_() {
-	start := time.Now()
-	log.Printf("Querying Snowflake for database names...\n")
-	rows, err := getDB().Query(`SELECT database_name FROM snowflake.account_usage.databases`)
-	if err != nil {
-		log.Fatalf("querying snowflake: %s", err)
+func (c *dbCache) getSchemas(dbVersion int) (map[string]*schemaCache, int, error) {
+// WIP: should we use dbCache or accountCache receiver?
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if accountVersion < c.version {
+		return c.dbs, c.version, nil
 	}
-	for rows.Next() {
-		var dbName string
-		if err = rows.Scan(&dbName); err != nil {
-			log.Fatalf("error scanning row: %s", err)
-		}
-		c.addDB(dbName)
-	}
-	if err = rows.Err(); err != nil {
-		log.Fatal(err)
-	}
-	t := time.Now()
-	log.Printf("Querying Snowflake for database names took %v\n", t.Sub(start))
-}
-
-func (c *accountCache) addDB(dbName string) {
-	if _, ok := c.dbNames[dbName]; !ok {
-		c.dbs[dbName] = &dbCache{
-			dbName:      dbName,
-			schemas:     map[string]*schemaCache{},
-		}
-	}
+	err := c.addDBs()
+	if err != nil { return c.dbs, c.version, err }
+	c.version += 1
+	return c.dbs, c.version, nil
 }
 
 func (c *accountCache) addSchemas() {
@@ -217,14 +212,15 @@ func (c *accountCache) addView(dbName, schemaName, viewName string) {
 	// ignore, view must have been created after we queried dbNames and schemaNames
 }
 
-func (c *accountCache) getDBsNewerThan(AccountVersion int) map[string]bool, int {
+func (c *accountCache) getDBsNewerThan(accountVersion int) (map[string]*dbCache, int) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.version == newerThanAccountVersion {
-		c.addDBs()
-		c.version += 1
+	if accountVersion < c.version {
+		return c.dbs, c.version
 	}
-	return c.dbNames, c.version
+	c.addDBs()
+	c.version += 1
+	return c.dbs, c.version
 }
 
 func (c *accountCache) getDBs() (map[string]bool, int) {
