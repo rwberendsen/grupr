@@ -1,25 +1,22 @@
 package snowflake
 
-// couple of simple data structures to hold matched objects in account
+// Couple of simple data structures to hold matched objects in account
 type AccountObjs struct {
 	DBs map[string]DBObjs
-	Version int
+	Version int // version with regard to accountCache
 }
 
 type DBObjs struct {
+	DBKind string
 	Schemas  map[string]SchemaObjs
 	MatchAll bool
-	Version int
+	Version int // version with regard to dbCache
 }
 
 type SchemaObjs struct {
-	// note that in case of drift during runtime tables and views may
-	// contain the same keys (i.e., if during runtime a table was removed
-	// and a view with the same name created)
-	Tables   map[string]bool
-	Views    map[string]bool
+	Objects   map[string]string
 	MatchAll bool
-	Version int
+	Version int // version with regard to schemaCache
 }
 
 func (o AccountObjs) addDB(db string, matchAllSchemas bool) AccountObjs {

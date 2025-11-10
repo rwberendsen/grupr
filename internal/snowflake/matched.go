@@ -38,7 +38,7 @@ func newMatchedAgainstAccountObjs(m semantics.ObjMatcher, o AccountObjs) Matched
 	return r
 }
 
-func matchPart(e semantics.ExprPart, l map[string]bool) map[string]bool {
+func matchPart(e semantics.ExprPart, l map[string]any) map[string]bool {
 	r := map[string]bool{}
 	if e.IsQuoted {
 		if _, ok := l[e.S]; ok {
@@ -58,16 +58,17 @@ func matchPart(e semantics.ExprPart, l map[string]bool) map[string]bool {
 	return r
 }
 
-func matchAgainstAccountCache(e semantics.ObjExpr, c *accountCache) AccountObjs {
+func matchAgainstAccountCache(e semantics.ObjExpr, c *accountCache) (AccountObjs, error) {
 	// we might decide to handle errors in a function like this, e.g., if we matched a schema, but, before we list objects in it, it was dropped, and Snowflake returns an error that the schema does not
         // exist. In that case, we might back-track, and list schemas again, and if that gives an error because the database was dropped, we might back-track and list DB's again. If Snowflake keeps throwing errors,
         // either objects are still being dropped, or perhaps we are lacking some access. What to do in such cases? Perhaps we should propagate errors further back up the chain instead?
-	o := AccountObjs{}
-	dbs, accountVersion := c.getDBs()
-	matchedDBs := matchPart(e[semantics.Database], dbNames)
-	o.Version = accountVersion
+	dbs, accountVersion, err := c.getDBs(o.Version)
+	// TODO: where is o.Version coming from? Should we make this a method that takes already an AccountObjs object; either empty or filled from a previous matching attempt; and refresh it?
+	if err != nil { return o, err }
+	o := AccountObjs{Version: accountVersion}
+	matchedDBs := matchPart(e[semantics.Database], dbs)
 	for db := range matchedDBs {
-		schemas, dbVersion := dbs[db].getSchemas(c)
+		schemas, dbVersion := dbs[db].getSchemas(dbVersion)
 		matchedSchemas := matchPart(e[semantics.Schema], schemaNames)
 		o = o.addDB(db, e[semantics.Schema].MatchAll(), dbVersion)
 		for schema := range matchedSchemas {
