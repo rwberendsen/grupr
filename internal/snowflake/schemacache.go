@@ -14,7 +14,7 @@ type schemaCache struct {
 	dbKind	   string
 	schemaName string
 	mu		sync.Mutex // guards objects and version
-	objects		map[string]int // nil: never requested; empty: none present; value: 0: table, 1: view
+	objects		map[string]string // nil: never requested; empty: none present; value: TABLE or VIEW
 	version int
 }
 
@@ -22,144 +22,54 @@ func newSchemaCache(dbName string, dbKind string, schemaName string) *schemaCach
 	return &schemaCache{dbName: dbName, dbKind: dbKind, schemaName: schemaName}
 }
 
-func (c *accountCache) getDBs(accountVersion int) (map[string]*dbCache, int, error) {
-	// WIP: adapt to schemaCache method
+func (c *schemaCache) getObjects(schemaVersion int) (map[string]*schemaCache, int, error) {
 	// Thread-safe method to get databases in an account
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.dbs == nil { c.dbs = map[string]*dbCache{} }
-	// below check is done because another thread may have already refreshed,
-	// in which case we don't need to go and fetch databases again
-	if accountVersion < c.version {
-		return c.dbs, c.version, nil
+	if c.objects == nil { c.objects = map[string]int{} }
+	// This check is done cause another thread may have refreshed already.
+	//
+	// Note that schemaVersion can be > c.version if this schema was
+	// dropped in Snowflake and later recreated between when this thread
+	// last called and now; in this case it is correct to query again.
+	if schemaVersion < c.version {
+		return c.objects, c.version, nil
 	}
-	err := c.addDBs()
+	err := c.refreshObjects()
 	if err != nil { return c.dbs, c.version, err }
 	c.version += 1
 	return c.dbs, c.version, nil
 }
 
-func addTables(ctx context.Context, c *accountCache, errc chan<- error) {
+func (c *schemaCache) refreshObjects() error {
+	// Do not directly call this function, meant to be called only from schemaCache.getObjects
+	objects, err := queryObjects(c.dbName)
+	if err != nil { return err }
+	c.objects = objects
+	return nil
+}
+
+func queryObjects(dbName string, schemaName string) (map[string]string, error) {
+	objects := map[string]string{}
 	start := time.Now()
-	log.Printf("Querying Snowflake for table names...\n")
-	invalidEntries := 0
-	rows, err := getDB().QueryContext(ctx, `SELECT table_catalog, table_schema, table_name FROM snowflake.account_usage.tables where deleted is null`)
+	log.Printf("Querying Snowflake for object names in schema: %s.%s ...\n", dbName, schemaName)
+	rows, err := getDB().Query(`SHOW TERSE OBJECTS IN SCHEMA IDENTIFIER(?) ->> SELECT "name", "kind" FROM S1`, dbName + "." + schemaName)
 	if err != nil {
-		errc <- err
-		return
+		return nil, fmt.Errorf("queryObjects error: %w", err)
 	}
 	for rows.Next() {
-		var dbName sql.NullString
-		var schemaName sql.NullString
-		var tableName sql.NullString
-		if err = rows.Scan(&dbName, &schemaName, &tableName); err != nil {
-			errc <- err
-			return
+		var objectName string
+		var objectKind string
+		if err = rows.Scan(&objectName, &objectKind); err != nil {
+			return nil, fmt.Errorf("queryObjectss: error scanning row: %w", err)
 		}
-		if !dbName.Valid || !schemaName.Valid || !tableName.Valid {
-			invalidEntries++
-		}
-		c.addTable(dbName.String, schemaName.String, tableName.String)
-	}
-	if err := rows.Close(); err != nil {
-		errc <- err
-		return
+		if _, ok := objects[objectName]; ok { return nil, fmt.Errorf("duplicate object name: %s", objectName) }
+		object[objectName] = objectKind
 	}
 	if err = rows.Err(); err != nil {
-		errc <- err
-		return
+		return nil, fmt.Errorf("queryObjects: error after looping over results: %w", err)
 	}
-	if invalidEntries > 0 {
-		log.Printf("WARN: there were entries in snowflake.account_usage.tables where table_catalog, table_schema, or table_name were null")
-	}
-	errc <- nil // caller will block on receiving err
 	t := time.Now()
-	log.Printf("Querying Snowflake for table names took %v\n", t.Sub(start))
-}
-
-func (c *accountCache) addTable(dbName, schemaName, tableName string) {
-	if dbc, ok := c.dbs[dbName]; ok {
-		if sc, ok := dbc.schemas[schemaName]; ok {
-			sc.tableNames[tableName] = true
-		}
-	}
-	// ignore, table must have been created after we queried dbNames and schemaNames
-}
-
-func addViews(ctx context.Context, c *accountCache, errc chan<- error) {
-	start := time.Now()
-	log.Printf("Querying Snowflake for view names...\n")
-	rows, err := getDB().QueryContext(ctx, `SELECT table_catalog, table_schema, table_name FROM snowflake.account_usage.views where deleted is null`)
-	if err != nil {
-		errc <- err
-		return
-	}
-	for rows.Next() {
-		var dbName string
-		var schemaName string
-		var viewName string
-		if err = rows.Scan(&dbName, &schemaName, &viewName); err != nil {
-			errc <- err
-			return
-		}
-		c.addView(dbName, schemaName, viewName)
-	}
-	if err := rows.Close(); err != nil {
-		errc <- err
-		return
-	}
-	if err = rows.Err(); err != nil {
-		errc <- err
-		return
-	}
-	errc <- nil // caller will block on receiving err
-	t := time.Now()
-	log.Printf("Querying Snowflake for view names took %v\n", t.Sub(start))
-}
-
-func (c *accountCache) addView(dbName, schemaName, viewName string) {
-	if dbc, ok := c.dbs[dbName]; ok {
-		if sc, ok := dbc.schemas[schemaName]; ok {
-			sc.viewNames[viewName] = true
-		}
-	}
-	// ignore, view must have been created after we queried dbNames and schemaNames
-}
-
-func (c *schemaCache) getObjects() map[string]bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.getObjectsHelper()
-	// here, or in helper
-	start := time.Now()
-	log.Printf("Querying Snowflake for view names...\n")
-	rows, err := getDB().QueryContext(ctx, `SHOW TERSE OBJECTS IN SCHEMA database.schema`)
-	// prepare for error where db or schema no longer exists, can be normal, just return empty list
-	if err != nil {
-		errc <- err
-		return
-	}
-	for rows.Next() {
-		var dbName string
-		var schemaName string
-		var viewName string
-		if err = rows.Scan(&dbName, &schemaName, &viewName); err != nil {
-			errc <- err
-			return
-		}
-		c.addView(dbName, schemaName, viewName)
-	}
-	if err := rows.Close(); err != nil {
-		errc <- err
-		return
-	}
-	if err = rows.Err(); err != nil {
-		errc <- err
-		return
-	}
-	errc <- nil // caller will block on receiving err
-	t := time.Now()
-	log.Printf("Querying Snowflake for view names took %v\n", t.Sub(start))
-	// TODO: also delete existing objects from cache that are no longer there.
-	// TODO: and leave alone entries that are already there.
+	log.Printf("Querying Snowflake for object names in schema: %s.%s took %v\n", dbName, schemaName, t.Sub(start))
+	return objects, nil
 }

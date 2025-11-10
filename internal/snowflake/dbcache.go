@@ -34,13 +34,13 @@ func (c *dbCache) getSchemas(dbVersion int) (map[string]*schemaCache, int, error
 	if dbVersion < c.version {
 		return c.schemas, c.version, nil
 	}
-	err := c.addSchemas()
+	err := c.refreshSchemas()
 	if err != nil { return c.schemas, c.version, err }
 	c.version += 1
 	return c.schemas, c.version, nil
 }
 
-func (c *dbCache) addSchemas() error {
+func (c *dbCache) refreshSchemas() error {
 	// Do not directly call this function, meant to be called only from dbCache.getSchemas
 	schemaNames, err := querySchemas(c.dbName)
 	if err != nil { return err }
@@ -68,7 +68,7 @@ func querySchemas(dbName string) (map[string]bool, error) {
 	for rows.Next() {
 		var schemaName string
 		if err = rows.Scan(&schemaName); err != nil {
-			return nil, fmt.Errorf("queryDBs: error scanning row: %w", err)
+			return nil, fmt.Errorf("querySchemas: error scanning row: %w", err)
 		}
 		if _, ok := schemas[schemaName]; ok { return nil, fmt.Errorf("duplicate schema name: %s", schemaName) }
 		schemas[schemaName] = true

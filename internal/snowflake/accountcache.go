@@ -39,13 +39,13 @@ func (c *accountCache) getDBs(accountVersion int) (map[string]*dbCache, int, err
 	if accountVersion < c.version {
 		return c.dbs, c.version, nil
 	}
-	err := c.addDBs()
+	err := c.refreshDBs()
 	if err != nil { return c.dbs, c.version, err }
 	c.version += 1
 	return c.dbs, c.version, nil
 }
 
-func (c *accountCache) addDBs() error {
+func (c *accountCache) refreshDBs() error {
 	// Do not directly call this function, meant to be called only from dbCache.getSchemas
 	dbNames, err := queryDBs()
 	if err != nil { return err }
