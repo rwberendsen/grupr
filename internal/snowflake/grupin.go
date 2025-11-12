@@ -3,31 +3,26 @@ package snowflake
 import (
 	"context"
 
+	"golang.org/x/sync/errgroup" 
 	"github.com/rwberendsen/grupr/internal/semantics"
 	"gopkg.in/yaml.v3"
 )
 
 type Grupin struct {
-	Products map[string]Product
+	Products map[string]*Product
 	AccountCache *accountCache
 }
 
 func NewGrupin(ctx context.Context, g semantics.Grupin) (Grupin, error) {
-	// TODO: Grupin should also return error, just like syntax and semantics grupin:
-	// all kinds of things can go wrong while building it, e.g., losing Snowflake connection,
-	// losing grants, unexpected deletion of Snowflake objects / roles / privileges, etc,
-	// and we should use the main package, the CLI, make up its mind on if its proper to
-	// exit the program or not.
-	r := Grupin{map[string]Product{}, newAccountCache(),}
+	r := Grupin{Products: map[string]Product{}, AccountCache: newAccountCache(),}
+	eg, ctx := errgroup.WithContext(ctx)
+	eg.SetLimit(2) // TODO: make this configurable depending on environment variable
 	for k, v := range g.Products {
-		p, err := go newProduct(ctx, v, r.AccountCache)
-		// TODO: consider starting a thread for each product here, so we can hit Snowflake with multiple connections doing work concurrently
-		// in this case, we should also be thinking about context here, or, even take it from the main program!? Think also about signals,
-		// for example, we'd want to be able to catch OS signals like SIGTERM, so we can CTRL+C if we want to, or K8s can rotate pods.
-		if err != nil { return r, err }
-		r.Products[k] = newProduct(v, r.AccountCache)
+		r.Products[k] = new(Product)
+		eg.Go(func() error { return refreshProduct(ctx, v, r.Products[k], r.AccountCache) }
 	}
-	return r, nil
+	err := eg.Wait()
+	return r, err
 }
 
 func (g Grupin) String() string {

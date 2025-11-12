@@ -11,9 +11,7 @@ type Product struct {
 	Interfaces map[string]Interface
 }
 
-func newProduct(ctx context.Context, p semantics.Product, c *accountCache) (Product, error) {
-	// lazily reads which objects exist in Snowflake and adds them to c, modifying c
-	r := Product{Interfaces: map[string]Interface{}}
+func refreshProduct(ctx context.Context, pSem semantics.Product, pSnow *Product, c *accountCache) error {
 	r.Matched = newMatched(p.ObjectMatcher, c)
 	for k, v := range p.Interfaces {
 		// TODO: consider matching against already matched object in prod; faster, and less complex, not having to deal with fluid accountcache

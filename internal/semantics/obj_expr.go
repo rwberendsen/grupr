@@ -72,6 +72,8 @@ func (lhs ObjExpr) subsetOfObjExprs(rhs ObjExprs) bool {
 
 func (lhs ObjExpr) subsetOf(rhs ObjExpr) bool {
 	// return true if rhs can match at least all objects that lhs can match
+	// TODO: figure out how to ensure that we catch error conditions where
+	// usergroup / dtap tags might be different for the same objExpr
 	if !lhs[Database].subsetOf(rhs[Database]) {
 		return false
 	}
