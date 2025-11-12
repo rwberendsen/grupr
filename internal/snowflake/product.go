@@ -12,15 +12,22 @@ type Product struct {
 }
 
 func refreshProduct(ctx context.Context, pSem semantics.Product, pSnow *Product, c *accountCache) error {
-	r.Matched = newMatched(p.ObjectMatcher, c)
-	for k, v := range p.Interfaces {
-		// TODO: consider matching against already matched object in prod; faster, and less complex, not having to deal with fluid accountcache
-		r.Interfaces[k] = newInterface(v, c)
+	pSNow.Interfaces = map[string]Interface{} // initialize / reset
+	matched, err := newMatched(ctx, pSem.ObjectMatcher, c)
+	if err != nil {
+		// TODO: retry once? in case e.g., between we queried schemas in a DB, and objects in a schema, that schema was dropped
+		// This could forseeably happen, and we might just want to try matching again in that case, once or even twice.
+		return err // the result of returning a non nil error will be that all product refreshes are cancelled by the errgroup.Group
 	}
-	return r
-	// TODO: even while creating this product, just collecting the objects, we may encounter errors, e.g., we match a schema, but when we a bit later want to list objects in it, it has been dropped.
-	// what to do in that case? This method does not even return an error
+	pSnow.Matched = matched
+	for k, v := range pSem.Interfaces {
+		// TODO: consider matching against already matched object in prod; faster, and less complex, not having to deal with fluid accountcache
+		// Also, that would mean no errors in this section; just makes sense.
+		// Finally, because all of this is fast and in memory, probably no need to respond to context cancellation
+		pSnow.Interfaces[k] = newInterface(v, pSnow.Matched)
+	}
+	// TODO: query grants to (database) roles associated with product; do this only once, we don't expect it to be fluid, as 
+	// grupr should be the only utiilty manipulating the privileges in gruprs scope on roles grupr manages. So, if already
+	// initialized, then no need to query grants again on subsequent invocations of refreshProduct
+	return nil
 }
-
-// TODO: conider method like refreshProduct, in case a product thread encountered an error like tables that were dropped while grupr ran and it tried to grant select on those objects; 
-// the refresh product method would just loop over everything again, collecting all objects again from the accountcache, after which running the grants could be retried.
