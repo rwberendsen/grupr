@@ -2,6 +2,7 @@ package snowflake
 
 import (
 	"context"
+	"database/sql"
 
 	"golang.org/x/sync/errgroup" 
 	"github.com/rwberendsen/grupr/internal/semantics"
@@ -13,7 +14,7 @@ type Grupin struct {
 	AccountCache *accountCache
 }
 
-func NewGrupin(ctx context.Context, g semantics.Grupin) (Grupin, error) {
+func NewGrupin(ctx context.Context, db *sql.DB, g semantics.Grupin) (Grupin, error) {
 	r := Grupin{Products: map[string]Product{}, AccountCache: newAccountCache(),}
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(2) // TODO: make this configurable depending on environment variable

@@ -14,7 +14,7 @@ import (
 )
 
 func main() {
-	oldFlag := flag.String("o", "", "old YAML, if any")
+	// oldFlag := flag.String("o", "", "old YAML, if any") // TODO: grupinDiff needs work
 	flag.Parse()
 	if len(flag.Args()) != 1 {
 		log.Fatalf("need one argument with path to YAML")
@@ -43,6 +43,8 @@ func main() {
 		log.Fatalf("get new grupin: %v", err)
 	}
 
+	/*
+	TODO: grupinDiff needs work, focusing on Grupin for now
 	if *oldFlag != "" {
 		oldGrupin, err := util.GetGrupinFromPath(*oldFlag)
 		if err != nil {
@@ -56,20 +58,27 @@ func main() {
 		// we can get all tables / views from snowflake, and start
 		// expanding the object (exclude) expressions to sets of matching tables.
 		snowflake.NewGrupinDiff(grupinDiff)
-	}
+	} */
 
-	// TODO: catch Signals
+	// Set up catching signals and context before we do network requests
 	sigs := make(chan signal.Signal, 1)
 	signals.Notify(sigs, syscall.SIGTERM)
-	ctx := context.WithCancel()
-
+	ctx, cancel := context.WithCancel()
+	defer cancel()
 	go func() {
 		<- sigs // block until we receive Signal
-		ctx.Cancel() // cancel context we will use to spawn threads, e.g., that hit our backend, e.g., Snowflake
-		//...
-	}
+		cancel() // cancel context we will use to spawn threads, e.g., that hit our backend, e.g., Snowflake
+	}()
 
-	snowflakeNewGrupin, err := snowflake.NewGrupin(ctx, newGrupin) // pass in ctx immediately; note how we can cancel it if SIGTERM is caught; that should in turn lead to an err coming back
+
+	// Get DB connection; calling this only once and passing it around as necessary
+	cnf, err := snowflake.GetConfig()
+
+	db, err := snowflake.GetDB(ctx, cnf)
+	if err != nil { log.Fatalf("error creating db connection: %v", err) }
+
+	// Create Snowflake Grupin object, which will hold relevant account objects per data product
+	snowflakeNewGrupin, err := snowflake.NewGrupin(ctx, db, newGrupin)
 	if err != nil { log.Fatalf("making Snowflake grupin: %v", err) }
 
 	// TODO: think about it, do we first build our snowflake grupin, which until now just contains matched objects and that's it; and then we start looping over that one
@@ -88,7 +97,7 @@ func main() {
 	// to come in and delete that one; but imagine the bewilderment if two grupr processes are concurrently trying to make two different yamls the reality...
 
 	basicStats := snowflake.NewBasicStats(newGrupin, snowflakeNewGrupin)
-	err = snowflake.PersistInSnowflake(basicStats)
+	err = snowflake.PersistInSnowflake(ctx, db, basicStats)
 
 	if err != nil { log.Fatalf("persisting stats: %v", err) }
 }

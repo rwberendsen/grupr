@@ -1,6 +1,7 @@
 package snowflake
 
 import (
+	"context"
 	"crypto/rsa"
 	"crypto/x509"
 	"database/sql"
@@ -8,32 +9,33 @@ import (
 	"log"
 	"os"
 
-	"github.com/rwberendsen/grupr/internal/config"
-
 	"github.com/snowflakedb/gosnowflake"
 )
 
-var db *sql.DB
+func GetDB(ctx *context.Context) (*sql.DB, error) {
+	// Call this only once
+	user, ok := os.LookupEnv("GRUPR_SNOWFLAKE_USER")
+	if !ok { return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_USER") }
 
-func getDB() *sql.DB {
-	if db != nil {
-		return db
-	}
-	user := config.GetEnvOrDie("GRUPR_SNOWFLAKE_USER")
-	role := config.GetEnvOrDie("GRUPR_SNOWFLAKE_ROLE")
-	account := config.GetEnvOrDie("GRUPR_SNOWFLAKE_ACCOUNT")
-	dbName := config.GetEnvOrDie("GRUPR_SNOWFLAKE_DB")
-	useSQLOpen := config.GetEnvOrDie("GRUPR_SNOWFLAKE_USE_SQL_OPEN")
+	role, ok := os.LookupEnv("GRUPR_SNOWFLAKE_ROLE")
+	if !ok { return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_USER") }
 
+	account, ok := os.LookupEnc("GRUPR_SNOWFLAKE_ACCOUNT")
+	if !ok { return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_ACCOUNT") }
+
+	dbName, ok := os.LookupEnc("GRUPR_SNOWFLAKE_DB")
+	if !ok { return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_DB") }
+
+	useSQLOpen, ok := os.LookupEnc("GRUPR_SNOWFLAKE_USE_SQL_OPEN")
+	if !ok { return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_USE_SQL_OPEN") }
+
+	var db *sql.DB
 	var rsaKey *rsa.PrivateKey
 	if useSQLOpen == "true" {
 		dsn := user + "@" + account + "/" + dbName + "?authenticator=" + gosnowflake.AuthTypeExternalBrowser.String()
 		log.Printf("dsn: %v", dsn)
-		var err error
-		db, err = sql.Open("snowflake", dsn)
-		if err != nil {
-			log.Fatalf("sql.Open error: %v", err)
-		}
+		db, err := sql.Open("snowflake", dsn)
+		if err != nil { return nil, err }
 	} else {
 		var cnf *gosnowflake.Config
 		if keyPath, ok := os.LookupEnv("GRUPR_SNOWFLAKE_RSA_KEY_PATH"); !ok {
@@ -49,7 +51,7 @@ func getDB() *sql.DB {
 			var err error
 			rsaKey, err = getPrivateRSAKey(keyPath)
 			if err != nil {
-				log.Fatalf("getting rsa key: %v", err)
+				return nil, err
 			}
 			cnf = &gosnowflake.Config{
 				Account:       account,
@@ -64,24 +66,14 @@ func getDB() *sql.DB {
 		connector := gosnowflake.NewConnector(gosnowflake.SnowflakeDriver{}, *cnf)
 		db = sql.OpenDB(connector)
 	}
-	rows, err := db.Query("SELECT CURRENT_USER()")
+	err := db.PingContext(ctx)
 	if err != nil {
 		if rsaKey != nil {
 			log.Printf("please make sure public key is registered in Snowflake:")
 			pubKeyByte, _ := x509.MarshalPKIXPublicKey(rsaKey.Public())
 			log.Print(base64.StdEncoding.EncodeToString(pubKeyByte))
 		}
-		log.Fatalf("Error querying: %v", err)
+		return db, err
 	}
-	for rows.Next() {
-		var s string
-		if err = rows.Scan(&s); err != nil {
-			log.Fatalf("error scanning rows: %v", err)
-		}
-		log.Printf("Connection is open with user %s", s)
-	}
-	if err = rows.Err(); err != nil {
-		log.Fatalf("errors found during scanning: %s", err)
-	}
-	return db
+	return db, nil
 }

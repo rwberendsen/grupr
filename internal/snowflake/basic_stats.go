@@ -1,6 +1,8 @@
 package snowflake
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
 	"log"
 	"maps"
@@ -55,7 +57,7 @@ func NewBasicStats(grupin semantics.Grupin, sfGrupin Grupin) []*BasicStats {
 	return r
 }
 
-func PersistInSnowflake(stats []*BasicStats) error {
+func PersistInSnowflake(ctx *context.Context, db *sql.DB, stats []*BasicStats) error {
 	start := time.Now()
 	log.Printf("Storing basic stats in Snowflake...\n")
 	getValuesSQL := func(stats []*BasicStats) []string {
@@ -82,7 +84,7 @@ CREATE OR REPLACE TABLE %v.%v.%vbasic_stats (
 )
 `,
 		dbName, schema, gruprPrefix)
-	_, err := getDB().Exec(sql)
+	_, err := db.Exec(sql)
 	if err != nil {
 		return fmt.Errorf("create table: %v", err)
 	}
@@ -100,7 +102,7 @@ VALUES
 `,
 		dbName, schema, gruprPrefix)
 	sql += strings.Join(getValuesSQL(stats), ",\n")
-	_, err = getDB().Exec(sql)
+	_, err = db.Exec(sql)
 	if err != nil {
 		return fmt.Errorf("insert stats: %v", err)
 	}
