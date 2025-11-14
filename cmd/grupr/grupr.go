@@ -38,7 +38,8 @@ func main() {
 	// temp key in S3 and then copy them; S3 CopyObject does support condtional write
 	// headers; most likely they would be applied on the target object for the copy
 	// operation. So, yeah, most likely this would work.
-	newGrupin, err := util.GetGrupinFromPath(flag.Arg(0))
+	semCnf := semantics.GetConfig()
+	newGrupin, err := util.GetGrupinFromPath(semCnf, flag.Arg(0))
 	if err != nil {
 		log.Fatalf("get new grupin: %v", err)
 	}
@@ -72,9 +73,9 @@ func main() {
 
 
 	// Get DB connection; calling this only once and passing it around as necessary
-	cnf, err := snowflake.GetConfig()
+	snowCnf, err := snowflake.GetConfig()
 
-	db, err := snowflake.GetDB(ctx, cnf)
+	db, err := snowflake.GetDB(ctx, snowCnf)
 	if err != nil { log.Fatalf("error creating db connection: %v", err) }
 
 	// Create Snowflake Grupin object, which will hold relevant account objects per data product

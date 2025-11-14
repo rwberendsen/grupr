@@ -8,7 +8,7 @@ import (
 )
 
 type InterfaceMetadata struct {
-	ObjectMatcher    ObjMatcher
+	ObjectMatchers   ObjMatchers
 	Classification   Classification
 	GlobalUserGroups map[string]bool
 	UserGroupMapping string
@@ -21,7 +21,7 @@ type InterfaceMetadata struct {
 	ForProduct       *string
 }
 
-func newInterfaceMetadata(imSyn syntax.InterfaceMetadata, classes map[string]syntax.Class, globalUserGroups map[string]bool,
+func newInterfaceMetadata(cnf *Config, imSyn syntax.InterfaceMetadata, classes map[string]syntax.Class, globalUserGroups map[string]bool,
 	userGroupMappings map[string]UserGroupMapping, dtaps syntax.Rendering, parent *InterfaceMetadata) (InterfaceMetadata, error) {
 	imSem := InterfaceMetadata{}
 	if err := imSem.setClassification(imSyn, parent, classes); err != nil {
@@ -36,7 +36,7 @@ func newInterfaceMetadata(imSyn syntax.InterfaceMetadata, classes map[string]syn
 	if err := imSem.setExposeDTAPs(imSyn, parent, dtaps); err != nil {
 		return imSem, err
 	}
-	if err := imSem.setObjectMatcher(imSyn, parent, dtaps); err != nil {
+	if err := imSem.setObjectMatchers(cnf, imSyn, parent, dtaps); err != nil {
 		return imSem, err
 	}
 	if err := imSem.setUserGroupColumn(imSyn, parent, dtaps); err != nil {
@@ -151,7 +151,7 @@ func (imSem *InterfaceMetadata) setExposeDTAPs(imSyn syntax.InterfaceMetadata, p
 	return nil
 }
 
-func (imSem *InterfaceMetadata) setObjectMatcher(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata,
+func (imSem *InterfaceMetadata) setObjectMatchers(cnf *Config, imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata,
 	dtaps syntax.Rendering) error {
 	if imSyn.Objects == nil {
 		if parent != nil {
@@ -160,7 +160,7 @@ func (imSem *InterfaceMetadata) setObjectMatcher(imSyn syntax.InterfaceMetadata,
 		}
 		return &PolicyError{"ObjectMatcher is a required field"}
 	}
-	if m, err := newObjMatcher(imSyn.Objects, imSyn.ObjectsExclude, dtaps, imSem.UserGroups); err != nil {
+	if m, err := newObjMatcher(cnf, imSyn.Objects, imSyn.ObjectsExclude, dtaps, imSem.UserGroups); err != nil {
 		return fmt.Errorf("ObjectMatcher: %w", err)
 	} else {
 		imSem.ObjectMatcher = m

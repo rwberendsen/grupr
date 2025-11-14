@@ -21,7 +21,7 @@ type Grupin struct {
 	//	 For now, these bigger changes are outside of the scope, and even when in scope, perhaps they can be handled outside of the Grupin data structure.
 }
 
-func NewGrupin(gSyn syntax.Grupin) (Grupin, error) {
+func NewGrupin(cnf *Config, gSyn syntax.Grupin) (Grupin, error) {
 	start := time.Now()
 	log.Printf("Validating deserialized YAML documents...\n")
 	gSem := Grupin{
@@ -38,7 +38,7 @@ func NewGrupin(gSyn syntax.Grupin) (Grupin, error) {
 		}
 	}
 	for k, v := range gSyn.Products {
-		if p, err := newProduct(v, gSem.Classes, gSem.GlobalUserGroups, gSem.UserGroupMappings); err != nil {
+		if p, err := newProduct(cnf, v, gSem.Classes, gSem.GlobalUserGroups, gSem.UserGroupMappings); err != nil {
 			return gSem, err
 		} else {
 			gSem.Products[k] = p
@@ -50,7 +50,7 @@ func NewGrupin(gSyn syntax.Grupin) (Grupin, error) {
 		}
 		dtaps := gSem.Products[iid.ProductID].DTAPs.DTAPRendering
 		parent := gSem.Products[iid.ProductID].InterfaceMetadata
-		if im, err := newInterfaceMetadata(v.InterfaceMetadata, gSem.Classes, gSem.GlobalUserGroups, gSem.UserGroupMappings, dtaps, &parent); err != nil {
+		if im, err := newInterfaceMetadata(cnf, v.InterfaceMetadata, gSem.Classes, gSem.GlobalUserGroups, gSem.UserGroupMappings, dtaps, &parent); err != nil {
 			return gSem, fmt.Errorf("interface '%s': %w", iid, err)
 		} else {
 			gSem.Products[iid.ProductID].Interfaces[iid.ID] = im

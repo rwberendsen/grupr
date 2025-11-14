@@ -5,9 +5,6 @@ import (
 	"strings"
 )
 
-var validUnquotedExpr *regexp.Regexp = regexp.MustCompile(`^[a-z_][a-z0-9_$]{0,254}[*]?$`) // identifier chars + optional wildcard suffix
-var validQuotedExpr *regexp.Regexp = regexp.MustCompile(`.{0,255}`)
-
 func CreateRegexpIdentifier(s string) *regexp.Regexp {
 	s = strings.ReplaceAll(s, "$", "\\$") // escape dollar sign, which can be used in Snowflake identifiers
 	s = strings.ReplaceAll(s, "*", ".*")  // transform the wildcard suffix into a zero or more regular expression
@@ -21,9 +18,12 @@ type ExprPart struct {
 }
 
 func (p ExprPart) validate() bool {
+	// TODO: move somewhere we are sure they will be evaluated only once, e.g., in a config, and then pass that config around?
 	if p.IsQuoted {
 		return validQuotedExpr.MatchString(p.S)
 	}
+	s := strings.ReplaceAll(p.S, "[dtap]", "")
+	s := strings.ReplaceAll(s, "[user_group]", "")
 	if !validUnquotedExpr.MatchString(p.S) {
 		return p.S == "*"
 	}

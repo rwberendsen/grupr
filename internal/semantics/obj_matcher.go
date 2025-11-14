@@ -7,9 +7,10 @@ import (
 )
 
 type ObjMatcher struct {
-	Include        ObjExprs
+	Include        ObjExpr
 	Exclude        ObjExprs            `yaml:",omitempty"`
 	StrictSuperset map[ObjExpr]ObjExpr `yaml:"strict_superset,omitempty"` // value is strict superset of key
+	// TODO: below data structure suggests that an ObjExpr can only have one strict subset, but it could have multiple
 	StrictSubset   map[ObjExpr]ObjExpr `yaml:"strict_subset,omitempty"`   // value is strict subset of key
 }
 
@@ -81,10 +82,9 @@ func (lhs ObjMatcher) disjoint(rhs ObjMatcher) bool {
 }
 
 func (lhs ObjMatcher) subsetOf(rhs ObjMatcher) bool {
-	// TODO: below logic fails to check that lhs.Exclude elements must be supersets of rhs.Exclude;
-	//       else, lhs excludes less, and lhs is a superset.
+	// TODO: This logic is not fully correct, to be correct it should at least consider also lhs.Exclude
 	//
-	// 	 also: this logic fails to catch edge cases where the rendering of dtap or usergroup was mixed up, e.g,
+	// 	 Also: this logic fails to catch edge cases where the rendering of dtap or usergroup was mixed up, e.g,
 	// 	 group_a_[user_group] and [user_group]_group_a render as the same expression when user_group is group_a,
 	//       but they are different before rendering.
 	//	 worse:
