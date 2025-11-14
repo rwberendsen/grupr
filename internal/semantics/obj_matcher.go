@@ -63,63 +63,27 @@ func newObjMatcher(include []string, exclude []string, dtaps syntax.Rendering, u
 	return m, nil
 }
 
-func (lhs ObjMatcher) Equal(rhs ObjMatcher) bool {
-	return lhs.Include.Equal(rhs.Include) && lhs.Exclude.Equal(rhs.Exclude)
-	// StrictSuperset and StrictSubset are derived from include and exclude, no need to compare
-}
 
 func (lhs ObjMatcher) disjoint(rhs ObjMatcher) bool {
-	for l := range lhs.Include {
-		for r := range rhs.Include {
-			if !l.disjoint(r) {
-				if !l.subsetOfObjExprs(rhs.Exclude) && !r.subsetOfObjExprs(lhs.Exclude) {
-					return false
-				}
-			}
-		}
-	}
-	return true
+	return !lhs.subsetOf(rhs) && !rhs.subsetOf(rhs)
 }
 
 func (lhs ObjMatcher) subsetOf(rhs ObjMatcher) bool {
-	// TODO: This logic is not fully correct, to be correct it should at least consider also lhs.Exclude
-	//
-	// 	 Also: this logic fails to catch edge cases where the rendering of dtap or usergroup was mixed up, e.g,
-	// 	 group_a_[user_group] and [user_group]_group_a render as the same expression when user_group is group_a,
-	//       but they are different before rendering.
-	//	 worse:
-	//       group_a_[usergroup] with usergroup being group_b and [usergroup]_group_b with usergroup begin group_a
-	// 	 would label the same expression with a different usergroup
-	//
-	//	 to fix these subtle issues, a principled approach would be best:
-	//	 
-	//	 - our little set algebra should be evaluated before rendering usergroups and dtaps (!)
-	//	 - an objectMatcher should just refer to a single object matching expression, and it should have its
- 	// 	   exclude expressions; after all, an exclude expression can only be a subset of a single include
-	//	   expression, since all sibling include expressions are disjoint.
-	// 	
-	// 	 yes: this would be quite a large code change, but I believe it is a necessary one to do immediately
-	//       it will simplify the code and logic considerably. And the project is still in that early stage
-	// 	 (version 0) where we can make large changes without much consideration for end users. On top of
-	//	 that, this change does not lead to a change in the YAML format.
-	for l := range lhs.Include {
-		hasSuperset := false
-		for r := range rhs.Include {
-			if l.subsetOf(r) {
-				if rExclude, ok := rhs.StrictSubset[r]; !ok {
-					hasSuperset = true
-					break
-				} else {
-					if !l.subsetOf(rExclude) {
-						hasSuperset = true
-						break
-					}
-				}
+	if !lhs.Include.subsetOf(rhs.Include) { return false }
+	for r := range rhs.Exclude {
+		if lhs.Inlcude.subsetOf(r) { return false }
+		alsoExcludedInLHS := false
+		for l := range lhs.Exclude {
+			if r.subsetOf(l) {
+				alsoExcludedInLHS = true
 			}
 		}
-		if !hasSuperset {
-			return false
-		}
+		if !alsoExcludedInLHS { return false }
 	}
 	return true
+}
+
+func (lhs ObjMatcher) Equal(rhs ObjMatcher) bool {
+	return lhs.Include.Equal(rhs.Include) && lhs.Exclude.Equal(rhs.Exclude)
+	// StrictSuperset and StrictSubset are derived from include and exclude, no need to compare
 }

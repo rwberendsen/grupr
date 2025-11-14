@@ -52,7 +52,7 @@ func newProduct(cnf *Config, pSyn syntax.Product, classes map[string]syntax.Clas
 }
 
 func (lhs Product) disjoint(rhs Product) bool {
-	return lhs.ObjectMatcher.disjoint(rhs.ObjectMatcher)
+	return lhs.ObjectMatchers.disjoint(rhs.ObjectMatchers)
 }
 
 func (lhs Product) Equal(rhs Product) bool {

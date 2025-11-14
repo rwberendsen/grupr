@@ -7,6 +7,7 @@ import (
 )
 
 // Renderings may contain upper-case characters, so they can be used inside quoted fields
+// TODO get rid of global variable
 var validRendering *regexp.Regexp = regexp.MustCompile(`^[A-Za-z0-9_]+$`)
 
 type Rendering map[string]string
