@@ -99,6 +99,24 @@ func (lhs ObjExpr) disjoint(rhs ObjExpr) bool {
 	// ...
 }
 
+func allDisjointObjExprMap(m map[ObjExpr]any) error {
+	if len(m) < 2 {
+		return nil
+	}
+	var keys []ObjExpr
+	for k := range m {
+		keys = append(keys, k)
+	}
+	for i := 0; i < len(keys)-1; i++ {
+		for j := i + 1; j < len(keys); j++ {
+			if !m[keys[i]].disjoint(m[keys[j]]) {
+				return &SetLogicError{fmt.Sprintf("overlapping ObjExpr's '%s' and '%s'", keys[i], keys[j])}
+			}
+		}
+	}
+	return nil
+}
+
 func (e ObjExpr) String() string {
 	a := []string{}
 	for _, ep := range e {

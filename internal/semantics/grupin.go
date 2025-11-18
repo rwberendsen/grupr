@@ -56,6 +56,8 @@ func NewGrupin(cnf *Config, gSyn syntax.Grupin) (Grupin, error) {
 			gSem.Products[iid.ProductID].Interfaces[iid.ID] = im
 		}
 	}
+	// TODO: validate tagging: loop over all products; for each product, loop over all interfaces
+	//	 for each (product, interface) pair, check that all ObjMatcher objects have identical tags (DTAP, UserGroup)
 	if err := gSem.allConsumedOk(); err != nil {
 		return gSem, err
 	}

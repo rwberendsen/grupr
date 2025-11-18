@@ -8,10 +8,8 @@ import (
 
 type ObjMatcher struct {
 	Include        ObjExpr
-	Exclude        ObjExprs            `yaml:",omitempty"`
-	StrictSuperset map[ObjExpr]ObjExpr `yaml:"strict_superset,omitempty"` // value is strict superset of key
-	// TODO: below data structure suggests that an ObjExpr can only have one strict subset, but it could have multiple
-	StrictSubset   map[ObjExpr]ObjExpr `yaml:"strict_subset,omitempty"`   // value is strict subset of key
+	ObjExprAttr
+	Exclude        map[ObjExpr]bool // No need to store ObjExprAttr of excluded objects
 }
 
 func newObjMatcher(include []string, exclude []string, dtaps syntax.Rendering, userGroups syntax.Rendering) (ObjMatcher, error) {
