@@ -63,22 +63,41 @@ func newObjMatcher(include []string, exclude []string, dtaps syntax.Rendering, u
 	return m, nil
 }
 
-
 func (lhs ObjMatcher) disjoint(rhs ObjMatcher) bool {
-	return !lhs.subsetOf(rhs) && !rhs.subsetOf(rhs)
+	if lhs.Include.disjoint(rhs.Include) {
+		return true
+	}
+	for l := range lhs.Exclude {
+		if rhs.Include.subsetOf(l) {
+			return true
+		}
+	}
+	for r := range rhs.Exclude {
+		if lhs.Include.subsetOf(r) {
+			return true
+		}
+	}
+	return false
 }
 
 func (lhs ObjMatcher) subsetOf(rhs ObjMatcher) bool {
-	if !lhs.Include.subsetOf(rhs.Include) { return false }
+	if !lhs.Include.subsetOf(rhs.Include) {
+		return false 
+	}
+	// lhs.Include <= rhs.Include
 	for r := range rhs.Exclude {
-		if lhs.Inlcude.subsetOf(r) { return false }
+		if lhs.Include.subsetOf(r) {
+			return false // lhs and rhs are disjoint
+		}
 		alsoExcludedInLHS := false
 		for l := range lhs.Exclude {
 			if r.subsetOf(l) {
 				alsoExcludedInLHS = true
 			}
 		}
-		if !alsoExcludedInLHS { return false }
+		if !alsoExcludedInLHS {
+			return false // rhs excludes objects that lhs does not exclude, so lhs cannot be a subset
+		}
 	}
 	return true
 }
