@@ -69,7 +69,14 @@ func (lhs ObjMatcher) Equals(rhs ObjMatcher) bool {
 }
 
 func (lhs ObjMatchers) disjoint(rhs ObjMatchers) bool {
-	return !lhs.subsetOf(rhs) && !rhs.subsetOf(lhs)
+	for _, l := range lhs {
+		for _, r := range rhs {
+			if !l.disjoint(r) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func (lhs ObjMatchers) subsetOf(rhs ObjMatchers) bool {
@@ -78,10 +85,12 @@ func (lhs ObjMatchers) subsetOf(rhs ObjMatchers) bool {
 		for _, r := range rhs {
 			if l.subsetOf(r) {
 				hasSuperSet = true
+				break
 			}
 		}
 		if !hasSuperSet {
 			return false
 		}
 	}
+	return true
 }
