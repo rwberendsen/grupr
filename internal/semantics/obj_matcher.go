@@ -37,13 +37,16 @@ func (lhs ObjMatcher) subsetOf(rhs ObjMatcher) bool {
 	
 	// Two scenarios are now still possible where lhs is not a subset of rhs though:
 	// 1. lhs.Include is also a subset of one of rhs.Exclude[]
-	// 2. One of rhs.Exclude[] excludes objects that are not excluded by any of lhs.Exclude[],
-	//    while these excluded objects do in fact overlap with lhs.Include ...
-	// 	TODO: check that the condition above in the while is fully complete: overlap is still vague: is it subset? And we did not code it yet
+	// 2. One of rhs.Exclude[] excludes objects that are in lhs.Include also and that are not excluded by any of lhs.Exclude[],
 	for r := range rhs.Exclude {
 		if lhs.Include.subsetOf(r) {
 			return false // lhs and rhs are disjoint
 		}
+		if !r.subsetOf(lhs.Include) {
+			continue // This rhs exclude is disjoint from lhs.Include, so, not related, let's say
+		}
+		// r is a subset of lhs.Include.
+		// Check that r is also excluded in lhs.Include, otherwise, lhs can not be a subset of rhs
 		alsoExcludedInLHS := false
 		for l := range lhs.Exclude {
 			if r.subsetOf(l) {
@@ -51,7 +54,7 @@ func (lhs ObjMatcher) subsetOf(rhs ObjMatcher) bool {
 			}
 		}
 		if !alsoExcludedInLHS {
-			return false // rhs excludes objects that lhs does not exclude, so lhs cannot be a subset
+			return false
 		}
 	}
 	return true
