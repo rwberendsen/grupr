@@ -16,7 +16,7 @@ func newObjMatchers(cnf *Config, include []string, exclude []string, dtaps synta
 	m := map[ObjExpr]ObjMatcher{}
 	// Create ObjMatcher objects for each include expression
 	for _, expr := range include {
-		objExprs, err := newObjExprs(expr, dtaps, userGroups)
+		objExprs, err := newObjExprs(cnf, expr, dtaps, userGroups)
 		if err != nil {
 			return m, fmt.Errorf("parsing obj expr: %s", err)
 		}

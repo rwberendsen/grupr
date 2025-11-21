@@ -87,11 +87,9 @@ func (g Grupin) allConsumedOk() error {
 			if p.Classification < g.Products[iid.ProductID].Interfaces[iid.ID].Classification {
 				return &PolicyError{fmt.Sprintf("product '%s' consumes interface with higher classification", p.ID)}
 			}
-			// check DTAP mapping
+			// Check DTAP mapping
 			for _, dtapSource := range dtapMapping {
-				hasDTAP := dtapSource == g.Products[iid.ProductID].DTAPs.Prod
-				if _, ok := g.Products[iid.ProductID].DTAPs.NonProd[dtapSource]; ok { hasDTAP = true }
-				if !hasDTAP {
+				if !g.Products[iid.ProductID].DTAPs.HasDTAP(dtapSource)
 					return &SetLogicError{fmt.Sprintf("product '%s': consumed interface '%s': dtap '%s': dtap not found", p.ID, iid, dtapSource)}
 				}
 			}

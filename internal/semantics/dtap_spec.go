@@ -36,6 +36,12 @@ func newDTAPSpec(dsSyn syntax.DTAPSpec, dtapRendering syntax.Rendering) DTAPSpec
 	return dsSem
 }
 
+func (spec DTAPSpec) HasDTAP(dtap string) bool {
+	if spec.Prod == dtap { return true }	
+	_, ok := spec.NonProd[dtap]
+	return ok
+}
+
 func (lhs DTAPSpec) Equal(rhs DTAPSpec) bool {
 	return lhs.Prod == rhs.Prod &&
 		maps.Equal(lhs.NonProd, rhs.NonProd) &&

@@ -27,6 +27,8 @@ func newInterfaceMetadata(cnf *Config, imSyn syntax.InterfaceMetadata, classes m
 	if err := imSem.setClassification(imSyn, parent, classes); err != nil {
 		return imSem, err
 	}
+	// TODO: user group mapping should be a product level property, we should not allow overriding it on the interface level
+	// After all, all objects must be named at the product level, and we do not allow different user group tags for the same object
 	if err := imSem.setUserGroupMapping(imSyn, parent, userGroupMappings); err != nil {
 		return imSem, err
 	}
@@ -86,6 +88,7 @@ func (imSem *InterfaceMetadata) setUserGroupMapping(imSyn syntax.InterfaceMetada
 		return &SetLogicError{fmt.Sprintf("Unknown user group mapping: '%s'", imSyn.UserGroupMapping)}
 	}
 	imSem.UserGroupMapping = imSyn.UserGroupMapping
+	// TODO: should we allow it if an interface uses a user group mapping that's distinct from the product?
 	return nil
 }
 
@@ -121,10 +124,15 @@ func (imSem *InterfaceMetadata) setUserGroups(imSyn syntax.InterfaceMetadata, pa
 		imSem.UserGroups[u] = r
 	}
 	if parent != nil {
+		// interfaces should have a subset of global user groups with regard to parent product
 		for u := range imSem.GlobalUserGroups {
 			if _, ok := parent.GlobalUserGroups[u]; !ok {
 				return &PolicyError{fmt.Sprintf("Interface should not have global user group '%s' that product does not have", u)}
 			}
+		}
+		// if parent product has user groups, interface should also have a at least one
+		if len(parent.GlobalUserGroups) > 0 and len(imSem.GlobalUserGroups) == 0 {
+			return &PolicyError{fmt.Sprintf("Product has global user groups, so interface should have at least one also", u)}
 		}
 	}
 	return nil

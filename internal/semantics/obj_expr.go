@@ -13,7 +13,7 @@ type Part int
 const (
 	Database Part = iota
 	Schema
-	Table
+	Object
 )
 
 func newObjExpr(s string) (ObjExpr, error) {
@@ -80,7 +80,7 @@ func (lhs ObjExpr) subsetOf(rhs ObjExpr) bool {
 	if !lhs[Schema].subsetOf(rhs[Schema]) {
 		return false
 	}
-	return lhs[Table].subsetOf(rhs[Table])
+	return lhs[Object].subsetOf(rhs[Object])
 }
 
 func (lhs ObjExpr) disjoint(rhs ObjExpr) bool {
@@ -90,7 +90,7 @@ func (lhs ObjExpr) disjoint(rhs ObjExpr) bool {
 	if lhs[Schema].disjoint(rhs[Schema]) {
 		return true
 	}
-	return lhs[Table].disjoint(rhs[Table])
+	return lhs[Object].disjoint(rhs[Object])
 	// TODO implement tests
 	// *.*.*	whatever	!disjoint
 	// a.*.*	b.*.*		disjoint
