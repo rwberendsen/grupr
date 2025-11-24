@@ -5,9 +5,8 @@ import (
 )
 
 type ColExprAttr struct {
-	// TODO: consider if we really need the renderings here?
-	DTAPs      syntax.Rendering `yaml:"dtaps,omitempty"`
-	UserGroups syntax.Rendering `yaml:"user_groups,omitempty"`
+	DTAP      string	// Empty means col expr omits DTAP template; it will be evaluated for all DTAPs
+	UserGroup string	// Empty means col expr omits UserGroup template; objects will be considered shared
 }
 
 func (lhs ColExprAttr) Equal(rhs ColExprAttr) bool {

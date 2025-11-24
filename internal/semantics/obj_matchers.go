@@ -6,10 +6,6 @@ import (
 	"github.com/rwberendsen/grupr/internal/syntax"
 )
 
-type ObjMatchers struct {
-	ObjectMatchers map[ObjExpr]ObjMatcher
-}
-
 type ObjMatchers map[ObjExpr]ObjMatcher
 
 func newObjMatchers(cnf *Config, include []string, exclude []string, dtaps syntax.Rendering, userGroups syntax.Rendering) (ObjMatchers, error) {

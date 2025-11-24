@@ -23,12 +23,12 @@ func newColExprs(s string, dtaps syntax.Rendering, userGroups syntax.Rendering) 
 			return exprs, &SetLogicError{fmt.Sprintf("expanding dtaps in '%s': no dtaps found", s)}
 		}
 		for d, renderedDTAP := range dtaps {
-			dtapExpanded[strings.ReplaceAll(s, DTAPTemplate, renderedDTAP)] = ColExprAttr{DTAPs: syntax.Rendering{d: renderedDTAP}}
+			dtapExpanded[strings.ReplaceAll(s, DTAPTemplate, renderedDTAP)] = ColExprAttr{DTAP: d}
 		}
 	} else {
 		// In a column matcher expression it is okay to omit a DTAP expansion, the column expressions are evaluated per DTAP,
 		// for overlap with the object expressions. So, the column expression is just associated with all DTAPs
-		dtapExpanded[s] = ColExprAttr{DTAPs: dtaps}
+		dtapExpanded[s] = ColExprAttr{}
 	}
 	userGroupExpanded := map[string]ColExprAttr{}
 	for k, v := range dtapExpanded {
@@ -41,11 +41,11 @@ func newColExprs(s string, dtaps syntax.Rendering, userGroups syntax.Rendering) 
 			}
 			for u, renderedUserGroup := range userGroups {
 				userGroupExpanded[strings.ReplaceAll(k, UserGroupTemplate, renderedUserGroup)] =
-					ColExprAttr{DTAPs: v.DTAPs, UserGroups: syntax.Rendering{u: renderedUserGroup}}
+					ColExprAttr{DTAP: v.DTAP, UserGroup: u}
 			}
 		} else {
 			// Objects matched by expression are shared between user groups
-			userGroupExpanded[k] = ColExprAttr{DTAPs: v.DTAPs, UserGroups: userGroups}
+			userGroupExpanded[k] = ColExprAttr{DTAP: v.DTAP}
 		}
 	}
 	for k, v := range userGroupExpanded {

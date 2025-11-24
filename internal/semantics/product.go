@@ -8,25 +8,39 @@ import (
 )
 
 type Product struct {
-	ID       string                      		  `yaml:"id"`
-	DTAPs    DTAPSpec                    		  `yaml:"dtaps,flow,omitempty"`
-	Consumes map[syntax.InterfaceID]map[string]string `yaml:",omitempty"`
+	ID       string 
+	DTAPs    DTAPSpec
+	UserGroupMapping string
 	InterfaceMetadata
+	UserGroupColumn  ColMatcher
+	Consumes map[syntax.InterfaceID]map[string]string
 	Interfaces map[string]InterfaceMetadata
 }
 
 func newProduct(cnf *Config, pSyn syntax.Product, classes map[string]syntax.Class, globalUserGroups map[string]bool,
 	userGroupMappings map[string]UserGroupMapping) (Product, error) {
+	// Initialize
 	pSem := Product{
 		ID:         pSyn.ID,
 		DTAPs:      newDTAPSpec(pSyn.DTAPs, pSyn.DTAPRendering),
 		Interfaces: map[string]InterfaceMetadata{},
 	}
+	// Set UsergroupMapping
+	if _, ok := userGroupMappings[pSyn.UserGroupMapping]; !ok {
+		return &SetLogicError{fmt.Sprintf("Unknown user group mapping: '%s'", pSyn.UserGroupMapping)}
+	}
+	pSem.UserGroupMapping = pSyn.UserGroupMapping
+	// Set InterfaceMetadata
 	if im, err := newInterfaceMetadata(cnf, pSyn.InterfaceMetadata, classes, globalUserGroups, userGroupMappings, pSem.DTAPs.DTAPRendering, nil); err != nil {
 		return pSem, fmt.Errorf("product id %s: interface metadata: %w", pSem.ID, err)
 	} else {
 		pSem.InterfaceMetadata = im
 	}
+	// Set UserGroupColumn (this requires InterfaceMetadata its ObjectMatchers to be set)
+	if err := pSem.setUserGroupColumn(pSyn); err != nil {
+		return pSem, err
+	}
+	// Set Consumes
 	pSem.Consumes = map[syntax.InterfaceID]map[string]string{}
 	for _, cs := range pSyn.Consumes {
 		if _, ok := pSem.Consumes[cs.InterfaceID]; ok {
@@ -49,6 +63,18 @@ func newProduct(cnf *Config, pSyn syntax.Product, classes map[string]syntax.Clas
 		}
 	}
 	return pSem, nil
+}
+
+func (pSem *Product) setUserGroupColumn(pSyn syntax.Product, dtaps syntax.Rendering) error {
+	if pSyn.UserGroupColumn == "" {
+		return nil
+	}
+	if m, err := newColMatcher([]string{pSyn.UserGroupColumn}, pSem.DTAPs.DTAPRendering, pSem.UserGroups, pSem.ObjectMatchers); err != nil {
+		return fmt.Errorf("user_group_column: %w", err)
+	} else {
+		pSem.UserGroupColumn = m
+	}
+	return nil
 }
 
 func (lhs Product) disjoint(rhs Product) bool {

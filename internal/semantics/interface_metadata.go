@@ -11,13 +11,10 @@ type InterfaceMetadata struct {
 	ObjectMatchers   ObjMatchers
 	Classification   Classification
 	GlobalUserGroups map[string]bool
-	UserGroupMapping string
 	UserGroups       syntax.Rendering
-	UserGroupColumn  ColMatcher
 	MaskColumns      ColMatcher
 	HashColumns      ColMatcher
 	ExposeDTAPs      map[string]bool
-	DTAPRendering    syntax.Rendering
 	ForProduct       *string
 }
 
@@ -27,11 +24,6 @@ func newInterfaceMetadata(cnf *Config, imSyn syntax.InterfaceMetadata, classes m
 	if err := imSem.setClassification(imSyn, parent, classes); err != nil {
 		return imSem, err
 	}
-	// TODO: user group mapping should be a product level property, we should not allow overriding it on the interface level
-	// After all, all objects must be named at the product level, and we do not allow different user group tags for the same object
-	if err := imSem.setUserGroupMapping(imSyn, parent, userGroupMappings); err != nil {
-		return imSem, err
-	}
 	if err := imSem.setUserGroups(imSyn, parent, globalUserGroups, userGroupMappings); err != nil {
 		return imSem, err
 	}
@@ -39,9 +31,6 @@ func newInterfaceMetadata(cnf *Config, imSyn syntax.InterfaceMetadata, classes m
 		return imSem, err
 	}
 	if err := imSem.setObjectMatchers(cnf, imSyn, parent, dtaps); err != nil {
-		return imSem, err
-	}
-	if err := imSem.setUserGroupColumn(imSyn, parent, dtaps); err != nil {
 		return imSem, err
 	}
 	if err := imSem.setMaskColumns(imSyn, parent, dtaps); err != nil {
@@ -72,23 +61,6 @@ func (imSem *InterfaceMetadata) setClassification(imSyn syntax.InterfaceMetadata
 	if parent != nil && parent.Classification < imSem.Classification {
 		return &PolicyError{"Classification on interface higher than product classification"}
 	}
-	return nil
-}
-
-func (imSem *InterfaceMetadata) setUserGroupMapping(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata,
-	userGroupMappings map[string]UserGroupMapping) error {
-	if imSyn.UserGroupMapping == "" {
-		if parent != nil {
-			imSem.UserGroupMapping = parent.UserGroupMapping
-			return nil
-		}
-		return nil
-	}
-	if _, ok := userGroupMappings[imSyn.UserGroupMapping]; !ok {
-		return &SetLogicError{fmt.Sprintf("Unknown user group mapping: '%s'", imSyn.UserGroupMapping)}
-	}
-	imSem.UserGroupMapping = imSyn.UserGroupMapping
-	// TODO: should we allow it if an interface uses a user group mapping that's distinct from the product?
 	return nil
 }
 
@@ -181,22 +153,6 @@ func (imSem *InterfaceMetadata) setObjectMatchers(cnf *Config, imSyn syntax.Inte
 	return nil
 }
 
-func (imSem *InterfaceMetadata) setUserGroupColumn(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata,
-	dtaps syntax.Rendering) error {
-	if imSyn.UserGroupColumn == "" {
-		if parent != nil {
-			imSem.UserGroupColumn = parent.UserGroupColumn
-		}
-		return nil
-	}
-	if m, err := newColMatcher([]string{imSyn.UserGroupColumn}, dtaps, imSem.UserGroups, imSem.ObjectMatcher); err != nil {
-		return fmt.Errorf("user_group_column: %w", err)
-	} else {
-		imSem.UserGroupColumn = m
-	}
-	return nil
-}
-
 func (imSem *InterfaceMetadata) setHashColumns(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata, dtaps syntax.Rendering) error {
 	if imSyn.MaskColumns == nil {
 		if parent != nil {
@@ -252,15 +208,12 @@ func equal_pointer_string(lhs *string, rhs *string) bool {
 }
 
 func (lhs InterfaceMetadata) Equal(rhs InterfaceMetadata) bool {
-	return lhs.ObjectMatcher.Equal(rhs.ObjectMatcher) &&
+	return lhs.ObjectMatchers.Equal(rhs.ObjectMatchers) &&
 		lhs.Classification == rhs.Classification &&
 		maps.Equal(lhs.GlobalUserGroups, rhs.GlobalUserGroups) &&
-		lhs.UserGroupMapping == rhs.UserGroupMapping &&
 		lhs.UserGroups.Equal(rhs.UserGroups) &&
-		lhs.UserGroupColumn.Equal(rhs.UserGroupColumn) &&
 		lhs.MaskColumns.Equal(rhs.MaskColumns) &&
 		lhs.HashColumns.Equal(rhs.MaskColumns) &&
 		maps.Equal(lhs.ExposeDTAPs, rhs.ExposeDTAPs) &&
-		lhs.DTAPRendering.Equal(rhs.DTAPRendering) &&
 		equal_pointer_string(lhs.ForProduct, rhs.ForProduct)
 }

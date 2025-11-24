@@ -61,14 +61,6 @@ func newObjExpr(s string) (ObjExpr, error) {
 	return r, nil
 }
 
-func (lhs ObjExpr) subsetOfObjExprs(rhs ObjExprs) bool {
-	for r := range rhs {
-		if lhs.subsetOf(r) {
-			return true
-		}
-	}
-	return false
-}
 
 func (lhs ObjExpr) subsetOf(rhs ObjExpr) bool {
 	// return true if rhs can match at least all objects that lhs can match
@@ -97,6 +89,15 @@ func (lhs ObjExpr) disjoint(rhs ObjExpr) bool {
 	// a.*.c	a.b.c		!disjoint
 	// a.*.c	a.b.d		disjoint
 	// ...
+}
+
+func (lhs ObjExpr) subsetOfObjExprMap(map[ObjExpr]any) bool {
+	for r := range rhs {
+		if lhs.subsetOf(r) {
+			return true
+		}
+	}
+	return false
 }
 
 func allDisjointObjExprMap(m map[ObjExpr]any) error {

@@ -97,9 +97,9 @@ func (lhs ColExpr) disjoint(rhs ColExpr) bool {
 	// TODO implement tests
 }
 
-func (c ColExpr) subsetOfObjExprs(objExprs ObjExprs) bool {
+func (c ColExpr) subsetOfObjExprMap(objExprs map[ObjExpr]any) bool {
 	objExpr := ObjExpr{c[0], c[1], c[2]}
-	return objExpr.subsetOfObjExprs(objExprs)
+	return objExpr.subsetOfObjExprMap(objExprs)
 }
 
 func (c ColExpr) disjointWithObjExpr(e ObjExpr) bool {
@@ -107,11 +107,11 @@ func (c ColExpr) disjointWithObjExpr(e ObjExpr) bool {
 	return objExpr.disjoint(e)
 }
 
-func (c ColExpr) disjointWithObjMatcher(om ObjMatcher, dtap string) bool {
-	for o, attr := range om.Include {
-		if attr.DTAP == dtap {
-			if !c.disjointWithObjExpr(o) {
-				if !c.subsetOfObjExprs(om.Exclude) {
+func (c ColExpr) disjointWithObjMatchers(oms ObjMatchers, dtap string) bool {
+	for _, om := range oms {
+		if om.DTAP == dtap {
+			if !c.disjointWithObjExpr(om.Include) {
+				if !c.subsetOfObjExprMap(om.Exclude) {
 					return false
 				}
 			}
