@@ -77,6 +77,15 @@ func (pSem *Product) setUserGroupColumn(pSyn syntax.Product, dtaps syntax.Render
 	return nil
 }
 
+func (pSem *Product) validateExprAttr() error {
+	for id, im := range pSem.Interfaces {
+		// we know that ObjMatchers of interfaces are subsets of pSem.ObjectMatchers
+		if err := im.ObjectMatchers.validateExprAttrAgainst(pSem.ObjectMatchers); err != nil {
+			return fmt.Errorf("interface '%s': %w", id, err)
+		}
+	}
+}
+
 func (lhs Product) disjoint(rhs Product) bool {
 	return lhs.ObjectMatchers.disjoint(rhs.ObjectMatchers)
 }

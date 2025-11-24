@@ -30,6 +30,7 @@ func NewGrupin(cnf *Config, gSyn syntax.Grupin) (Grupin, error) {
 		UserGroupMappings: map[string]UserGroupMapping{},
 		Products:          map[string]Product{},
 	}
+	// Validate user group mappings
 	for k, v := range gSyn.UserGroupMappings {
 		if ugm, err := newUserGroupMapping(v, gSem.GlobalUserGroups); err != nil {
 			return gSem, err
@@ -37,6 +38,7 @@ func NewGrupin(cnf *Config, gSyn syntax.Grupin) (Grupin, error) {
 			gSem.UserGroupMappings[k] = ugm
 		}
 	}
+	// Validate product specs
 	for k, v := range gSyn.Products {
 		if p, err := newProduct(cnf, v, gSem.Classes, gSem.GlobalUserGroups, gSem.UserGroupMappings); err != nil {
 			return gSem, err
@@ -44,6 +46,7 @@ func NewGrupin(cnf *Config, gSyn syntax.Grupin) (Grupin, error) {
 			gSem.Products[k] = p
 		}
 	}
+	// Validate interface specs
 	for iid, v := range gSyn.Interfaces {
 		if err := gSem.validateInterfaceID(iid); err != nil {
 			return gSem, err
@@ -56,11 +59,17 @@ func NewGrupin(cnf *Config, gSyn syntax.Grupin) (Grupin, error) {
 			gSem.Products[iid.ProductID].Interfaces[iid.ID] = im
 		}
 	}
-	// TODO: validate tagging: loop over all products; for each product, loop over all interfaces
-	//	 for each (product, interface) pair, check that all ObjMatcher objects have identical tags (DTAP, UserGroup)
+	// Validate DTAP and UserGroup tagging
+	for k, v := range gSem.Products {
+		if err := v.validateExprAttr(); err != nil {
+			return gSem, fmt.Errorf("product '%s': %w", k, err)
+		}
+	}
+	// Validate consume relationships
 	if err := gSem.allConsumedOk(); err != nil {
 		return gSem, err
 	}
+	// Validate all products are disjoint
 	if err := gSem.allDisjoint(); err != nil {
 		return gSem, err
 	}

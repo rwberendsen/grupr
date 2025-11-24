@@ -2,6 +2,7 @@ package semantics
 
 import (
 	"fmt"
+	"maps"
 
 	"github.com/rwberendsen/grupr/internal/syntax"
 )
@@ -60,8 +61,23 @@ func newObjMatchers(cnf *Config, include []string, exclude []string, dtaps synta
 	return m, nil
 }
 
-func (lhs ObjMatcher) Equals(rhs ObjMatcher) bool {
-	return lhs.Include.Equal(rhs.Include) && lhs.Exclude.Equal(rhs.Exclude)
+func (lhs ObjMatchers) validateExprAttrAgainst(rhs ObjMatchers) error {
+	// Caller must ensure lhs is a subset of rhs
+	for _, om_lhs := range lhs {
+		for _, om_rhs := range rhs {
+			if om_lhs.subsetOf(om.rhs) {
+				if err := om_lhs.validateExprAttrAgainst(om_rhs); err != nil {
+					return err
+				}
+			}
+			break
+		}
+	}
+	return nil
+}
+
+func (lhs ObjMatchers) Equal(rhs ObjMatchers) bool {
+	return maps.EqualFunc(lhs, rhs, ObjMatcher.Equal)
 }
 
 func (lhs ObjMatchers) disjoint(rhs ObjMatchers) bool {
