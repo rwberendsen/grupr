@@ -91,12 +91,11 @@ func (lhs Product) disjoint(rhs Product) bool {
 }
 
 func (lhs Product) Equal(rhs Product) bool {
-	if lhs.ID != rhs.ID {
-		return false
-	}
-	if !lhs.DTAPs.Equal(rhs.DTAPs) {
-		return false
-	}
+	if lhs.ID != rhs.ID { return false }
+	if !lhs.DTAPs.Equal(rhs.DTAPs) { return false }
+	if lhs.UserGroupMapping != rhs.UserGroupMapping { return false }
+	if !lhs.InterfaceMetadata.Equal(rhs.InterfaceMetadata) { return false }
+	if !lhs.UserGroupColumn.Equal(rhs.UserGroupColumn) { return false }
 	for lhsKey, lhsValue := range lhs.Consumes {
 		if rhsValue, ok := rhs.Consumes[lhsKey]; !ok {
 			return false
@@ -106,9 +105,6 @@ func (lhs Product) Equal(rhs Product) bool {
 	}
 	for rhsKey, _ := range rhs.Consumes {
 		if _, ok := lhs.Consumes[rhsKey]; !ok { return false }
-	}
-	if !lhs.InterfaceMetadata.Equal(rhs.InterfaceMetadata) {
-		return false
 	}
 	if !maps.EqualFunc(lhs.Interfaces, rhs.Interfaces, InterfaceMetadata.Equal) {
 		return false

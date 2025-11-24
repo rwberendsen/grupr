@@ -2,6 +2,7 @@ package semantics
 
 import (
 	"fmt"
+	"maps"
 
 	"github.com/rwberendsen/grupr/internal/syntax"
 )
@@ -67,6 +68,7 @@ func (lhs ObjMatcher) validateExprAgainst(rhs ObjMatcher) error {
 }
 
 func (lhs ObjMatcher) Equal(rhs ObjMatcher) bool {
-	return lhs.Include.Equal(rhs.Include) && lhs.Exclude.Equal(rhs.Exclude)
-	// TODO: this one needs a bit of work
+	return lhs.Include == rhs.Include && 
+		lhs.ObjExprAttr == lhs.ObjExprAttr &&
+		maps.Equal(lhs.Exclude, rhs.Exclude)
 }

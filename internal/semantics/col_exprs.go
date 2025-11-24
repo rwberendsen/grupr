@@ -77,5 +77,5 @@ func (m ColExprs) allDisjoint() bool {
 }
 
 func (lhs ColExprs) Equal(rhs ColExprs) bool {
-	return maps.EqualFunc(lhs, rhs, ColExprAttr.Equal)
+	return maps.Equal(lhs, rhs)
 }

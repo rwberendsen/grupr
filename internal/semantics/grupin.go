@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/rwberendsen/grupr/internal/syntax"
-	"gopkg.in/yaml.v3"
 )
 
 type Grupin struct {
@@ -147,12 +146,4 @@ func (g Grupin) validateInterfaceID(iid syntax.InterfaceID) error {
 		return &SetLogicError{fmt.Sprintf("interface id '%s': product not found", iid)}
 	}
 	return nil
-}
-
-func (g Grupin) String() string {
-	data, err := yaml.Marshal(g)
-	if err != nil {
-		panic("Grups could not be marshalled")
-	}
-	return string(data)
 }
