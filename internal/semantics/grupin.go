@@ -95,12 +95,15 @@ func (g Grupin) allConsumedOk() error {
 			if p.Classification < g.Products[iid.ProductID].Interfaces[iid.ID].Classification {
 				return &PolicyError{fmt.Sprintf("product '%s' consumes interface with higher classification", p.ID)}
 			}
-			// Check DTAP mapping
+			// Check specified DTAP mappings
 			for _, dtapSource := range dtapMapping {
 				if !g.Products[iid.ProductID].DTAPs.HasDTAP(dtapSource)
 					return &SetLogicError{fmt.Sprintf("product '%s': consumed interface '%s': dtap '%s': dtap not found", p.ID, iid, dtapSource)}
 				}
 			}
+			// For non production DTAPs not specified in dtapMapping, check that a non-prod DTAP with the same name exists in the consumed product;
+			// It should not be a prod DTAP in the consumed product; because in a one to one mapping we would expect not just the names but also
+			// the nature of the DTAPs to be the same; 
 			for dtapSelf, _ := range p.DTAPs.NonProd {
 				if _, ok := dtapMapping[dtapSelf]; !ok {
 					if _, ok := g.Products[iid.ProductID].DTAPs.NonProd[dtapSelf]; !ok {

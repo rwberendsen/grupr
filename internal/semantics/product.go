@@ -57,7 +57,7 @@ func newProduct(cnf *Config, pSyn syntax.Product, classes map[string]syntax.Clas
 			}
 		}
 		if cs.DTAPMapping == nil {
-			pSem.Consumes[cs.InterfaceID] = map[string]string{} 
+			pSem.Consumes[cs.InterfaceID] = map[string]string{} // default means one-to-one
 		} else {
 			pSem.Consumes[cs.InterfaceID] = cs.DTAPMapping
 		}

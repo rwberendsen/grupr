@@ -7,17 +7,16 @@ import (
 )
 
 type DTAPSpec struct {
-	Prod          string
+	Prod          *string
 	NonProd       map[string]bool
 	DTAPRendering syntax.Rendering
 }
 
-func newDTAPSpec(dsSyn syntax.DTAPSpec, dtapRendering syntax.Rendering) DTAPSpec {
-	if dsSyn.IsEmpty() {
-		// Not specifying any DTAP info means your objects will be considered as production, and you cannot use the [dtap] expansion
+func newDTAPSpec(cnf *Config, dsSyn *syntax.DTAPSpec, dtapRendering syntax.Rendering) DTAPSpec {
+	if dSyn == nil () {
+		// Not specifying any DTAP info means you will get a default DTAP spec, which has only a production DTAP
 		return DTAPSpec{
-			Prod:          "",
-			DTAPRendering: syntax.Rendering{}, // empty rendering
+			Prod:          &cnf.DefaultProdDTAPName,
 		}
 	}
 	dsSem := DTAPSpec{
@@ -25,25 +24,35 @@ func newDTAPSpec(dsSyn syntax.DTAPSpec, dtapRendering syntax.Rendering) DTAPSpec
 		NonProd:       make(map[string]bool, len(dsSyn.NonProd)),
 		DTAPRendering: make(syntax.Rendering, len(dsSyn.NonProd)+1),
 	}
-	dsSem.DTAPRendering[dsSem.Prod] = dsSem.Prod
+	if dsSyn.Prod != nil {
+		s := *dsSyn.Prod
+		dsSem.Prod = &s // s will escape, but, if we had assigned dsSyn.Prod directly, then dsSyn would not be garbage collected.
+		dsSem.DTAPRendering[s] = s // default value when not in dtapRendering
+	}
 	for _, d := range dsSyn.NonProd {
 		dsSem.NonProd[d] = true
-		dsSem.DTAPRendering[d] = d
+		dsSem.DTAPRendering[d] = d // default value when not in dtapRendering
 	}
 	for d, r := range dtapRendering {
-		dsSem.DTAPRendering[d] = r
+		dsSem.DTAPRendering[d] = r // overwrite default value
 	}
 	return dsSem
 }
 
 func (spec DTAPSpec) HasDTAP(dtap string) bool {
-	if spec.Prod == dtap { return true }	
+	if spec.Prod != nil {
+		if *spec.Prod == dtap {
+			return true
+		}
+	}
 	_, ok := spec.NonProd[dtap]
 	return ok
 }
 
 func (lhs DTAPSpec) Equal(rhs DTAPSpec) bool {
-	return lhs.Prod == rhs.Prod &&
-		maps.Equal(lhs.NonProd, rhs.NonProd) &&
+	if lhs.Prod == nil && rhs.Prod != nil { return false }
+	if lhs.Prod != nil && rhs.Prod == nil { return false }
+	if lhs.Prod != nil && rhs.Prod != nil && *lhs.Prod != *rhs.Prod { return false }
+	return maps.Equal(lhs.NonProd, rhs.NonProd) &&
 		maps.Equal(lhs.DTAPRendering, rhs.DTAPRendering)
 }

@@ -5,6 +5,7 @@ type Config struct {
 	ValidQuotedExpr *regexp.RegEgxp
 	DTAPTemplate string
 	UserGroupTemplate string
+	DefaultProdDTAPName string
 }
 
 func GetConfig() *Config {
@@ -18,6 +19,8 @@ func GetConfig() *Config {
 	// You will never be able to match objects that contain the two templates below in their name, so choose wisely
 	cnf.DTAPTemplate = "[dtap]"
 	cnt.UserGroupTemplate = "[user_group]"
+
+	cnf.DefaultProdDTAPName = "p"
 
 	return cnf
 	
