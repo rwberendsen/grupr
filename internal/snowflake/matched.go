@@ -4,14 +4,20 @@ import (
 	"github.com/rwberendsen/grupr/internal/semantics"
 )
 
-type Matched struct {
-	Objects map[semantics.ObjExpr]AccountObjs
+type Matched map[semantics.ObjExpr]*AccountObjs
+
+
+func newMatched(oms semantics.ObjMatchers) Matched {
+	m := Matched{}
+	for k, _ := range oms {
+		m[k] = &AccountObjs{}
+	}
 }
 
-func newMatchedAgainstAccountCache(m semantics.ObjMatcher, c *accountCache) Matched {
-	r := Matched{map[semantics.ObjExpr]AccountObjs{}}
-	for k := range m.Include {
-		r.Objects[k] = matchAgainstAccountCache(k, c)
+func newMatchedAgainstAccountCache(oms semantics.ObjMatchers, c *accountCache) Matched {
+	r := Matched{}
+	for k, v := range oms {
+		r[k] = matchAgainstAccountCache(k, c)
 	}
 	for k := range m.Exclude {
 		// TODO: match against r.Objects, cause other threads may have manipulated the accountcache concurrently,
@@ -24,9 +30,9 @@ func newMatchedAgainstAccountCache(m semantics.ObjMatcher, c *accountCache) Matc
 }
 
 func newMatchedAgainstAccountObjs(m semantics.ObjMatcher, o AccountObjs) Matched {
-	r := Matched{map[semantics.ObjExpr]AccountObjs{}}
+	r := Matched{}
 	for k := range m.Include {
-		r.Objects[k] = match(k, r)
+		r[k] = match(k, r)
 	}
 	for k := range m.Exclude {
 		// TODO: match against r.Objects, cause other threads may have manipulated the accountcache concurrently,

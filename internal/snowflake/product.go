@@ -11,19 +11,27 @@ type Product struct {
 	Interfaces map[string]Interface
 }
 
+func newProduct(pSem semantics.Product) Product {
+	p := &Product{}
+	p.Matched = newMatched(pSem.ObjectMatchers)
+	p.Interfaces = map[string]Interface{}
+	for k, v := range pSem.Interfaces {
+		p.Interfaces[k] = newInterface(v)
+	}
+}
+
 func refreshProduct(ctx context.Context, pSem semantics.Product, pSnow *Product, c *accountCache) error {
-	pSNow.Interfaces = map[string]Interface{} // initialize / reset
 	matched, err := newMatched(ctx, pSem.ObjectMatcher, c)
 	if err != nil {
 		// TODO: retry once? in case e.g., between we queried schemas in a DB, and objects in a schema, that schema was dropped
 		// This could forseeably happen, and we might just want to try matching again in that case, once or even twice.
 		return err // the result of returning a non nil error will be that all product refreshes are cancelled by the errgroup.Group
 	}
+	// Okay, so reaching out to the database went well, the rest is just a matter of some in-memory data structure walking,
+	// we can start to update pSnow
 	pSnow.Matched = matched
+	pSNow.Interfaces = map[string]Interface{} // initialize / reset
 	for k, v := range pSem.Interfaces {
-		// TODO: consider matching against already matched object in prod; faster, and less complex, not having to deal with fluid accountcache
-		// Also, that would mean no errors in this section; just makes sense.
-		// Finally, because all of this is fast and in memory, probably no need to respond to context cancellation
 		pSnow.Interfaces[k] = newInterface(v, pSnow.Matched)
 	}
 	// TODO: query grants to (database) roles associated with product; do this only once, we don't expect it to be fluid, as 
