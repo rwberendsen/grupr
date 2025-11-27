@@ -12,7 +12,7 @@ import (
 // caching objects in Snowflake locally
 type accountCache struct {
 	// TODO: think about whether it makes sense to cache also privileges granted to (database) roles
-	mu	sync.Mutex // guards dbs and version
+	mu	sync.RWMutex // guards dbs and version
 	dbs     map[string]*dbCache // nil: never requested; empty: none found
 	version int
 }
@@ -29,7 +29,22 @@ func escapeString(s string) string {
 	return strings.ReplaceAll(s, "'", "\\'")
 }
 
-func (c *accountCache) getDBs(accountVersion int) (map[string]*dbCache, int, error) {
+func (c *accountCache) matchDBs(e semantics.ExprPart, accountVersion int) (matchedDBs map[string]bool, fresh bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if accountVersion >= c.version { return }
+	matchedDBS = matchPart(e, c.dbs)
+	fresh = true
+	return
+}
+
+func (c* accountCache) matchSchemas(e semantics.ExprPart, db string, dbVersion int) (matchedSchemas map[string]bool, fresh bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if dbCache, ok := c.dbs[db]; !ok { return }
+}
+
+func (c *accountCache) getDBs(accountVersion int) (map[string]bool, int, error) {
 	// Thread-safe method to get databases in an account
 	c.mu.Lock()
 	defer c.mu.Unlock()

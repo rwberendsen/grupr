@@ -12,6 +12,7 @@ import (
 type dbCache struct {
 	dbName      string
 	dbKind		string
+	exists 		bool
 	mu 		sync.Mutex // guards schemas and version
 	schemas     map[string]*schemaCache // nil: never requested; empty: none found
 	version int
