@@ -29,19 +29,57 @@ func escapeString(s string) string {
 	return strings.ReplaceAll(s, "'", "\\'")
 }
 
-func (c *accountCache) matchDBs(e semantics.ExprPart, accountVersion int) (matchedDBs map[string]bool, fresh bool) {
+func (c *accountCache) matchDBs(e semantics.ExprPart, accountVersion int) (map[string]bool, fresh bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if accountVersion >= c.version { return }
-	matchedDBS = matchPart(e, c.dbs)
+	matchedDBS := matchPart(e, c.dbs) // TODO: also return kind of DB?
 	fresh = true
 	return
 }
 
-func (c* accountCache) matchSchemas(e semantics.ExprPart, db string, dbVersion int) (matchedSchemas map[string]bool, fresh bool) {
+func (c* accountCache) matchSchemas(e semantics.ExprPart, db DBID, dbVersion int) (map[string]bool, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	if dbCache, ok := c.dbs[db]; !ok { return }
+	var dbc *dbCache
+	if dbc, ok := c.dbs[db]; !ok { 
+		// return db does not exist error
+		return
+	} 
+	dbc.mu.RLock()
+	defer c.mu.RUnlock
+	if dbVersion >= dbc.version {
+		// return not fresh error
+		return
+	}
+	matchedSchemas := matchPart(e, dbc.schemas)
+	return
+}
+
+func (c* accountCache) matchObjects(e semantics.ExprPart, db DBID, schema string, schemaVersion int) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	var dbC *dbCache
+	if dbC, ok := c.dbs[db]; !ok { 
+		// return db does not exist error
+		return
+	} 
+	dbC.mu.RLock()
+	defer c.mu.RUnlock
+	var schemaC *schemaCache
+	if schemaC, ok := dbC.schemas[schema] {
+		// return schema does not exist error
+		return
+	}
+	schemaC.mu.RLock()
+	defer schemaC.mu.RUnlock()
+	if schemaVersion >= schemaC.version {
+		// return not fresh error
+		// TODO: ok indeed to skip checking db version?
+		return
+	}
+	matchedObjects := matchPart(e, schemaC.objects) // TODO: also return kind of object?
+	return
 }
 
 func (c *accountCache) getDBs(accountVersion int) (map[string]bool, int, error) {
@@ -105,4 +143,29 @@ func queryDBs() (map[string]string, error) {
 	t := time.Now()
 	log.Printf("Querying Snowflake for database names took %v\n", t.Sub(start))
 	return dbs, nil
+}
+
+func (c *accountCache) refreshObjects(db DBID, schema string, schemaVersion int) int, error {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	var dbC *dbCache
+	if dbC, ok := c.dbs[db]; !ok { 
+		// TODO: try and refresh account? and if successful, then try and refresh db?
+		// And then if still not successful, return db does not exist error
+		return
+	} 
+	dbC.mu.RLock()
+	defer c.mu.RUnlock
+	var schemaC *schemaCache
+	if schemaC, ok := dbC.schemas[schema] {
+		// return schema does not exist error
+		// TODO: try and refresh DB?
+		return
+	}
+	schemaC.mu.Lock() // NB! this is a write lock, since we are refreshing objects
+	defer schemaC.mu.Unlock()
+	if schemaVersion < schemaC.version {
+		return schemaC.verison, nil // another thread may have already refreshed DB
+	}
+	// TODO: query objects, store in cache, and  bump version
 }
