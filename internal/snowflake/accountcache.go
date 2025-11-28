@@ -29,6 +29,46 @@ func escapeString(s string) string {
 	return strings.ReplaceAll(s, "'", "\\'")
 }
 
+func matchAgainstAccountCache(e semantics.ObjExpr, c *accountCache, o AccountObjs) (AccountObjs, bool) {
+	// TODO: start from scratch? init o here?
+	o := AccountObjs{}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if o.Version >= c.version {
+		return 
+	}
+	matchedDBs := matchPart(e[semantics.Database], c.dbs)
+	for db := range matchedDBs {
+		c.dbs[db].mu.RLock()
+		defer c.dbs[db].mu.RUnlock()
+		// TODO: consider this idea of keeping the locks while matching an entire ObjExpr, and what it means for the versioning
+		if o.Version >= c.version {
+			return 
+		}
+		matchedSchemas := matchPart(e[semantics.Schema], c.dbs[db].schemas)
+		o = o.addDB(db, e[semantics.Schema].MatchAll(), dbVersion)
+		for schema := range matchedSchemas {
+			objectNames, schemaVersion := schemas[schema].getObjectNames(c)
+			// it is interesting to consider the case where the schema we are trying to list objects in has been removed concurrently. In fact, in this case, another thread may have beaten us to
+			// it and it may have also removed this schema from the account cache already. So our schemas[schema] reference is still valid for us, but it can't be reached anymore via the accountcache.
+			// in any case, then schemas[schema].getObjectNames(c) will experience an error. Probably I'd want to catch that here. And probably break out of the loop as well, and try and list schemas
+			// again. Or, just give it back to the caller, the error, so the caller can "just" try again to call us
+			//
+			// Another approach could be to "just" ignore all such errors: we would say: yes the account is fluid, objects come and go. If they are there, we will find them. If they are not there,
+			// and we try to grant privileges on them, but we get an error because they don't exist, no harm done.
+			matchedObjects := matchPart(e[semantics.Table], objectNames)
+			o = o.addSchema(db, schema, e[semantics.Table].MatchAll(), schemaVersion)
+			for t := range matchedTables {
+				o = o.addTable(db, schema, t)
+			}
+			for v := range matchedViews {
+				o = o.addView(db, schema, v)
+			}
+		}
+	}
+	return o
+}
+
 func (c *accountCache) matchDBs(e semantics.ExprPart, accountVersion int) (map[string]bool, fresh bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -145,7 +185,7 @@ func queryDBs() (map[string]string, error) {
 	return dbs, nil
 }
 
-func (c *accountCache) refreshObjects(db DBID, schema string, schemaVersion int) int, error {
+func (c *accountCache) refreshObjects(db DBID, schema string, schemaVersion int) error {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	var dbC *dbCache
@@ -168,4 +208,5 @@ func (c *accountCache) refreshObjects(db DBID, schema string, schemaVersion int)
 		return schemaC.verison, nil // another thread may have already refreshed DB
 	}
 	// TODO: query objects, store in cache, and  bump version
+	// if failure object does not exist, then call refreshSchema's; if that one fails because object does not exist; refresh databases
 }
