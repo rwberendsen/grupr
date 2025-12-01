@@ -29,14 +29,59 @@ func escapeString(s string) string {
 	return strings.ReplaceAll(s, "'", "\\'")
 }
 
-func matchAgainstAccountCache(e semantics.ObjExpr, c *accountCache, o AccountObjs) (AccountObjs, bool) {
-	// TODO: start from scratch? init o here?
-	o := AccountObjs{}
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	if o.Version >= c.version {
-		return 
+func match(e semantics.ObjExpr, c *accountCache, o *AccountObjs) error {
+	// will modify both c and o
+	d := &refreshProgressAccount{}
+	err := matchDBs(e semantics.ObjExpr, c *accountCache, o *AccountObjs, d *refreshProgressAccount)
+	for db := range o.DBs {
+		done, err := matchSchemas(db, e semantics.ObjExpr, c *accountCache, o *AccountObjs, d *refreshProgressAccount)
 	}
+	for {
+		done, err := matchDBs(e semantics.ObjExpr, c *accountCache, o *AccountObjs, d *refreshProgressAccount)
+		if err != nil { return err }
+		if done { break }
+	}
+}
+
+func matchDBs(e semantics.ObjExprPart, c *accountCache, o *AccountObjs, d *refreshProgressAccount) error {
+	if !d.updated {
+		c.mu.Lock() // block till all other threads are done, get a write lock, now you are the only one modifying the tree
+		defer c.mu.Unlock()
+	} else {
+		c.mu.RLock() // block till a writer is done, if any, and get a read lock (others may read concurrently)
+		defer c.mu.RUnlock()
+	}
+	if o.Version == c.version {
+		// cache entry is stale
+		if d.updated {
+			// no other thread bumped version since we last checked here
+			return nil
+		}
+		err := c.refreshDBs()
+		if err != nil {
+			return err // for schema level, here we may have to backtrack
+		}
+	}
+	// process DBs
+	o.Version = c.version
+	matchedDBs := matchPart(e[semantics.Database], c.dbs)
+	for old := range o.DBs {
+		if _, ok := matchedDBs[old]; !ok {
+			delete(o.DBs, old)
+		}
+	}
+	for m := range matchedDBs {
+		o.addDB(m)
+	}
+	d.updated = true
+	return nil
+}
+
+func matchSchemas
+
+
+		// mark that we've updated the account
+		d.updated = true
 	matchedDBs := matchPart(e[semantics.Database], c.dbs)
 	for db := range matchedDBs {
 		c.dbs[db].mu.RLock()
