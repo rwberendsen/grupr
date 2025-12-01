@@ -31,40 +31,34 @@ func escapeString(s string) string {
 
 func match(e semantics.ObjExpr, c *accountCache, o *AccountObjs) error {
 	// will modify both c and o
-	d := &refreshProgressAccount{}
-	err := matchDBs(e semantics.ObjExpr, c *accountCache, o *AccountObjs, d *refreshProgressAccount)
+	retry_requested, err := matchDBs(e[semantics.Database], c, o)
+	if err != nil { return err }
 	for db := range o.DBs {
-		done, err := matchSchemas(db, e semantics.ObjExpr, c *accountCache, o *AccountObjs, d *refreshProgressAccount)
-	}
-	for {
-		done, err := matchDBs(e semantics.ObjExpr, c *accountCache, o *AccountObjs, d *refreshProgressAccount)
+		retryRequested, err := matchSchemas(db, e, c, o)
 		if err != nil { return err }
-		if done { break }
+		if retryRequested {
+			return match(e, c, o) // start over
+		}
+		for schema := range o.DBs[db].Schemas {
+			retryRequested, err = matchObjects(db, schema, e, c, o)
+			if err != nil { return err }
+			if retryRequested {
+				return match(e, c, o) // start over
+			}
+		}
 	}
 }
 
-func matchDBs(e semantics.ObjExprPart, c *accountCache, o *AccountObjs, d *refreshProgressAccount) error {
-	if !d.updated {
-		c.mu.Lock() // block till all other threads are done, get a write lock, now you are the only one modifying the tree
-		defer c.mu.Unlock()
-	} else {
-		c.mu.RLock() // block till a writer is done, if any, and get a read lock (others may read concurrently)
-		defer c.mu.RUnlock()
-	}
+func matchDBs(ep semantics.ObjExprPart, c *accountCache, o *AccountObjs) error {
+	c.mu.Lock() // block till all another writer or any active readers are done, get a write lock, now you are the only one modifying the tree
+	defer c.mu.Unlock()
 	if o.Version == c.version {
 		// cache entry is stale
-		if d.updated {
-			// no other thread bumped version since we last checked here
-			return nil
-		}
 		err := c.refreshDBs()
-		if err != nil {
-			return err // for schema level, here we may have to backtrack
-		}
+		if err != nil { return err }
 	}
-	// process DBs
 	o.Version = c.version
-	matchedDBs := matchPart(e[semantics.Database], c.dbs)
+	matchedDBs := matchPart(ep, c.dbs)
 	for old := range o.DBs {
 		if _, ok := matchedDBs[old]; !ok {
 			delete(o.DBs, old)
@@ -73,11 +67,53 @@ func matchDBs(e semantics.ObjExprPart, c *accountCache, o *AccountObjs, d *refre
 	for m := range matchedDBs {
 		o.addDB(m)
 	}
-	d.updated = true
 	return nil
 }
 
-func matchSchemas
+func matchSchemas(db string, ep semantics.ObjExprPart, c *accountCache, o *AccountObjs) (bool, error) {
+	c.mu.RLock() // Block till a (requesting) writer (obtains and) releases the lock, if any, get a read lock, now you can read this node, 
+		     // concurrently with other readers
+	defer c.mu.RUnlock()
+	if _, ok := c.dbs[db]; !ok {
+		// Another thread may have modified c, refreshing db's, and deleted this db.
+		return true, nil
+	}
+	// It could still be that o.Version < c.version
+	// I'm fine with that, as long as the db I'm interested is still there in the current version
+	if o.DBs[db].Version == c.dbs[db].version {
+		// cache entry is stale
+		err := c.refreshSchemas(db)
+		if err != nil { return err } // TODO: if err is obj not exist then request retry
+	}
+	o.DBs[db].Version = c.dbs[db].version
+	matchedSchemas := matchPart(ep, c.dbs[db].schemas)
+	for old := range o.DBs[db].schemas {
+		if _, ok := matchedSchemass[old]; !ok {
+			delete(o.DBs[db].schemas, old)
+		}
+	}
+	for m := range matchedSchemas {
+		o.addSchema(db, m)
+	}
+	return false, nil
+}
+
+func matchObjects(db string, schema string, ep semantics.ObjExprPart, c *accountCache, o *AccountObjs) (bool, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if _, ok := c.dbs[db]; !ok { return true, nil }
+	c.dbs[db].mu.RLock()
+	defer c.dbs[db].mu.RUnlock()
+	if _, ok := c.dbs[db].schemas[schema]; !ok { return true, nil }
+	if o.DBs[db].schemas[schema].Version == c.dbs[db].schemas[schema].version {
+		// cache entry is stale
+		err := c.refreshObjects(db, schema)
+		if err != nil { return err } // TODO: if err is obj not exist then request retry
+	}
+	o.DBs[db].schemas[schema].Version = c.dbs[db].schemas[schema].version
+	matchedObjects := matchPart(ep, c.dbs[db].schemas[schema].objects)
+	// TODO: process them, based on type (TABLE or VIEW)
+}
 
 
 		// mark that we've updated the account
