@@ -13,7 +13,7 @@ import (
 type accountCache struct {
 	// TODO: think about whether it makes sense to cache also privileges granted to (database) roles
 	mu	sync.RWMutex // guards dbs and version
-	dbs     map[string]*dbCache // nil: never requested; empty: none found
+	dbs     map[dbKey]*dbCache // nil: never requested; empty: none found
 	version int
 }
 
@@ -58,19 +58,20 @@ func matchDBs(ep semantics.ObjExprPart, c *accountCache, o *AccountObjs) error {
 		if err != nil { return err }
 	}
 	o.Version = c.version
-	matchedDBs := matchPart(ep, c.dbs)
-	for old := range o.DBs {
-		if _, ok := matchedDBs[old]; !ok {
-			delete(o.DBs, old)
+	for dbKey := range o.DBs {
+		if _, ok := c.dbs; !ok {
+			delete(o.DBs, dbKey)
 		}
 	}
-	for m := range matchedDBs {
-		o.addDB(m)
+	for dbKey := range c.dbs {
+		if matchPart(ep, dbKey.name) {
+			o.addDB(dbKey)
+		}
 	}
 	return nil
 }
 
-func matchSchemas(db string, ep semantics.ObjExprPart, c *accountCache, o *AccountObjs) (bool, error) {
+func matchSchemas(db dbKey, ep semantics.ObjExprPart, c *accountCache, o *AccountObjs) (bool, error) {
 	c.mu.RLock() // Block till a (requesting) writer (obtains and) releases the lock, if any, get a read lock, now you can read this node, 
 		     // concurrently with other readers
 	defer c.mu.RUnlock()
@@ -80,25 +81,29 @@ func matchSchemas(db string, ep semantics.ObjExprPart, c *accountCache, o *Accou
 	}
 	// It could still be that o.Version < c.version
 	// I'm fine with that, as long as the db I'm interested is still there in the current version
+	//	This works, because the type of db is in the db key; if it weren't for all I know everything is fine, but the db all of a sudden
+	//	is not a standard db anymore; it is an imported db. Which I might want to treat differently.
 	if o.DBs[db].Version == c.dbs[db].version {
 		// cache entry is stale
 		err := c.refreshSchemas(db)
-		if err != nil { return err } // TODO: if err is obj not exist then request retry
+		if err != nil { return false, err } // TODO: if err is obj not exist then request retry
 	}
 	o.DBs[db].Version = c.dbs[db].version
 	matchedSchemas := matchPart(ep, c.dbs[db].schemas)
-	for old := range o.DBs[db].schemas {
-		if _, ok := matchedSchemass[old]; !ok {
-			delete(o.DBs[db].schemas, old)
+	for schema := range o.DBs[db].Schemas {
+		if _, ok := c.dbs[db].schemas[schema]; !ok {
+			delete(o.DBs[db].Schemas, schema)
 		}
 	}
-	for m := range matchedSchemas {
-		o.addSchema(db, m)
+	for schema := range c.dbs[db].schemas {
+		if matchPart(ep, schema) {
+			o.addSchema(db, schema)
+		}
 	}
 	return false, nil
 }
 
-func matchObjects(db string, schema string, ep semantics.ObjExprPart, c *accountCache, o *AccountObjs) (bool, error) {
+func matchObjects(db dbKey, schema string, ep semantics.ObjExprPart, c *accountCache, o *AccountObjs) (bool, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if _, ok := c.dbs[db]; !ok { return true, nil }
@@ -108,115 +113,20 @@ func matchObjects(db string, schema string, ep semantics.ObjExprPart, c *account
 	if o.DBs[db].schemas[schema].Version == c.dbs[db].schemas[schema].version {
 		// cache entry is stale
 		err := c.refreshObjects(db, schema)
-		if err != nil { return err } // TODO: if err is obj not exist then request retry
+		if err != nil { return false, err } // TODO: if err is obj not exist then request retry
 	}
-	o.DBs[db].schemas[schema].Version = c.dbs[db].schemas[schema].version
-	matchedObjects := matchPart(ep, c.dbs[db].schemas[schema].objects)
-	// TODO: process them, based on type (TABLE or VIEW)
-}
-
-
-		// mark that we've updated the account
-		d.updated = true
-	matchedDBs := matchPart(e[semantics.Database], c.dbs)
-	for db := range matchedDBs {
-		c.dbs[db].mu.RLock()
-		defer c.dbs[db].mu.RUnlock()
-		// TODO: consider this idea of keeping the locks while matching an entire ObjExpr, and what it means for the versioning
-		if o.Version >= c.version {
-			return 
-		}
-		matchedSchemas := matchPart(e[semantics.Schema], c.dbs[db].schemas)
-		o = o.addDB(db, e[semantics.Schema].MatchAll(), dbVersion)
-		for schema := range matchedSchemas {
-			objectNames, schemaVersion := schemas[schema].getObjectNames(c)
-			// it is interesting to consider the case where the schema we are trying to list objects in has been removed concurrently. In fact, in this case, another thread may have beaten us to
-			// it and it may have also removed this schema from the account cache already. So our schemas[schema] reference is still valid for us, but it can't be reached anymore via the accountcache.
-			// in any case, then schemas[schema].getObjectNames(c) will experience an error. Probably I'd want to catch that here. And probably break out of the loop as well, and try and list schemas
-			// again. Or, just give it back to the caller, the error, so the caller can "just" try again to call us
-			//
-			// Another approach could be to "just" ignore all such errors: we would say: yes the account is fluid, objects come and go. If they are there, we will find them. If they are not there,
-			// and we try to grant privileges on them, but we get an error because they don't exist, no harm done.
-			matchedObjects := matchPart(e[semantics.Table], objectNames)
-			o = o.addSchema(db, schema, e[semantics.Table].MatchAll(), schemaVersion)
-			for t := range matchedTables {
-				o = o.addTable(db, schema, t)
-			}
-			for v := range matchedViews {
-				o = o.addView(db, schema, v)
-			}
+	o.DBs[db].Schemas[schema].Version = c.dbs[db].schemas[schema].version
+	for objKey := range o.DBs[db].Schemas[schema].Objects {
+		if _, ok := c.dbs[db].schemas[schema].objects[objKey]; !ok {
+			delete(o.DBs[db].Schemas[schema].Objects, objKey)
 		}
 	}
-	return o
-}
-
-func (c *accountCache) matchDBs(e semantics.ExprPart, accountVersion int) (map[string]bool, fresh bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	if accountVersion >= c.version { return }
-	matchedDBS := matchPart(e, c.dbs) // TODO: also return kind of DB?
-	fresh = true
-	return
-}
-
-func (c* accountCache) matchSchemas(e semantics.ExprPart, db DBID, dbVersion int) (map[string]bool, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	var dbc *dbCache
-	if dbc, ok := c.dbs[db]; !ok { 
-		// return db does not exist error
-		return
-	} 
-	dbc.mu.RLock()
-	defer c.mu.RUnlock
-	if dbVersion >= dbc.version {
-		// return not fresh error
-		return
+	for objKey := range c.dbs[db].schemas[schema].objects {
+		if matchPart(ep, objKey.name) {
+			o.addObject(db, schema, objKey)
+		}
 	}
-	matchedSchemas := matchPart(e, dbc.schemas)
-	return
-}
-
-func (c* accountCache) matchObjects(e semantics.ExprPart, db DBID, schema string, schemaVersion int) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	var dbC *dbCache
-	if dbC, ok := c.dbs[db]; !ok { 
-		// return db does not exist error
-		return
-	} 
-	dbC.mu.RLock()
-	defer c.mu.RUnlock
-	var schemaC *schemaCache
-	if schemaC, ok := dbC.schemas[schema] {
-		// return schema does not exist error
-		return
-	}
-	schemaC.mu.RLock()
-	defer schemaC.mu.RUnlock()
-	if schemaVersion >= schemaC.version {
-		// return not fresh error
-		// TODO: ok indeed to skip checking db version?
-		return
-	}
-	matchedObjects := matchPart(e, schemaC.objects) // TODO: also return kind of object?
-	return
-}
-
-func (c *accountCache) getDBs(accountVersion int) (map[string]bool, int, error) {
-	// Thread-safe method to get databases in an account
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.dbs == nil { c.dbs = map[string]*dbCache{} }
-	// below check is done because another thread may have already refreshed,
-	// in which case we don't need to go and fetch databases again
-	if accountVersion < c.version {
-		return c.dbs, c.version, nil
-	}
-	err := c.refreshDBs()
-	if err != nil { return c.dbs, c.version, err }
-	c.version += 1
-	return c.dbs, c.version, nil
+	return false, nil
 }
 
 func (c *accountCache) refreshDBs() error {

@@ -69,7 +69,6 @@ func main() {
 		cancel() // cancel context we will use to spawn threads, e.g., that hit our backend, e.g., Snowflake
 	}()
 
-
 	// Get DB connection; calling this only once and passing it around as necessary
 	snowCnf, err := snowflake.GetConfig()
 

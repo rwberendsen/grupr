@@ -3,7 +3,7 @@ package snowflake
 // Couple of simple data structures to hold matched objects in account
 type AccountObjs struct {
 	Version int // version with regard to accountCache
-	DBs map[string]*DBObjs
+	DBs map[dbKey]*DBObjs
 	ImportedDBs map[string]*DBObjs
 }
 
@@ -14,8 +14,7 @@ type DBObjs struct {
 
 type SchemaObjs struct {
 	Version int // version with regard to schemaCache
-	Tables map[string]bool
-	Views map[string]bool
+	Objects map[objKey]bool
 }
 
 func (o *AccountObjs) addDB(db string) AccountObjs {
