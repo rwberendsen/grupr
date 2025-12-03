@@ -81,7 +81,7 @@ func matchSchemas(db dbKey, ep semantics.ObjExprPart, c *accountCache, o *Accoun
 	}
 	// It could still be that o.Version < c.version
 	// I'm fine with that, as long as the db I'm interested is still there in the current version
-	//	This works, because the type of db is in the db key; if it weren't for all I know everything is fine, but the db all of a sudden
+	//	This works, because the kind of db is in the db key; if it weren't for all I know everything is fine, but the db all of a sudden
 	//	is not a standard db anymore; it is an imported db. Which I might want to treat differently.
 	if o.DBs[db].Version == c.dbs[db].version {
 		// cache entry is stale
@@ -130,7 +130,8 @@ func matchObjects(db dbKey, schema string, ep semantics.ObjExprPart, c *accountC
 }
 
 func (c *accountCache) refreshDBs() error {
-	// Do not directly call this function, meant to be called only from dbCache.getSchemas
+	// Do not directly call this function, meant to be called only via match and friends,
+	// which would have required appropriate write locks to mutexes
 	dbNames, err := queryDBs()
 	if err != nil { return err }
 	for dbName, dbCache := range c.dbs {
@@ -150,8 +151,8 @@ func (c *accountCache) refreshDBs() error {
 	return nil
 }
 
-func queryDBs() (map[string]string, error) {
-	dbs := map[string]string{}
+func queryDBs() (map[dbKey]true, error) {
+	dbs := map[dbKey]string{}
 	start := time.Now()
 	log.Printf("Querying Snowflake for database names...\n")
 	// TODO: consider how much work it would be to support APPLICATION DATABASE
@@ -165,8 +166,9 @@ func queryDBs() (map[string]string, error) {
 		if err = rows.Scan(&dbName, &dbKind); err != nil {
 			return nil, fmt.Errorf("queryDBs: error scanning row: %w", err)
 		}
-		if _, ok := dbs[dbName]; ok { return nil, fmt.Errorf("duplicate db name: %s", dbName) }
-		dbs[dbName] = dbKind
+		db := dbKey{dbName, dbKind}
+		if _, ok := dbs[db]; ok { return nil, fmt.Errorf("duplicate db: %v", db) }
+		dbs[db] = true
 	}
 	if err = rows.Err(); err != nil {
 		return nil, fmt.Errorf("queryDBs: error after looping over results: %w", err)
