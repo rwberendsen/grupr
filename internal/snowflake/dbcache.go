@@ -10,50 +10,53 @@ import (
 )
 
 type dbCache struct {
-	dbName      string
-	dbKind		string
-	exists 		bool
+	dropped 		bool
 	mu 		sync.Mutex // guards schemas and version
 	schemas     map[string]*schemaCache // nil: never requested; empty: none found
 	version int
 }
 
-func newDBCache(dbName string, dbKind string) *dbCache {
-	return &dbCache{dbName: dbName, dbKind: dbKind}
-}
-
-func (c *dbCache) getSchemas(dbVersion int) (map[string]*schemaCache, int, error) {
-	// Thread-safe method to get schemas in a database
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.schemas == nil { c.schemas = map[string]*schemaCache{} }
-	// This check is done cause another thread may have refreshed already.
-	// 
-	// Note that dbVersion can be > c.version if this DB was dropped in
-	// Snowflake and later recreated between when this thread last called
-	// and now; in this case it is correct to query again.
-	if dbVersion < c.version {
-		return c.schemas, c.version, nil
+func (c *dbCache) drop() {
+	// no need to obtain write lock; only called from accountCache.refreshDBs(),
+	// which is called from accountCache.matchDBs, which acquired a write lock
+	// on the account level 
+	c.dropped = true
+	version += 1
+	for schema, sc := range c.schemas {
+		sc.drop()
 	}
-	err := c.refreshSchemas()
-	if err != nil { return c.schemas, c.version, err }
-	c.version += 1
-	return c.schemas, c.version, nil
 }
 
-func (c *dbCache) refreshSchemas() error {
-	// Do not directly call this function, meant to be called only from dbCache.getSchemas
-	schemaNames, err := querySchemas(c.dbName)
+func (c *dbCache) createIfDropped() {
+	if c.dropped {
+		c.dropped = false
+		version += 1
+	}	
+}
+
+func (c *dbCache) addSchema(k string) {
+	if _, ok := c.schemas[k]; !ok {
+		if c.schemas == nil {
+			c.schemas = map[string]*schemaCache{}
+		}
+		c.schemas[k] = &schemaCache{}
+		return
+	}
+	c.schemas[k].createIfDropped()
+}
+
+func (c *dbCache) refreshSchemas(dbName string) error {
+	// Do not directly call this function, meant to be called only via match and friends,
+	// which would have required appropriate write locks to mutexes
+	schemas, err := querySchemas(dbName)
 	if err != nil { return err }
-	for schemaName, _ := range c.schemas {
-		if _, ok := schemaNames[dbName]; !ok {
-			delete(c.dbs, dbName)
+	for k, v := range c.schemas {
+		if _, ok := schemas[k]; !ok {
+			v.drop()
 		}
 	}
-	for schemaName, _ := range schemaNames {
-		if _, ok := c.schemas[schemaName]; !ok {
-			c.schemas[schemaName] = newSchemaCache(c.dbBame, schemaName)
-		}
+	for k := range schemas {
+		c.addSchema(k)
 	}
 	return nil
 }

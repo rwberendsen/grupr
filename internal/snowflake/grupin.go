@@ -20,7 +20,7 @@ func NewGrupin(ctx context.Context, db *sql.DB, g semantics.Grupin) (Grupin, err
 	eg.SetLimit(2) // TODO: make this configurable depending on environment variable
 	for k, v := range g.Products {
 		r.Products[k] = newProduct()
-		eg.Go(func() error { return refreshProduct(ctx, v, r.Products[k], r.AccountCache) }
+		eg.Go(func() error { return refreshProduct(ctx, db, v, r.Products[k], r.AccountCache) }
 	}
 	err := eg.Wait()
 	return r, err

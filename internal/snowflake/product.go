@@ -20,8 +20,8 @@ func newProduct(pSem semantics.Product) Product {
 	}
 }
 
-func refreshProduct(ctx context.Context, pSem semantics.Product, pSnow *Product, c *accountCache) error {
-	matched, err := newMatched(ctx, pSem.ObjectMatcher, c)
+func refreshProduct(ctx context.Context, conn *sql.DB,  pSem semantics.Product, pSnow *Product, c *accountCache) error {
+	matched, err := newMatched(ctx, conn, pSem.ObjectMatcher, c)
 	if err != nil {
 		// TODO: retry once? in case e.g., between we queried schemas in a DB, and objects in a schema, that schema was dropped
 		// This could forseeably happen, and we might just want to try matching again in that case, once or even twice.

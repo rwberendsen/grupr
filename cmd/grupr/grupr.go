@@ -72,11 +72,11 @@ func main() {
 	// Get DB connection; calling this only once and passing it around as necessary
 	snowCnf, err := snowflake.GetConfig()
 
-	db, err := snowflake.GetDB(ctx, snowCnf)
+	conn, err := snowflake.GetDB(ctx, snowCnf)
 	if err != nil { log.Fatalf("error creating db connection: %v", err) }
 
 	// Create Snowflake Grupin object, which will hold relevant account objects per data product
-	snowflakeNewGrupin, err := snowflake.NewGrupin(ctx, db, newGrupin)
+	snowflakeNewGrupin, err := snowflake.NewGrupin(ctx, conn, newGrupin)
 	if err != nil { log.Fatalf("making Snowflake grupin: %v", err) }
 
 	// TODO: think about it, do we first build our snowflake grupin, which until now just contains matched objects and that's it; and then we start looping over that one
@@ -95,7 +95,7 @@ func main() {
 	// to come in and delete that one; but imagine the bewilderment if two grupr processes are concurrently trying to make two different yamls the reality...
 
 	basicStats := snowflake.NewBasicStats(newGrupin, snowflakeNewGrupin)
-	err = snowflake.PersistInSnowflake(ctx, db, basicStats)
+	err = snowflake.PersistInSnowflake(ctx, conn, basicStats)
 
 	if err != nil { log.Fatalf("persisting stats: %v", err) }
 }

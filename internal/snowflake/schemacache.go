@@ -10,47 +10,37 @@ import (
 )
 
 type schemaCache struct {
-	dbName     string
-	dbKind	   string
-	schemaName string
+	dropped 	bool
 	mu		sync.Mutex // guards objects and version
-	objects		map[string]string // nil: never requested; empty: none present; value: TABLE or VIEW
+	objects		map[objKey]bool // nil: never requested; empty: none present; value: TABLE or VIEW
 	version int
 }
 
-func newSchemaCache(dbName string, dbKind string, schemaName string) *schemaCache {
-	return &schemaCache{dbName: dbName, dbKind: dbKind, schemaName: schemaName}
+func (c *schemaCache) drop() {
+	// no need to obtain write lock; only called in cases where
+	// a write lock on the database or account level has been acquired already 
+	c.dropped = true
+	version += 1
+	objects = nil
 }
 
-func (c *schemaCache) getObjects(schemaVersion int) (map[string]*schemaCache, int, error) {
-	// Thread-safe method to get databases in an account
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.objects == nil { c.objects = map[string]int{} }
-	// This check is done cause another thread may have refreshed already.
-	//
-	// Note that schemaVersion can be > c.version if this schema was
-	// dropped in Snowflake and later recreated between when this thread
-	// last called and now; in this case it is correct to query again.
-	if schemaVersion < c.version {
-		return c.objects, c.version, nil
-	}
-	err := c.refreshObjects()
-	if err != nil { return c.dbs, c.version, err }
-	c.version += 1
-	return c.dbs, c.version, nil
+func (c *schemaCache) createIfDropped() {
+	if c.dropped {
+		c.dropped = false
+		version += 1
+	}	
 }
 
-func (c *schemaCache) refreshObjects() error {
+func (c *schemaCache) refreshObjects(dbName string, schemaName string) error {
 	// Do not directly call this function, meant to be called only from schemaCache.getObjects
-	objects, err := queryObjects(c.dbName)
+	objects, err := queryObjects(dbName, schemaName)
 	if err != nil { return err }
 	c.objects = objects
 	return nil
 }
 
-func queryObjects(dbName string, schemaName string) (map[string]string, error) {
-	objects := map[string]string{}
+func queryObjects(dbName string, schemaName string) (map[objKey]bool, error) {
+	objects := map[objKey]bool
 	start := time.Now()
 	log.Printf("Querying Snowflake for object names in schema: %s.%s ...\n", dbName, schemaName)
 	rows, err := getDB().Query(`SHOW TERSE OBJECTS IN SCHEMA IDENTIFIER(?) ->> SELECT "name", "kind" FROM S1`, dbName + "." + schemaName)
@@ -63,8 +53,9 @@ func queryObjects(dbName string, schemaName string) (map[string]string, error) {
 		if err = rows.Scan(&objectName, &objectKind); err != nil {
 			return nil, fmt.Errorf("queryObjectss: error scanning row: %w", err)
 		}
-		if _, ok := objects[objectName]; ok { return nil, fmt.Errorf("duplicate object name: %s", objectName) }
-		object[objectName] = objectKind
+		k := objKey{objectName, objectKind}
+		if _, ok := objects[k]; ok { return nil, fmt.Errorf("duplicate object: %v", k) }
+		object[k] = true
 	}
 	if err = rows.Err(); err != nil {
 		return nil, fmt.Errorf("queryObjects: error after looping over results: %w", err)

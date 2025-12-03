@@ -29,49 +29,49 @@ func escapeString(s string) string {
 	return strings.ReplaceAll(s, "'", "\\'")
 }
 
-func match(e semantics.ObjExpr, c *accountCache, o *AccountObjs) error {
+func (c *accountCache) match(ctx context.Context, conn *sql.DB, e semantics.ObjExpr, o *AccountObjs) error {
 	// will modify both c and o
-	retry_requested, err := matchDBs(e[semantics.Database], c, o)
+	retry_requested, err := c.matchDBs(ctx, e[semantics.Database], o)
 	if err != nil { return err }
 	for db := range o.DBs {
-		retryRequested, err := matchSchemas(db, e, c, o)
+		retryRequested, err := c.matchSchemas(ctx, conn, db, e, o)
 		if err != nil { return err }
 		if retryRequested {
 			return match(e, c, o) // start over
 		}
 		for schema := range o.DBs[db].Schemas {
-			retryRequested, err = matchObjects(db, schema, e, c, o)
+			retryRequested, err = c.matchObjects(ctx, conn, db, schema, e, o)
 			if err != nil { return err }
 			if retryRequested {
-				return match(e, c, o) // start over
+				return c.match(e, o) // start over
 			}
 		}
 	}
 }
 
-func matchDBs(ep semantics.ObjExprPart, c *accountCache, o *AccountObjs) error {
+func (c *accountCache) matchDBs(ctx context.Context, conn *sql.DB, ep semantics.ObjExprPart, o *AccountObjs) error {
 	c.mu.Lock() // block till all another writer or any active readers are done, get a write lock, now you are the only one modifying the tree
 	defer c.mu.Unlock()
 	if o.Version == c.version {
 		// cache entry is stale
-		err := c.refreshDBs()
+		err := c.refreshDBs(ctx, conn)
 		if err != nil { return err }
 	}
 	o.Version = c.version
-	for dbKey := range o.DBs {
+	for k := range o.DBs {
 		if _, ok := c.dbs; !ok {
-			delete(o.DBs, dbKey)
+			delete(o.DBs, k)
 		}
 	}
-	for dbKey := range c.dbs {
-		if matchPart(ep, dbKey.name) {
-			o.addDB(dbKey)
+	for k := range c.dbs {
+		if matchPart(ep, k.name) {
+			o.addDB(k)
 		}
 	}
 	return nil
 }
 
-func matchSchemas(db dbKey, ep semantics.ObjExprPart, c *accountCache, o *AccountObjs) (bool, error) {
+func (c *accountCache) matchSchemas(ctx context.Context, conn *sql.DB, db dbKey, ep semantics.ObjExprPart, o *AccountObjs) (bool, error) {
 	c.mu.RLock() // Block till a (requesting) writer (obtains and) releases the lock, if any, get a read lock, now you can read this node, 
 		     // concurrently with other readers
 	defer c.mu.RUnlock()
@@ -83,9 +83,11 @@ func matchSchemas(db dbKey, ep semantics.ObjExprPart, c *accountCache, o *Accoun
 	// I'm fine with that, as long as the db I'm interested is still there in the current version
 	//	This works, because the kind of db is in the db key; if it weren't for all I know everything is fine, but the db all of a sudden
 	//	is not a standard db anymore; it is an imported db. Which I might want to treat differently.
+	c.dbs[db].mu.Lock() // get a write lock on this database
+	defer c.dbs[db].mu.Unlock()
 	if o.DBs[db].Version == c.dbs[db].version {
 		// cache entry is stale
-		err := c.refreshSchemas(db)
+		err := c.dbs[db].refreshSchemas(ctx, conn, db.name)
 		if err != nil { return false, err } // TODO: if err is obj not exist then request retry
 	}
 	o.DBs[db].Version = c.dbs[db].version
@@ -103,16 +105,18 @@ func matchSchemas(db dbKey, ep semantics.ObjExprPart, c *accountCache, o *Accoun
 	return false, nil
 }
 
-func matchObjects(db dbKey, schema string, ep semantics.ObjExprPart, c *accountCache, o *AccountObjs) (bool, error) {
+func (c *accountCache) matchObjects(ctx context.Context, conn *sql.DB, db dbKey, schema string, ep semantics.ObjExprPart, o *AccountObjs) (bool, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if _, ok := c.dbs[db]; !ok { return true, nil }
 	c.dbs[db].mu.RLock()
 	defer c.dbs[db].mu.RUnlock()
 	if _, ok := c.dbs[db].schemas[schema]; !ok { return true, nil }
+	c.dbs[db].schemas[schema].mu.Lock() // get a write lock on this schema
+	defer c.dbs[db].schemas[schema].mu.Unlock()
 	if o.DBs[db].schemas[schema].Version == c.dbs[db].schemas[schema].version {
 		// cache entry is stale
-		err := c.refreshObjects(db, schema)
+		err := c.refreshObjects(ctx, conn, db.name, schema)
 		if err != nil { return false, err } // TODO: if err is obj not exist then request retry
 	}
 	o.DBs[db].Schemas[schema].Version = c.dbs[db].schemas[schema].version
@@ -129,33 +133,39 @@ func matchObjects(db dbKey, schema string, ep semantics.ObjExprPart, c *accountC
 	return false, nil
 }
 
-func (c *accountCache) refreshDBs() error {
+func (c *accountCache) refreshDBs(ctx context.Context, conn *sql.DB) error {
 	// Do not directly call this function, meant to be called only via match and friends,
 	// which would have required appropriate write locks to mutexes
-	dbNames, err := queryDBs()
+	dbs, err := queryDBs(ctx, conn)
 	if err != nil { return err }
-	for dbName, dbCache := range c.dbs {
-		if _, ok := dbNames[dbName]; !ok {
-			delete(c.dbs, dbName)
-		} else {
-			if dbCache.dbKind != dbNames[dbName] {
-				delete(c.dbs, dbName)
-			}
+	for k, v := range c.dbs {
+		if _, ok := dbs[k]; !ok {
+			v.drop()
 		}
 	}
-	for dbName, dbKind := range dbNames {
-		if _, ok := c.dbs[dbName]; !ok {
-			c.dbs[dbName] = newDBCache(dbName, dbKind)
-		}
+	for k := range dbs {
+		c.addDB(k)
 	}
 	return nil
 }
 
-func queryDBs() (map[dbKey]true, error) {
+func (c *accountCache) addDB(k dbKey) {
+	if _, ok := c.dbs[k]; !ok {
+		if c.dbs == nil {
+			c.dbs = map[dbKey]*dbCache{}
+		}
+		c.dbs[k] = &dbCache{}
+		return
+	}
+	c.dbs[k].createIfDropped()
+}
+
+func queryDBs(ctx context.Context, conn *sql.DB) (map[dbKey]true, error) {
 	dbs := map[dbKey]string{}
 	start := time.Now()
 	log.Printf("Querying Snowflake for database names...\n")
 	// TODO: consider how much work it would be to support APPLICATION DATABASE
+	// WIP: use conn, and figure out how to use context
 	rows, err := getDB().Query(`SHOW TERSE DATABASES IN ACCOUNT ->> SELECT "name", "kind" FROM S1 WHERE "kind" IN ('STANDARD', 'IMPORTED DATABASE')`)
 	if err != nil {
 		return nil, fmt.Errorf("queryDBs error: %w", err)
@@ -176,30 +186,4 @@ func queryDBs() (map[dbKey]true, error) {
 	t := time.Now()
 	log.Printf("Querying Snowflake for database names took %v\n", t.Sub(start))
 	return dbs, nil
-}
-
-func (c *accountCache) refreshObjects(db DBID, schema string, schemaVersion int) error {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	var dbC *dbCache
-	if dbC, ok := c.dbs[db]; !ok { 
-		// TODO: try and refresh account? and if successful, then try and refresh db?
-		// And then if still not successful, return db does not exist error
-		return
-	} 
-	dbC.mu.RLock()
-	defer c.mu.RUnlock
-	var schemaC *schemaCache
-	if schemaC, ok := dbC.schemas[schema] {
-		// return schema does not exist error
-		// TODO: try and refresh DB?
-		return
-	}
-	schemaC.mu.Lock() // NB! this is a write lock, since we are refreshing objects
-	defer schemaC.mu.Unlock()
-	if schemaVersion < schemaC.version {
-		return schemaC.verison, nil // another thread may have already refreshed DB
-	}
-	// TODO: query objects, store in cache, and  bump version
-	// if failure object does not exist, then call refreshSchema's; if that one fails because object does not exist; refresh databases
 }
