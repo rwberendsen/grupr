@@ -45,10 +45,17 @@ func (c *dbCache) addSchema(k string) {
 	c.schemas[k].createIfDropped()
 }
 
-func (c *dbCache) refreshSchemas(dbName string) error {
+func (c *dbCache) hasSchema(k string) {
+	if v, ok := c.schemas[k]; ok {
+		return !v.dropped
+	}
+	return false
+}
+
+func (c *dbCache) refreshSchemas(ctx context.Context, conn *sql.DB, dbName string) error {
 	// Do not directly call this function, meant to be called only via match and friends,
 	// which would have required appropriate write locks to mutexes
-	schemas, err := querySchemas(dbName)
+	schemas, err := querySchemas(ctx, conn, dbName)
 	if err != nil { return err }
 	for k, v := range c.schemas {
 		if _, ok := schemas[k]; !ok {
@@ -61,11 +68,11 @@ func (c *dbCache) refreshSchemas(dbName string) error {
 	return nil
 }
 
-func querySchemas(dbName string) (map[string]bool, error) {
+func querySchemas(ctx context.Context, conn *sql.DB, dbName string) (map[string]bool, error) {
 	schemas := map[string]bool{}
 	start := time.Now()
 	log.Printf("Querying Snowflake for schema  names in DB: %s ...\n", dbName)
-	rows, err := getDB().Query(`SHOW TERSE SCHEMAS IN DATABASE IDENTIFIER(?) ->> SELECT "name" FROM S1`, dbName)
+	rows, err := conn.QueryContext(ctx, `SHOW TERSE SCHEMAS IN DATABASE IDENTIFIER(?) ->> SELECT "name" FROM S1`, dbName)
 	if err != nil {
 		return nil, fmt.Errorf("querySchemas error: %w", err)
 	}

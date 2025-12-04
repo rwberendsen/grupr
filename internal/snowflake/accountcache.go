@@ -29,21 +29,28 @@ func escapeString(s string) string {
 	return strings.ReplaceAll(s, "'", "\\'")
 }
 
+func (c *accountCache) hasDB(db dbKey) bool {
+	if v, ok := c.dbs[db]; ok {
+		return !v.dropped
+	}
+	return false
+}
+
 func (c *accountCache) match(ctx context.Context, conn *sql.DB, e semantics.ObjExpr, o *AccountObjs) error {
 	// will modify both c and o
 	retry_requested, err := c.matchDBs(ctx, e[semantics.Database], o)
 	if err != nil { return err }
-	for db := range o.DBs {
-		retryRequested, err := c.matchSchemas(ctx, conn, db, e, o)
+	for db, dbObjs := range o.DBs {
+		retryRequested, err := c.matchSchemas(ctx, conn, db, e, dbObjs)
 		if err != nil { return err }
 		if retryRequested {
-			return match(e, c, o) // start over
+			return match(ctx, conn, e, o) // start over, note that o remains modified
 		}
-		for schema := range o.DBs[db].Schemas {
-			retryRequested, err = c.matchObjects(ctx, conn, db, schema, e, o)
+		for schema, schemaObjs := range dbObjs.Schemas {
+			retryRequested, err = c.matchObjects(ctx, conn, db, schema, e, schemaObjs)
 			if err != nil { return err }
 			if retryRequested {
-				return c.match(e, o) // start over
+				return c.match(ctx, conn, e, o) // start over, note that o remains modified
 			}
 		}
 	}
@@ -59,7 +66,7 @@ func (c *accountCache) matchDBs(ctx context.Context, conn *sql.DB, ep semantics.
 	}
 	o.Version = c.version
 	for k := range o.DBs {
-		if _, ok := c.dbs; !ok {
+		if !c.hasDB(k) {
 			delete(o.DBs, k)
 		}
 	}
@@ -71,7 +78,7 @@ func (c *accountCache) matchDBs(ctx context.Context, conn *sql.DB, ep semantics.
 	return nil
 }
 
-func (c *accountCache) matchSchemas(ctx context.Context, conn *sql.DB, db dbKey, ep semantics.ObjExprPart, o *AccountObjs) (bool, error) {
+func (c *accountCache) matchSchemas(ctx context.Context, conn *sql.DB, db dbKey, ep semantics.ObjExprPart, o *DBObjs) (bool, error) {
 	c.mu.RLock() // Block till a (requesting) writer (obtains and) releases the lock, if any, get a read lock, now you can read this node, 
 		     // concurrently with other readers
 	defer c.mu.RUnlock()
@@ -85,27 +92,26 @@ func (c *accountCache) matchSchemas(ctx context.Context, conn *sql.DB, db dbKey,
 	//	is not a standard db anymore; it is an imported db. Which I might want to treat differently.
 	c.dbs[db].mu.Lock() // get a write lock on this database
 	defer c.dbs[db].mu.Unlock()
-	if o.DBs[db].Version == c.dbs[db].version {
+	if o.Version == c.dbs[db].version {
 		// cache entry is stale
 		err := c.dbs[db].refreshSchemas(ctx, conn, db.name)
 		if err != nil { return false, err } // TODO: if err is obj not exist then request retry
 	}
-	o.DBs[db].Version = c.dbs[db].version
-	matchedSchemas := matchPart(ep, c.dbs[db].schemas)
-	for schema := range o.DBs[db].Schemas {
-		if _, ok := c.dbs[db].schemas[schema]; !ok {
-			delete(o.DBs[db].Schemas, schema)
+	o.Version = c.dbs[db].version
+	for schema := range o.Schemas {
+		if !c.dbs[db].hasSchema(schema) {
+			delete(o.Schemas, schema)
 		}
 	}
 	for schema := range c.dbs[db].schemas {
 		if matchPart(ep, schema) {
-			o.addSchema(db, schema)
+			o.addSchema(schema)
 		}
 	}
 	return false, nil
 }
 
-func (c *accountCache) matchObjects(ctx context.Context, conn *sql.DB, db dbKey, schema string, ep semantics.ObjExprPart, o *AccountObjs) (bool, error) {
+func (c *accountCache) matchObjects(ctx context.Context, conn *sql.DB, db dbKey, schema string, ep semantics.ObjExprPart, o *SchemaObjs) (bool, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if _, ok := c.dbs[db]; !ok { return true, nil }
@@ -114,20 +120,20 @@ func (c *accountCache) matchObjects(ctx context.Context, conn *sql.DB, db dbKey,
 	if _, ok := c.dbs[db].schemas[schema]; !ok { return true, nil }
 	c.dbs[db].schemas[schema].mu.Lock() // get a write lock on this schema
 	defer c.dbs[db].schemas[schema].mu.Unlock()
-	if o.DBs[db].schemas[schema].Version == c.dbs[db].schemas[schema].version {
+	if o.Version == c.dbs[db].schemas[schema].version {
 		// cache entry is stale
 		err := c.refreshObjects(ctx, conn, db.name, schema)
 		if err != nil { return false, err } // TODO: if err is obj not exist then request retry
 	}
-	o.DBs[db].Schemas[schema].Version = c.dbs[db].schemas[schema].version
-	for objKey := range o.DBs[db].Schemas[schema].Objects {
+	o.Version = c.dbs[db].schemas[schema].version
+	for objKey := range o.Objects {
 		if _, ok := c.dbs[db].schemas[schema].objects[objKey]; !ok {
-			delete(o.DBs[db].Schemas[schema].Objects, objKey)
+			delete(o.Objects, objKey)
 		}
 	}
 	for objKey := range c.dbs[db].schemas[schema].objects {
 		if matchPart(ep, objKey.name) {
-			o.addObject(db, schema, objKey)
+			o.addObject(objKey)
 		}
 	}
 	return false, nil
@@ -165,8 +171,7 @@ func queryDBs(ctx context.Context, conn *sql.DB) (map[dbKey]true, error) {
 	start := time.Now()
 	log.Printf("Querying Snowflake for database names...\n")
 	// TODO: consider how much work it would be to support APPLICATION DATABASE
-	// WIP: use conn, and figure out how to use context
-	rows, err := getDB().Query(`SHOW TERSE DATABASES IN ACCOUNT ->> SELECT "name", "kind" FROM S1 WHERE "kind" IN ('STANDARD', 'IMPORTED DATABASE')`)
+	rows, err := conn.QueryContext(ctx, `SHOW TERSE DATABASES IN ACCOUNT ->> SELECT "name", "kind" FROM S1 WHERE "kind" IN ('STANDARD', 'IMPORTED DATABASE')`)
 	if err != nil {
 		return nil, fmt.Errorf("queryDBs error: %w", err)
 	}

@@ -12,7 +12,7 @@ import (
 type schemaCache struct {
 	dropped 	bool
 	mu		sync.Mutex // guards objects and version
-	objects		map[objKey]bool // nil: never requested; empty: none present; value: TABLE or VIEW
+	objects		map[objKey]struct // nil: never requested; empty: none present; value: TABLE or VIEW
 	version int
 }
 
@@ -31,16 +31,16 @@ func (c *schemaCache) createIfDropped() {
 	}	
 }
 
-func (c *schemaCache) refreshObjects(dbName string, schemaName string) error {
+func (c *schemaCache) refreshObjects(ctx context.Context, conn *sql.DB, dbName string, schemaName string) error {
 	// Do not directly call this function, meant to be called only from schemaCache.getObjects
-	objects, err := queryObjects(dbName, schemaName)
+	objects, err := queryObjects(ctx, conn, dbName, schemaName)
 	if err != nil { return err }
 	c.objects = objects
 	return nil
 }
 
-func queryObjects(dbName string, schemaName string) (map[objKey]bool, error) {
-	objects := map[objKey]bool
+func queryObjects(ctx context.Context, conn *sql.DB, dbName string, schemaName string) (map[objKey]struct, error) {
+	objects := map[objKey]struct{}
 	start := time.Now()
 	log.Printf("Querying Snowflake for object names in schema: %s.%s ...\n", dbName, schemaName)
 	rows, err := getDB().Query(`SHOW TERSE OBJECTS IN SCHEMA IDENTIFIER(?) ->> SELECT "name", "kind" FROM S1`, dbName + "." + schemaName)
@@ -55,7 +55,7 @@ func queryObjects(dbName string, schemaName string) (map[objKey]bool, error) {
 		}
 		k := objKey{objectName, objectKind}
 		if _, ok := objects[k]; ok { return nil, fmt.Errorf("duplicate object: %v", k) }
-		object[k] = true
+		object[k] = struct{}
 	}
 	if err = rows.Err(); err != nil {
 		return nil, fmt.Errorf("queryObjects: error after looping over results: %w", err)

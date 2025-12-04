@@ -4,44 +4,38 @@ package snowflake
 type AccountObjs struct {
 	Version int // version with regard to accountCache
 	DBs map[dbKey]*DBObjs
-	ImportedDBs map[string]*DBObjs
+	MatchAllDBs bool
+	MatchAllSchemas bool
+	MatchAllObjects bool
 }
 
-type DBObjs struct {
-	Version int // version with regard to dbCache
-	Schemas  map[string]*SchemaObjs
+func newAccountObjs(ctx context.Context, conn *sql.DB, m semantics.ObjMatcher, c *accountCache) (*AccountObjs, error) {
+	o := &AccountObjs{}
+	if err := c.match(ctx, conn, m.Include, o); err != nil {
+		return nil, err
+	}
+	o.setMatchAll(m)
+	o.processExcludes(m)
+	return o, nil
 }
 
-type SchemaObjs struct {
-	Version int // version with regard to schemaCache
-	Objects map[objKey]bool
+func (o *AccountObjs) setMatchAll(m semantics.ObjMatcher) {
+	// evaluate m.Include, as well as all excludes about how the MatchAll attributes need to be set.
+	// For example: "a.*.*", excluding "a.b.*" should no longer match all schemas, cause schema b
+	// is entirely excluded.
 }
 
-func (o *AccountObjs) addDB(db string) AccountObjs {
+func (o *AccountObjs) processExcludes(m semantics.ObjMatcher) {
+	// walk over all excludes, and remove excluded objects from o
+}
+
+func (o *AccountObjs) addDB(db string) {
 	if _, ok := o.DBs[db]; !ok {
 		if o.DBs == nil {
 			o.DBs = map[string]*DBObjs{}
 		}
 		o.DBs[db] = &DBObjs{}
 	}
-	return o
-}
-
-func (o AccountObjs) addSchema(db string, schema string, matchAllTables bool) AccountObjs {
-	if _, ok := o.DBs[db].Schemas[schema]; !ok {
-		o.DBs[db].Schemas[schema] = SchemaObjs{map[string]bool{}, map[string]bool{}, matchAllTables}
-	}
-	return o
-}
-
-func (o AccountObjs) addTable(db string, schema string, obj string) AccountObjs {
-	o.DBs[db].Schemas[schema].Tables[obj] = true
-	return o
-}
-
-func (o AccountObjs) addView(db string, schema string, obj string) AccountObjs {
-	o.DBs[db].Schemas[schema].Views[obj] = true
-	return o
 }
 
 func (lhs AccountObjs) subtract(rhs AccountObjs) AccountObjs {
