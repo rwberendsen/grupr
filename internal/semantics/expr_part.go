@@ -17,7 +17,7 @@ type ExprPart struct {
 	IsQuoted bool
 }
 
-func (p ExprPart) validate() bool {
+func (p ExprPart) validate(validQuotedExpr *regexp.Regexp, validUnquotedExpr *regexp.RegExp) bool {
 	// TODO: move somewhere we are sure they will be evaluated only once, e.g., in a config, and then pass that config around?
 	if p.IsQuoted {
 		return validQuotedExpr.MatchString(p.S)

@@ -10,20 +10,20 @@ import (
 
 type ColExprs map[ColExpr]ColExprAttr
 
-func newColExprs(s string, dtaps syntax.Rendering, userGroups syntax.Rendering) (ColExprs, error) {
+func newColExprs(cnf *Config, s string, dtaps syntax.Rendering, userGroups syntax.Rendering) (ColExprs, error) {
 	exprs := ColExprs{}
 	if strings.ContainsRune(s, '\n') {
 		return exprs, &syntax.FormattingError{"object expression has newline"}
 	}
 	dtapExpanded := map[string]ColExprAttr{}
-	if strings.Contains(s, DTAPTemplate) {
+	if strings.Contains(s, cnf.DTAPTemplate) {
 		// If object exists only in, say, a dev env, that's okay. Cause it's okay if the production rendition of the object does not match any existing objects.
 		// What counts is that if they would exist, then they would be matched.
 		if len(dtaps) == 0 {
 			return exprs, &SetLogicError{fmt.Sprintf("expanding dtaps in '%s': no dtaps found", s)}
 		}
 		for d, renderedDTAP := range dtaps {
-			dtapExpanded[strings.ReplaceAll(s, DTAPTemplate, renderedDTAP)] = ColExprAttr{DTAP: d}
+			dtapExpanded[strings.ReplaceAll(s, cnf.DTAPTemplate, renderedDTAP)] = ColExprAttr{DTAP: d}
 		}
 	} else {
 		// In a column matcher expression it is okay to omit a DTAP expansion, the column expressions are evaluated per DTAP,
@@ -32,7 +32,7 @@ func newColExprs(s string, dtaps syntax.Rendering, userGroups syntax.Rendering) 
 	}
 	userGroupExpanded := map[string]ColExprAttr{}
 	for k, v := range dtapExpanded {
-		if strings.Contains(k, UserGroupTemplate) {
+		if strings.Contains(k, cnf.UserGroupTemplate) {
 			// If object only actually exists for, say, one particular user group, that's okay.
 			// Cause it's okay if the rendition of the object for other user groups does not match any existing objects.
 			// What counts is that if they would exist, then they would be matched.
@@ -40,7 +40,7 @@ func newColExprs(s string, dtaps syntax.Rendering, userGroups syntax.Rendering) 
 				return exprs, fmt.Errorf("expanding user groups in '%s': no user groups found", k)
 			}
 			for u, renderedUserGroup := range userGroups {
-				userGroupExpanded[strings.ReplaceAll(k, UserGroupTemplate, renderedUserGroup)] =
+				userGroupExpanded[strings.ReplaceAll(k, cnf.UserGroupTemplate, renderedUserGroup)] =
 					ColExprAttr{DTAP: v.DTAP, UserGroup: u}
 			}
 		} else {
@@ -49,7 +49,7 @@ func newColExprs(s string, dtaps syntax.Rendering, userGroups syntax.Rendering) 
 		}
 	}
 	for k, v := range userGroupExpanded {
-		expr, err := newColExpr(k)
+		expr, err := newColExpr(k, cnf.ValidQuotedExpr, cnf.ValidUnquotedExpr)
 		if err != nil {
 			return exprs, err
 		}

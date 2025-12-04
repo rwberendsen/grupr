@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 
 	"github.com/rwberendsen/grupr/internal/syntax"
@@ -15,7 +16,7 @@ const (
 	Column Part = iota + 3 // Database, Schema, and Table are defined with Expr; as well as type Part
 )
 
-func newColExpr(s string) (ColExpr, error) {
+func newColExpr(s string, validQuotedExpr *regexp.Regexp, validUnquotedExpr *regexp.Regexp) (ColExpr, error) {
 	r := ColExpr{}
 	reader := csv.NewReader(strings.NewReader(s)) // encoding/csv can conveniently handle quoted parts
 	reader.Comma = '.'
@@ -51,7 +52,7 @@ func newColExpr(s string) (ColExpr, error) {
 	}
 	// validate identifier expressions
 	for _, exprPart := range fields {
-		if !exprPart.validate() {
+		if !exprPart.validate(validQuotedExpr, validUnquotedExpr) {
 			return r, &syntax.FormattingError{fmt.Sprintf("invalid expr part: '%v'", exprPart)}
 		}
 	}

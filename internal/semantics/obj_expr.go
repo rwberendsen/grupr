@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 )
 
@@ -16,7 +17,7 @@ const (
 	Object
 )
 
-func newObjExpr(s string) (ObjExpr, error) {
+func newObjExpr(s string, validQuotedExpr *regexp.Regexp, validUnquotedExpr *regexp.Regexp) (ObjExpr, error) {
 	r := ObjExpr{}
 	reader := csv.NewReader(strings.NewReader(s)) // encoding/csv can conveniently handle quoted parts
 	reader.Comma = '.'
@@ -50,7 +51,7 @@ func newObjExpr(s string) (ObjExpr, error) {
 	}
 	// validate identifier expressions
 	for _, exprPart := range r {
-		if !exprPart.validate() {
+		if !exprPart.validate(validQuotedExpr, validUnquotedExpr) {
 			return r, fmt.Errorf("invalid expr part: %s", exprPart.S)
 		}
 	}

@@ -12,38 +12,22 @@ import (
 	"github.com/snowflakedb/gosnowflake"
 )
 
-func GetDB(ctx *context.Context) (*sql.DB, error) {
-	// Call this only once
-	user, ok := os.LookupEnv("GRUPR_SNOWFLAKE_USER")
-	if !ok { return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_USER") }
-
-	role, ok := os.LookupEnv("GRUPR_SNOWFLAKE_ROLE")
-	if !ok { return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_USER") }
-
-	account, ok := os.LookupEnc("GRUPR_SNOWFLAKE_ACCOUNT")
-	if !ok { return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_ACCOUNT") }
-
-	dbName, ok := os.LookupEnc("GRUPR_SNOWFLAKE_DB")
-	if !ok { return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_DB") }
-
-	useSQLOpen, ok := os.LookupEnc("GRUPR_SNOWFLAKE_USE_SQL_OPEN")
-	if !ok { return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_USE_SQL_OPEN") }
-
+func GetDB(ctx *context.Context, snowCnf *Config) (*sql.DB, error) {
 	var db *sql.DB
 	var rsaKey *rsa.PrivateKey
-	if useSQLOpen == "true" {
-		dsn := user + "@" + account + "/" + dbName + "?authenticator=" + gosnowflake.AuthTypeExternalBrowser.String()
+	if snowCnf.UseSQLOpen {
+		dsn := snowCnf.User + "@" + snowCnf.Account + "/" + snowCnf.Database + "?authenticator=" + gosnowflake.AuthTypeExternalBrowser.String()
 		log.Printf("dsn: %v", dsn)
 		db, err := sql.Open("snowflake", dsn)
 		if err != nil { return nil, err }
 	} else {
 		var cnf *gosnowflake.Config
-		if keyPath, ok := os.LookupEnv("GRUPR_SNOWFLAKE_RSA_KEY_PATH"); !ok {
+		if cnf.RSAKeyPath == "" {
 			cnf = &gosnowflake.Config{
-				Account:       account,
-				User:          user,
-				Role:          role,
-				Database:      dbName,
+				Account:       snowCnf.Account,
+				User:          snowCnf.User,
+				Role:          snowCnf.Role,
+				Database:      snowCnf.Database,
 				Authenticator: gosnowflake.AuthTypeExternalBrowser,
 				Params:        map[string]*string{},
 			}
@@ -54,10 +38,10 @@ func GetDB(ctx *context.Context) (*sql.DB, error) {
 				return nil, err
 			}
 			cnf = &gosnowflake.Config{
-				Account:       account,
-				User:          user,
-				Role:          role,
-				Database:      dbName,
+				Account:       snowCnf.Account,
+				User:          snowCnf.User,
+				Role:          snowCnf.Role,
+				Database:      snowCnf.Database,
 				Authenticator: gosnowflake.AuthTypeJwt,
 				PrivateKey:    rsaKey,
 				Params:        map[string]*string{},
@@ -66,6 +50,8 @@ func GetDB(ctx *context.Context) (*sql.DB, error) {
 		connector := gosnowflake.NewConnector(gosnowflake.SnowflakeDriver{}, *cnf)
 		db = sql.OpenDB(connector)
 	}
+	db.setMaxOpenConns(snowCnf.MaxOpenConns)
+	db.setMaxIdleConns(snowCnf.MaxIdleConns)
 	err := db.PingContext(ctx)
 	if err != nil {
 		if rsaKey != nil {

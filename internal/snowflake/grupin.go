@@ -12,15 +12,19 @@ import (
 type Grupin struct {
 	Products map[string]Product
 	AccountCache *accountCache
+	Roles map[string]bool // false means no evidence from YAML (yet) that we need this role
+	DatabaseRoles map[string]bool // false means no evidence from YAML (yet) that we need this database role
+	// TODO: where we use map[string]bool but the bool has no meaning, use struct{} instead: more clearly meaningless
 }
 
-func NewGrupin(ctx context.Context, db *sql.DB, g semantics.Grupin) (Grupin, error) {
+func NewGrupin(ctx context.Context, cnf *Config, conn *sql.DB, g semantics.Grupin) (Grupin, error) {
 	r := Grupin{Products: map[string]Product{}, AccountCache: newAccountCache(),}
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(2) // TODO: make this configurable depending on environment variable
+	// TODO: get all (database) roles LIKE grupr_prefix, and mark them as false (no evidence yet that we need them)
 	for k, v := range g.Products {
 		r.Products[k] = newProduct()
-		eg.Go(func() error { return refreshProduct(ctx, db, v, r.Products[k], r.AccountCache) }
+		eg.Go(func() error { return refreshProduct(ctx, conn, v, r.Products[k], r.AccountCache) }
 	}
 	err := eg.Wait()
 	return r, err

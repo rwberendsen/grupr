@@ -70,13 +70,13 @@ func main() {
 	}()
 
 	// Get DB connection; calling this only once and passing it around as necessary
-	snowCnf, err := snowflake.GetConfig()
+	snowCnf, err := snowflake.GetConfig(semCnf)
 
 	conn, err := snowflake.GetDB(ctx, snowCnf)
 	if err != nil { log.Fatalf("error creating db connection: %v", err) }
 
 	// Create Snowflake Grupin object, which will hold relevant account objects per data product
-	snowflakeNewGrupin, err := snowflake.NewGrupin(ctx, conn, newGrupin)
+	snowflakeNewGrupin, err := snowflake.NewGrupin(ctx, snowCnf, conn, newGrupin)
 	if err != nil { log.Fatalf("making Snowflake grupin: %v", err) }
 
 	// TODO: think about it, do we first build our snowflake grupin, which until now just contains matched objects and that's it; and then we start looping over that one

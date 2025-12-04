@@ -43,7 +43,7 @@ func newObjExprs(cnf *Config, s string, dtaps syntax.Rendering, userGroups synta
 		}
 	}
 	for k, v := range userGroupExpanded {
-		expr, err := newObjExpr(k)
+		expr, err := newObjExpr(k, cnf.ValidQuotedExpr, cnf.ValidUnquotedExpr)
 		if err != nil {
 			return exprs, err
 		}
