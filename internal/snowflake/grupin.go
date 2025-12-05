@@ -20,7 +20,7 @@ type Grupin struct {
 func NewGrupin(ctx context.Context, cnf *Config, conn *sql.DB, g semantics.Grupin) (Grupin, error) {
 	r := Grupin{Products: map[string]Product{}, AccountCache: newAccountCache(),}
 	eg, ctx := errgroup.WithContext(ctx)
-	eg.SetLimit(cnf.NProductThreads)
+	eg.SetLimit(cnf.MaxProductThreads)
 	// TODO: get all (database) roles LIKE grupr_prefix, and mark them as false (no evidence yet that we need them)
 	for k, v := range g.Products {
 		r.Products[k] = newProduct()

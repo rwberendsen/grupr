@@ -18,15 +18,17 @@ type Config struct {
 	ObjectPrefix string // for objects created by Grupr in Snowflake
 	MaxOpenConns int
 	MaxIdleConns int
-	NProductThreads int
+	MaxProductThreads int
+	MaxProductRefreshes int
 }
 
 func GetConfig(semCnf *semantics.Config) *Config, error {
 	cnf := &Config{
 		UseSQLOpen: false,
 		MaxOpenConns: 0, 	// unlimited
-		MaxIdleConns: 3,	// NProductThreads - 1 (sometimes we use only one conn before quickly fanning out again)
-		NProductThreads: 4,
+		MaxIdleConns: 3,	// MaxProductThreads - 1 (sometimes we use only one conn before quickly fanning out again)
+		MaxProductThreads: 4,
+		MaxProductRefreshes: 4, 
 	}
 
 	if user, ok := os.LookupEnv("GRUPR_SNOWFLAKE_USER"); !ok {
@@ -93,14 +95,22 @@ q		return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_U
 		}
 	}
 
-	if nProductThreads, ok := os.LookupEnv("GRUPR_SNOWFLAKE_N_PRODUCT_THREADS"); ok {
-		if i, err := strconv.Atoi(nProductThreads); err != nil {
-			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_N_PRODUCT_THREADS: %w", err)
+	if maxProductThreads, ok := os.LookupEnv("GRUPR_SNOWFLAKE_MAX_PRODUCT_THREADS"); ok {
+		if i, err := strconv.Atoi(maxProductThreads); err != nil {
+			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_MAX_PRODUCT_THREADS: %w", err)
 		} else {
-			if i < cnf.NConnections {
-				return nil, fmt.Errorf("GRUPR_SNOWFLAKE_N_PRODUCT_THREADS should be >= GRUPR_SNOWFLAKE_N_CONNECTIONS")
+			if i < cnf.MaxOpenConnections {
+				return nil, fmt.Errorf("GRUPR_SNOWFLAKE_MAX_PRODUCT_THREADS should be >= GRUPR_SNOWFLAKE_MAX_OPEN_CONNECTIONS")
 			}
-			cnf.NProductThreads = i
+			cnf.MaxProductThreads = i
+		}
+	}
+	
+	if maxProductRefreshes, ok := os.LookupEnv("GRUPR_SNOWFLAKE_MAX_PRODUCT_REFRESHES"); ok {
+		if i, err := strconv.Atoi(maxProductRefreshes); err != nil {
+			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_MAX_PRODUCT_REFRESHES: %w", err)
+		} else {
+			cnf.MaxProductRefreshes = i
 		}
 	}
 }

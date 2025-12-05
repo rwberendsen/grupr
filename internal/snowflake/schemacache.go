@@ -45,6 +45,9 @@ func queryObjects(ctx context.Context, conn *sql.DB, dbName string, schemaName s
 	log.Printf("Querying Snowflake for object names in schema: %s.%s ...\n", dbName, schemaName)
 	rows, err := getDB().Query(`SHOW TERSE OBJECTS IN SCHEMA IDENTIFIER(?) ->> SELECT "name", "kind" FROM S1`, dbName + "." + schemaName)
 	if err != nil {
+		if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
+			return nil, ErrObjectNotExistOrAuthorized
+		}
 		return nil, fmt.Errorf("queryObjects error: %w", err)
 	}
 	for rows.Next() {

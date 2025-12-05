@@ -17,10 +17,9 @@ func newMatched(oms semantics.ObjMatchers) Matched {
 	}
 }
 
-func newMatchedAgainstAccountCache(ctx context.Context, conn *sql.DB, oms semantics.ObjMatchers, c *accountCache) Matched {
-	r := Matched{}
+func (m *Matched) refresh(ctx context.Context, conn *sql.DB, oms semantics.ObjMatchers, c *accountCache) error {
 	for k, v := range oms {
-		r[k] = c.match(ctx, conn, k)
+		if err := c.match(ctx, conn, k, v); err != nil { return err }
 	}
 	for k := range m.Exclude {
 		// TODO: match against r.Objects, cause other threads may have manipulated the accountcache concurrently,

@@ -2,11 +2,14 @@ package snowflake
 
 import (
 	"context"
+	"strings"
 	"database/sql"
 	"log"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/snowflakedb/gosnowflake"
 )
 
 // caching objects in Snowflake locally
@@ -38,20 +41,14 @@ func (c *accountCache) hasDB(db dbKey) bool {
 
 func (c *accountCache) match(ctx context.Context, conn *sql.DB, e semantics.ObjExpr, o *AccountObjs) error {
 	// will modify both c and o
-	retry_requested, err := c.matchDBs(ctx, e[semantics.Database], o)
+	err := c.matchDBs(ctx, e[semantics.Database], o)
 	if err != nil { return err }
 	for db, dbObjs := range o.DBs {
-		retryRequested, err := c.matchSchemas(ctx, conn, db, e, dbObjs)
+		err := c.matchSchemas(ctx, conn, db, e, dbObjs)
 		if err != nil { return err }
-		if retryRequested {
-			return match(ctx, conn, e, o) // start over, note that o remains modified
-		}
 		for schema, schemaObjs := range dbObjs.Schemas {
-			retryRequested, err = c.matchObjects(ctx, conn, db, schema, e, schemaObjs)
+			err = c.matchObjects(ctx, conn, db, schema, e, schemaObjs)
 			if err != nil { return err }
-			if retryRequested {
-				return c.match(ctx, conn, e, o) // start over, note that o remains modified
-			}
 		}
 	}
 }
@@ -78,13 +75,13 @@ func (c *accountCache) matchDBs(ctx context.Context, conn *sql.DB, ep semantics.
 	return nil
 }
 
-func (c *accountCache) matchSchemas(ctx context.Context, conn *sql.DB, db dbKey, ep semantics.ObjExprPart, o *DBObjs) (bool, error) {
+func (c *accountCache) matchSchemas(ctx context.Context, conn *sql.DB, db dbKey, ep semantics.ObjExprPart, o *DBObjs) error {
 	c.mu.RLock() // Block till a (requesting) writer (obtains and) releases the lock, if any, get a read lock, now you can read this node, 
 		     // concurrently with other readers
 	defer c.mu.RUnlock()
 	if _, ok := c.dbs[db]; !ok {
 		// Another thread may have modified c, refreshing db's, and deleted this db.
-		return true, nil
+		return ErrObjectNotExistOrAuthorized
 	}
 	// It could still be that o.Version < c.version
 	// I'm fine with that, as long as the db I'm interested is still there in the current version
@@ -95,7 +92,7 @@ func (c *accountCache) matchSchemas(ctx context.Context, conn *sql.DB, db dbKey,
 	if o.Version == c.dbs[db].version {
 		// cache entry is stale
 		err := c.dbs[db].refreshSchemas(ctx, conn, db.name)
-		if err != nil { return false, err } // TODO: if err is obj not exist then request retry
+		if err != nil { return err }
 	}
 	o.Version = c.dbs[db].version
 	for schema := range o.Schemas {
@@ -111,19 +108,19 @@ func (c *accountCache) matchSchemas(ctx context.Context, conn *sql.DB, db dbKey,
 	return false, nil
 }
 
-func (c *accountCache) matchObjects(ctx context.Context, conn *sql.DB, db dbKey, schema string, ep semantics.ObjExprPart, o *SchemaObjs) (bool, error) {
+func (c *accountCache) matchObjects(ctx context.Context, conn *sql.DB, db dbKey, schema string, ep semantics.ObjExprPart, o *SchemaObjs) error {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	if _, ok := c.dbs[db]; !ok { return true, nil }
+	if _, ok := c.dbs[db]; !ok { return ErrObjectNotExistOrAuthorized }
 	c.dbs[db].mu.RLock()
 	defer c.dbs[db].mu.RUnlock()
-	if _, ok := c.dbs[db].schemas[schema]; !ok { return true, nil }
+	if _, ok := c.dbs[db].schemas[schema]; !ok { return ErrObjectNotExistOrAuthorized }
 	c.dbs[db].schemas[schema].mu.Lock() // get a write lock on this schema
 	defer c.dbs[db].schemas[schema].mu.Unlock()
 	if o.Version == c.dbs[db].schemas[schema].version {
 		// cache entry is stale
 		err := c.refreshObjects(ctx, conn, db.name, schema)
-		if err != nil { return false, err } // TODO: if err is obj not exist then request retry
+		if err != nil { return err }
 	}
 	o.Version = c.dbs[db].schemas[schema].version
 	for objKey := range o.Objects {
