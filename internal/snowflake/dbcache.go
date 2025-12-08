@@ -3,6 +3,7 @@ package snowflake
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log"
 	"strings"
 	"sync"
@@ -10,46 +11,32 @@ import (
 )
 
 type dbCache struct {
-	dropped 		bool
-	mu 		sync.Mutex // guards schemas and version
-	schemas     map[string]*schemaCache // nil: never requested; empty: none found
+	mu 		sync.Mutex // guards schemas, schemaExists, and version
 	version int
-}
-
-func (c *dbCache) drop() {
-	// no need to obtain write lock; only called from accountCache.refreshDBs(),
-	// which is called from accountCache.matchDBs, which acquired a write lock
-	// on the account level 
-	c.dropped = true
-	version += 1
-	for schema, sc := range c.schemas {
-		sc.drop()
-	}
-}
-
-func (c *dbCache) createIfDropped() {
-	if c.dropped {
-		c.dropped = false
-		version += 1
-	}	
+	schemas     map[string]*schemaCache // nil: never requested; empty: none found
+	schemaExists map[string]bool
 }
 
 func (c *dbCache) addSchema(k string) {
-	if _, ok := c.schemas[k]; !ok {
-		if c.schemas == nil {
-			c.schemas = map[string]*schemaCache{}
-		}
-		c.schemas[k] = &schemaCache{}
-		return
+	if c.schemas == nil {
+		c.schemas = map[string]*schemaCache{}
+		c.schemaExists = map[string]bool{}
 	}
-	c.schemas[k].createIfDropped()
+	if _, ok := c.schemas[k]; !ok {
+		c.schemas[k] = &schemaCache{}
+	}
+	c.schemaExists[k] = true
+}
+
+func (c *dbCache) dropSchema(k string) {
+	if _, ok := c.schemas[k]; !ok {
+		panic(fmt.Sprintf("Schema not found: '%s'", k))
+	}
+	c.schemaExists[k] = false
 }
 
 func (c *dbCache) hasSchema(k string) {
-	if v, ok := c.schemas[k]; ok {
-		return !v.dropped
-	}
-	return false
+	return c.schemaExists[k];
 }
 
 func (c *dbCache) refreshSchemas(ctx context.Context, conn *sql.DB, dbName string) error {
@@ -58,9 +45,9 @@ func (c *dbCache) refreshSchemas(ctx context.Context, conn *sql.DB, dbName strin
 	schemas, err := querySchemas(ctx, conn, dbName)
 	if err != nil { return err }
 	c.version += 1
-	for k, v := range c.schemas {
+	for k, _ := range c.schemas {
 		if _, ok := schemas[k]; !ok {
-			v.drop()
+			c.dropSchema(k)
 		}
 	}
 	for k := range schemas {

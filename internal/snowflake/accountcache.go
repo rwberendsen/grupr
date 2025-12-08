@@ -2,6 +2,7 @@ package snowflake
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"database/sql"
 	"log"
@@ -14,28 +15,19 @@ import (
 
 // caching objects in Snowflake locally
 type accountCache struct {
-	mu	sync.RWMutex // guards dbs and version
-	dbs     map[DBKey]*dbCache // nil: never requested; empty: none found
+	mu	sync.RWMutex // guards dbs, dbExists, and version
 	version int
+	dbs     map[DBKey]*dbCache // nil: never requested; empty: none found
+	dbExists map[DBKey]bool
 }
 
-func newAccountCache() *accountCache {
-	return &accountCache{}
-}
-
+// TODO: move this to some file with global functions
 func escapeIdentifier(s string) string {
 	return strings.ReplaceAll(s, "\"", "\"\"")
 }
 
 func escapeString(s string) string {
 	return strings.ReplaceAll(s, "'", "\\'")
-}
-
-func (c *accountCache) hasDB(db DBKey) bool {
-	if v, ok := c.dbs[db]; ok {
-		return !v.dropped
-	}
-	return false
 }
 
 func (c *accountCache) match(ctx context.Context, conn *sql.DB, e semantics.ObjExpr, o *matchedAccountObjs) error {
@@ -61,9 +53,9 @@ func (c *accountCache) matchDBs(ctx context.Context, conn *sql.DB, ep semantics.
 		if err != nil { return err }
 	}
 	o.version = c.version
-	for k, v := range o.dbs {
+	for k, _ := range o.dbs {
 		if !c.hasDB(k) {
-			v.drop()
+			o.dropDB(k)
 		}
 	}
 	for k := range c.dbs {
@@ -94,9 +86,9 @@ func (c *accountCache) matchSchemas(ctx context.Context, conn *sql.DB, db DBKey,
 		if err != nil { return err }
 	}
 	o.version = c.dbs[db].version
-	for k, v := range o.schemas {
+	for k, _ := range o.schemas {
 		if !c.dbs[db].hasSchema(k) {
-			v.drop()
+			o.dropSchema(k)
 		}
 	}
 	for k := range c.dbs[db].schemas {
@@ -139,7 +131,7 @@ func (c *accountCache) refreshDBs(ctx context.Context, conn *sql.DB) error {
 	c.version += 1
 	for k, v := range c.dbs {
 		if _, ok := dbs[k]; !ok {
-			v.drop()
+			c.dropDB(k)
 		}
 	}
 	for k := range dbs {
@@ -149,14 +141,25 @@ func (c *accountCache) refreshDBs(ctx context.Context, conn *sql.DB) error {
 }
 
 func (c *accountCache) addDB(k DBKey) {
-	if _, ok := c.dbs[k]; !ok {
-		if c.dbs == nil {
-			c.dbs = map[DBKey]*dbCache{}
-		}
-		c.dbs[k] = &dbCache{}
-		return
+	if c.dbs == nil {
+		c.dbs = map[DBKey]*dbCache{}
+		c.dbExists = map[DBKey]bool{}
 	}
-	c.dbs[k].createIfDropped()
+	if _, ok := c.dbs[k]; !ok {
+		c.dbs[k] = &dbCache{}
+	}
+	c.dbExists[k] = true
+}
+
+func (c *accountCache) dropDB(k DBKey) {
+	if _, ok := c.dbs[k]; !ok {
+		panic(fmt.Sprintf("DBKey not found: '%s'", k))
+	}
+	c.dbExists[k] = false
+}
+
+func (c *accountCache) hasDB(k DBKey) bool {
+	return c.dbExists[k]
 }
 
 func queryDBs(ctx context.Context, conn *sql.DB) (map[DBKey]true, error) {

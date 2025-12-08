@@ -10,25 +10,9 @@ import (
 )
 
 type schemaCache struct {
-	dropped 	bool
 	mu		sync.Mutex // guards objects and version
-	objects		map[objKey]struct // nil: never requested; empty: none present; value: TABLE or VIEW
 	version int
-}
-
-func (c *schemaCache) drop() {
-	// no need to obtain write lock; only called in cases where
-	// a write lock on the database or account level has been acquired already 
-	c.dropped = true
-	version += 1
-	objects = nil
-}
-
-func (c *schemaCache) createIfDropped() {
-	if c.dropped {
-		c.dropped = false
-		version += 1
-	}	
+	objects		map[objKey]struct // nil: never requested; empty: none present; value: TABLE or VIEW
 }
 
 func (c *schemaCache) refreshObjects(ctx context.Context, conn *sql.DB, dbName string, schemaName string) error {

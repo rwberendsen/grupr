@@ -8,22 +8,31 @@ import (
 )
 
 type Product struct {
+	AccountObjects map[semantics.ObjExpr]*AccountObjs
+	Interfaces map[string]Interface
+	pSem semantics.Product
 	refreshCount int
 	matchedAccountObjects map[semantics.ObjExpr]*matchedAccountObjs
-	AccountObjects map[semantics.ObjExpr]*AccountObjs
 }
 
 func newProduct(pSem semantics.Product) *Product {
-	p := &Product{}
-	p.AccountObjects = map[semantics.ObjExpr]*AccountObjs{}
+	p := &Product{pSem: pSem}
+	p.matchedAccountObjects = map[semantics.ObjExpr]*AccountObjs{}
 	for k := range pSem.ObjectMatchers {
-		p.AccountObjects[k] = &AccountObjects{}
+		p.matchedAccountObjects[k] = &matchedAccountObjects{}
 	}
+	return p
 }
 
 func (p *Product) refresh(ctx context.Context, cnf *Config, conn *sql.DB, c *accountCache) error {
-	defer refreshCount += 1
-	if p.refreshCount == cnf.MaxProductRefreshCount {
+	err := p.refreshRecur(ctx, cnf, conn, c)
+	if err != nil { return err }
+	p.calcObjects()
+}
+
+func (p *Product) refreshRecur(ctx context.Context, cnf *Config, conn *sql.DB, c *accountCache) error {
+	p.refreshCount += 1
+	if p.refreshCount > cnf.MaxProductRefreshCount {
 		return fmt.Errorf("Max product refresh count reached")
 	}
 	util.SleepContext(ctx, 1 << p.refreshCount - 1) // exponential backoff
@@ -31,16 +40,25 @@ func (p *Product) refresh(ctx context.Context, cnf *Config, conn *sql.DB, c *acc
 		if err != ErrObjectNotExistOrAuthorized {
 			return err
 		}
-		err = p.refresh(ctx, cnf, conn, c) 
+		err = p.refreshRecur(ctx, cnf, conn, c) 
 	}
 	return nil
 }
 
 func (p *Product) refreshObjExprs(ctx context.Context, conn *sql.DB, c *accountCache) error {
-	for k, v := range p.AccountObjects {
-		c.match() // WIP
+	for e, _ := range pSem.ObjectMatchers {
+		if err := c.match(ctx, conn, e, p.matchedAccountObjects[e]); err != nil {
+			return err
+		}
 	}
+	return nil
 }
+
+func (p *Product) calcObjects() {
+	p.AccountObjects = map[semantics.ObjExpr]*AccountObjects{}
+	for 
+}
+
 
 func (pSnow *Product) grant(ctx context.Context, cnf *Config, conn *sql.DB, pSem semantics.Product, c *accountCache) error {
 	// if during granting we get ErrObjectNotExistOrAuthorized, we should refresh the product and try again
