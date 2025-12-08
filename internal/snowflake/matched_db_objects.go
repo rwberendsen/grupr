@@ -27,3 +27,7 @@ func (o *matchedDBObjs) dropSchema(k string) {
 	}
 	o.schemaExists[k] = false
 }
+
+func (o *matchedDBObjs) hasSchema(k string) {
+	return o.schemaExists[k]
+}

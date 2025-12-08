@@ -46,7 +46,7 @@ func (p *Product) refreshRecur(ctx context.Context, cnf *Config, conn *sql.DB, c
 }
 
 func (p *Product) refreshObjExprs(ctx context.Context, conn *sql.DB, c *accountCache) error {
-	for e, _ := range pSem.ObjectMatchers {
+	for e, _ := range p.pSem.ObjectMatchers {
 		if err := c.match(ctx, conn, e, p.matchedAccountObjects[e]); err != nil {
 			return err
 		}
@@ -56,7 +56,20 @@ func (p *Product) refreshObjExprs(ctx context.Context, conn *sql.DB, c *accountC
 
 func (p *Product) calcObjects() {
 	p.AccountObjects = map[semantics.ObjExpr]*AccountObjects{}
-	for 
+	for e, om := range p.pSem.ObjectMatchers {
+		p.calcObjectsExpr(e, om)
+	}
+}
+
+func (p *Product) calcObjectsExpr(e semanctics.ObjExpr, om semantics.ObjMatcher) {
+	for db := range p.matchedAccountObjects[e] {
+		if p.matchedAccountObjects[e].hasDB(db) {
+			for excludeExpr := range om.Exclude {
+				if !matchPart(db.Name) // WIP ...
+			}
+			p.AccountObjects[e]
+		}
+	}
 }
 
 
