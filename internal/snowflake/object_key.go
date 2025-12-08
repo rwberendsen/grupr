@@ -4,24 +4,24 @@ import (
 	"fmt"
 )
 
-type objKind int
+type ObjKind int
 
 const (
-	Table objKind = iota
+	Table ObjKind = iota
 	View
 )
 
-type objKey struct {
-	name string
-	kind objKind
+type ObjKey struct {
+	Name string
+	Kind ObjKind
 }
 
-func getObjKind(k string) objKind {
+func getObjKind(k string) ObjKind {
 	if k == 'TABLE' { return Table }
 	if k == 'VIEW' { return View }
 	panic("Unsupported object kind")
 }
 
-func (k objKey) String() {
-	fmt.Println("%s (%s)", k.name, k.kind)
+func (k ObjKey) String() {
+	fmt.Println("%s (%s)", k.Name, k.Kind)
 }

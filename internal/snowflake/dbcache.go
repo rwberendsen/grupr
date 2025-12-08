@@ -57,6 +57,7 @@ func (c *dbCache) refreshSchemas(ctx context.Context, conn *sql.DB, dbName strin
 	// which would have required appropriate write locks to mutexes
 	schemas, err := querySchemas(ctx, conn, dbName)
 	if err != nil { return err }
+	c.version += 1
 	for k, v := range c.schemas {
 		if _, ok := schemas[k]; !ok {
 			v.drop()

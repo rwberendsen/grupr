@@ -4,24 +4,24 @@ import (
 	"fmt"
 )
 
-type dbKind int
+type DBKind int
 
 const (
-	StandardDatabase dbKind = iota
+	StandardDatabase DBKind = iota
 	ImportedDatabase
 )
 
-type dbKey struct {
-	name string
-	kind dbKind
+type DBKey struct {
+	Name string
+	Kind DBKind
 }
 
-func getDBKind(k string) dbKind {
+func getDBKind(k string) DBKind {
 	if k == 'STANDARD' { return StandardDatabase }
 	if k == 'IMPORTED DATABASE' { return ImportedDatabase }
 	panic("Unsupported database kind")
 }
 
-func (k dbKey) String() {
-	fmt.Println("%s (%s)", k.name, k.kind)
+func (k DBKey) String() {
+	fmt.Println("%s (%s)", k.Name, k.Kind)
 }

@@ -9,6 +9,7 @@ import (
 
 type Product struct {
 	refreshCount int
+	matchedAccountObjects map[semantics.ObjExpr]*matchedAccountObjs
 	AccountObjects map[semantics.ObjExpr]*AccountObjs
 }
 

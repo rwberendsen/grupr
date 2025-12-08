@@ -35,6 +35,7 @@ func (c *schemaCache) refreshObjects(ctx context.Context, conn *sql.DB, dbName s
 	// Do not directly call this function, meant to be called only from schemaCache.getObjects
 	objects, err := queryObjects(ctx, conn, dbName, schemaName)
 	if err != nil { return err }
+	c.version += 1
 	c.objects = objects
 	return nil
 }
