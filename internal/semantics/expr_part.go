@@ -75,6 +75,17 @@ func (e ExprPart) MatchAll() bool {
 	return !e.IsQuoted && e.S == "*"
 }
 
+func (e ExprPart) Match(s string) bool {
+	if e.IsQuoted {
+		return e.S == s
+	}
+	// implement match unquoted with optional suffix wildcard
+	// note that we match case insensitive, so `mytable` would match all of
+	// "mytable", "MyTable", "MYTABLE", etc.
+	re := CreateRegexpIdentifier(e.S)
+	return re.MatchString(s)
+}
+
 func (e ExprPart) String() string {
 	s := ""
 	if e.IsQuoted {

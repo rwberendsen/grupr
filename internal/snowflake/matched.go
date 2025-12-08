@@ -45,14 +45,3 @@ func newMatchedAgainstAccountObjs(m semantics.ObjMatcher, o AccountObjs) Matched
 	}
 	return r
 }
-
-func matchPart(e semantics.ExprPart, name string) bool {
-	if e.IsQuoted {
-		return e.S == name
-	}
-	// implement match unquoted with optional suffix wildcard
-	// note that we match case insensitive, so `mytable` would match all of
-	// "mytable", "MyTable", "MYTABLE", etc.
-	re := semantics.CreateRegexpIdentifier(e.S)
-	return re.MatchString(name)
-}

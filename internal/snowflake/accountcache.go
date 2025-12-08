@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rwberendsen/grupr/internal/semantics"
 	"github.com/snowflakedb/gosnowflake"
 )
 
@@ -59,7 +60,7 @@ func (c *accountCache) matchDBs(ctx context.Context, conn *sql.DB, ep semantics.
 		}
 	}
 	for k := range c.dbs {
-		if matchPart(ep, k.Name) {
+		if ep.Match(k.Name) {
 			o.addDB(k)
 		}
 	}
@@ -92,7 +93,7 @@ func (c *accountCache) matchSchemas(ctx context.Context, conn *sql.DB, db DBKey,
 		}
 	}
 	for k := range c.dbs[db].schemas {
-		if matchPart(ep, k) {
+		if ep.Match(k) {
 			o.addSchema(k)
 		}
 	}
@@ -116,7 +117,7 @@ func (c *accountCache) matchObjects(ctx context.Context, conn *sql.DB, db DBKey,
 	o.version = c.dbs[db].schemas[schema].version
 	o.objects = map[ObjKey]struct{}
 	for k := range c.dbs[db].schemas[schema].objects {
-		if matchPart(ep, k.Name) {
+		if ep.Match(k.Name) {
 			o.objects[k] = struct{}
 		}
 	}

@@ -2,38 +2,14 @@ package snowflake
 
 // Couple of simple data structures to hold matched objects in account
 type AccountObjs struct {
-	Version int // version with regard to accountCache
 	DBs map[dbKey]*DBObjs
-	MatchAllDBs bool
-	MatchAllSchemas bool
-	MatchAllObjects bool
-}
-
-func newAccountObjs(ctx context.Context, conn *sql.DB, m semantics.ObjMatcher, c *accountCache) (*AccountObjs, error) {
-	o := &AccountObjs{}
-	if err := c.match(ctx, conn, m.Include, o); err != nil {
-		return nil, err
-	}
-	o.setMatchAll(m)
-	o.processExcludes(m)
-	return o, nil
-}
-
-func (o *AccountObjs) setMatchAll(m semantics.ObjMatcher) {
-	// evaluate m.Include, as well as all excludes about how the MatchAll attributes need to be set.
-	// For example: "a.*.*", excluding "a.b.*" should no longer match all schemas, cause schema b
-	// is entirely excluded.
-}
-
-func (o *AccountObjs) processExcludes(m semantics.ObjMatcher) {
-	// walk over all excludes, and remove excluded objects from o
 }
 
 func (o *AccountObjs) addDB(db string) {
+	if o.DBs == nil {
+		o.DBs = map[string]*DBObjs{}
+	}
 	if _, ok := o.DBs[db]; !ok {
-		if o.DBs == nil {
-			o.DBs = map[string]*DBObjs{}
-		}
 		o.DBs[db] = &DBObjs{}
 	}
 }

@@ -61,17 +61,35 @@ func (p *Product) calcObjects() {
 	}
 }
 
-func (p *Product) calcObjectsExpr(e semanctics.ObjExpr, om semantics.ObjMatcher) {
-	for db := range p.matchedAccountObjects[e] {
+func (p *Product) calcObjectsExpr(e semantics.ObjExpr, om semantics.ObjMatcher) {
+	for db, matchedDBObjects := range p.matchedAccountObjects[e].dbs {
 		if p.matchedAccountObjects[e].hasDB(db) {
+			dbExcluded := false
 			for excludeExpr := range om.Exclude {
-				if !matchPart(db.Name) // WIP ...
+				if excludeExpr.MatchesAllObjectsInDB(db.Name) {
+					dbExcluded = true
+				}
 			}
-			p.AccountObjects[e]
+			if !dbExcluded {
+				p.AccountObjects[e].addDB(db)
+				for schema, matchedSchemaObjects := range matchedDBObjects.schemas {
+					if matchedDBObjects.hasSchema(schema) {
+						schemaExcluded := false
+						for excludeExpr := range om.Exclude {
+							if excludeExpr.MatchesAllObjectsInSchema(db.Name, schema) {
+								schemaExcluded = true
+							}
+						}
+						if !schemaExcluded {
+							p.AccountObjects[e].DBs[db].addSchema(schema)
+							// WIP
+						}
+					}
+				}
+			}
 		}
 	}
 }
-
 
 func (pSnow *Product) grant(ctx context.Context, cnf *Config, conn *sql.DB, pSem semantics.Product, c *accountCache) error {
 	// if during granting we get ErrObjectNotExistOrAuthorized, we should refresh the product and try again
