@@ -1,5 +1,10 @@
 package snowflake
 
+import (
+	"github.com/rwberendsen/grupr/internal/semantics"
+)
+
+
 // Couple of simple data structures to hold matched objects in account
 type AccountObjs struct {
 	DBs map[DBKey]*DBObjs
@@ -12,6 +17,36 @@ func newAccountObjsFromMatched(m *matchedAccountObjs) *AccountObjs {
 		o.DBs[k] = newDBObjsFromMatched(v)
 	}
 	return o
+}
+
+func newAccountObjs(o *AccountObjs, e semantics.ObjExpr, om semantics.ObjMatcher) *AccountObjs {
+	for db, matchedDBObjects := range p.matchedAccountObjects[e].dbs {
+		if p.matchedAccountObjects[e].hasDB(db) {
+			dbExcluded := false
+			for excludeExpr := range om.Exclude {
+				if excludeExpr.MatchesAllObjectsInDB(db.Name) {
+					dbExcluded = true
+				}
+			}
+			if !dbExcluded {
+				p.AccountObjects[e].addDB(db)
+				for schema, matchedSchemaObjects := range matchedDBObjects.schemas {
+					if matchedDBObjects.hasSchema(schema) {
+						schemaExcluded := false
+						for excludeExpr := range om.Exclude {
+							if excludeExpr.MatchesAllObjectsInSchema(db.Name, schema) {
+								schemaExcluded = true
+							}
+						}
+						if !schemaExcluded {
+							p.AccountObjects[e].DBs[db].addSchema(schema)
+							// WIP
+						}
+					}
+				}
+			}
+		}
+	}
 }
 
 func (o *AccountObjs) addDB(db string) {

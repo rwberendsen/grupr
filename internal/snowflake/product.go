@@ -57,38 +57,12 @@ func (p *Product) refreshObjExprs(ctx context.Context, conn *sql.DB, c *accountC
 func (p *Product) calcObjects() {
 	p.AccountObjects = map[semantics.ObjExpr]*AccountObjects{}
 	for e, om := range p.pSem.ObjectMatchers {
-		p.AccountObjects[e] = newAccountObjects(e, om)
+		tmpAccountObjs = newAccountObjsFromMatched(p.matchedAccountObjects[e])
+		p.AccountObjects[e] = newAccountObjects(tmpAccountObjs, e, om)
 	}
 }
 
 func (p *Product) calcObjectsExpr(e semantics.ObjExpr, om semantics.ObjMatcher) {
-	for db, matchedDBObjects := range p.matchedAccountObjects[e].dbs {
-		if p.matchedAccountObjects[e].hasDB(db) {
-			dbExcluded := false
-			for excludeExpr := range om.Exclude {
-				if excludeExpr.MatchesAllObjectsInDB(db.Name) {
-					dbExcluded = true
-				}
-			}
-			if !dbExcluded {
-				p.AccountObjects[e].addDB(db)
-				for schema, matchedSchemaObjects := range matchedDBObjects.schemas {
-					if matchedDBObjects.hasSchema(schema) {
-						schemaExcluded := false
-						for excludeExpr := range om.Exclude {
-							if excludeExpr.MatchesAllObjectsInSchema(db.Name, schema) {
-								schemaExcluded = true
-							}
-						}
-						if !schemaExcluded {
-							p.AccountObjects[e].DBs[db].addSchema(schema)
-							// WIP
-						}
-					}
-				}
-			}
-		}
-	}
 }
 
 func (pSnow *Product) grant(ctx context.Context, cnf *Config, conn *sql.DB, pSem semantics.Product, c *accountCache) error {

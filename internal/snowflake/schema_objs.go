@@ -1,9 +1,15 @@
 package snowflake
 
 type SchemaObjs struct {
-	Version int // version with regard to schemaCache
-	Objects map[objKey]struct
+	Objects map[ObjKey]struct
 	MatchAllObjects bool
+}
+
+func newSchemaObjsFromMatched(m *matchedSchemaObjs) *SchemaObjs {
+	o := &SchemaObjs{Objects: map[ObjKey]struct{},}
+	for k := range m.objects {
+		o.objects[k] = struct{}
+	}
 }
 
 func (o *SchemaObjs) addObject(k objKey) {
