@@ -29,5 +29,5 @@ func (o *matchedDBObjs) dropSchema(k string) {
 }
 
 func (o *matchedDBObjs) hasSchema(k string) {
-	return o.schemaExists[k]
+	return o.schemaExists != nil && o.schemaExists[k]
 }

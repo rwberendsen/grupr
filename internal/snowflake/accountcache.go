@@ -36,9 +36,11 @@ func (c *accountCache) match(ctx context.Context, conn *sql.DB, e semantics.ObjE
 	err := c.matchDBs(ctx, e[semantics.Database], o)
 	if err != nil { return err }
 	for db, dbObjs := range o.dbs {
+		if !o.hasDB(db) { continue }
 		err := c.matchSchemas(ctx, conn, db, e, dbObjs)
 		if err != nil { return err }
 		for schema, schemaObjs := range dbObjs.schemas {
+			if !dbObjs.hasSchema(schema) { continue }
 			err = c.matchObjects(ctx, conn, db, schema, e, schemaObjs)
 			if err != nil { return err }
 		}
@@ -55,11 +57,13 @@ func (c *accountCache) matchDBs(ctx context.Context, conn *sql.DB, ep semantics.
 	}
 	o.version = c.version
 	for k, _ := range o.dbs {
+		if !o.hasDB(k) { continue }
 		if !c.hasDB(k) {
 			o.dropDB(k)
 		}
 	}
 	for k := range c.dbs {
+		if !c.hasDB(k) { continue }
 		if ep.Match(k.Name) {
 			o.addDB(k)
 		}
@@ -88,11 +92,13 @@ func (c *accountCache) matchSchemas(ctx context.Context, conn *sql.DB, db DBKey,
 	}
 	o.version = c.dbs[db].version
 	for k, _ := range o.schemas {
+		if !o.hasSchema(k) { continue }
 		if !c.dbs[db].hasSchema(k) {
 			o.dropSchema(k)
 		}
 	}
 	for k := range c.dbs[db].schemas {
+		if !c.dbs[db].hasSchema(k) { continue }
 		if ep.Match(k) {
 			o.addSchema(k)
 		}
@@ -131,6 +137,7 @@ func (c *accountCache) refreshDBs(ctx context.Context, conn *sql.DB) error {
 	if err != nil { return err }
 	c.version += 1
 	for k, v := range c.dbs {
+		if !c.hasDB(k) { continue }
 		if _, ok := dbs[k]; !ok {
 			c.dropDB(k)
 		}
@@ -160,7 +167,7 @@ func (c *accountCache) dropDB(k DBKey) {
 }
 
 func (c *accountCache) hasDB(k DBKey) bool {
-	return c.dbExists[k]
+	return c.dbExists != nil && c.dbExists[k]
 }
 
 func queryDBs(ctx context.Context, conn *sql.DB) (map[DBKey]true, error) {

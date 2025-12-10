@@ -2,7 +2,16 @@ package snowflake
 
 // Couple of simple data structures to hold matched objects in account
 type AccountObjs struct {
-	DBs map[dbKey]*DBObjs
+	DBs map[DBKey]*DBObjs
+}
+
+func newAccountObjsFromMatched(m *matchedAccountObjs) *AccountObjs {
+	o := &AccountObjs{DBS: map[DBKey]*DBObjs{},}
+	for k, v := range m.dbs {
+		if !m.hasDB(k) { continue }
+		o.DBs[k] = newDBObjsFromMatched(v)
+	}
+	return o
 }
 
 func (o *AccountObjs) addDB(db string) {

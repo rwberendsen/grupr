@@ -29,5 +29,5 @@ func (o *matchedAccountObjs) dropDB(k DBKey) {
 }
 
 func (o *matchedAccountObjs) hasDB(k DBKey) {
-	return o.dbExists[k]
+	return o.dbExists != nil && o.dbExists[k]
 }

@@ -36,7 +36,7 @@ func (c *dbCache) dropSchema(k string) {
 }
 
 func (c *dbCache) hasSchema(k string) {
-	return c.schemaExists[k];
+	return c.schemaExists != nil && c.schemaExists[k];
 }
 
 func (c *dbCache) refreshSchemas(ctx context.Context, conn *sql.DB, dbName string) error {
@@ -46,6 +46,7 @@ func (c *dbCache) refreshSchemas(ctx context.Context, conn *sql.DB, dbName strin
 	if err != nil { return err }
 	c.version += 1
 	for k, _ := range c.schemas {
+		if !c.hasSchema(k) { continue }
 		if _, ok := schemas[k]; !ok {
 			c.dropSchema(k)
 		}

@@ -57,7 +57,7 @@ func (p *Product) refreshObjExprs(ctx context.Context, conn *sql.DB, c *accountC
 func (p *Product) calcObjects() {
 	p.AccountObjects = map[semantics.ObjExpr]*AccountObjects{}
 	for e, om := range p.pSem.ObjectMatchers {
-		p.calcObjectsExpr(e, om)
+		p.AccountObjects[e] = newAccountObjects(e, om)
 	}
 }
 
