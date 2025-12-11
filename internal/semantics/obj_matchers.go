@@ -106,3 +106,17 @@ func (lhs ObjMatchers) subsetOf(rhs ObjMatchers) bool {
 	}
 	return true
 }
+
+func (lhs ObjMatchers) setSubsetOf(rhs ObjMatchers) ObjMatchers {
+	ret := ObjMatchers{}
+	for eLHS, omLHS := range lhs {
+		for eRHS, omRHS := range rhs {
+			if omLHS.subsetOf(omRHS) {
+				omLHS.SubsetOf = eRHS
+				break
+			}
+		}
+		ret[eLHS] = omLHS
+	}
+	return ret	
+}

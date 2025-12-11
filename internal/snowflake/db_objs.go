@@ -24,15 +24,13 @@ func newDBObjs(db DBKey, o *DBObjs, e semantics.ObjExpr, om semantics.ObjMatcher
 	r.setMatchAllSchemas(db, e, om)
 	r.setMatchAllObjects(db, e, om)
 	for schema, schemaObjs := range o.Schemas {
-		schemaExcluded = false
+		if !e[semantics.Schema].Match(schema) { continue }
 		for excludeExpr := range om.Exclude {
 			if excludeExpr.MatchesAllObjectsInSchema(db.Name, schema) {
-				schemaExcluded = true
+				continue
 			}
 		}
-		if !schemaExcluded {
-			o.Schemas[schema] = newSchemaObjs(db, schema, schemaObjs, e, om)
-		}
+		o.Schemas[schema] = newSchemaObjs(db, schema, schemaObjs, e, om)
 	}
 }
 
@@ -51,7 +49,7 @@ func (o *DBObjs) setMatchAllObjects(db DBKey, e semantics.ObjExpr, om semantics.
 	if !e[semantics.Object].MatchAll() { return }
 	o.MatchAllObjects = true
 	for excludeExpr := range om.Exclude {
-		if excludeExpr[Database].Match(db.Name) {
+		if excludeExpr[semantics.Database].Match(db.Name) {
 			o.MatchAllObjects = false
 		}
 	}

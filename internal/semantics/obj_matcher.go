@@ -11,6 +11,7 @@ type ObjMatcher struct {
 	Include        ObjExpr
 	ObjExprAttr
 	Exclude        map[ObjExpr]bool // No need to store ObjExprAttr of excluded objects
+	SubsetOf 	ObjExpr // used for any ObjMatcher that is part of an interface; "" means none
 }
 
 func (lhs ObjMatcher) disjoint(rhs ObjMatcher) bool {

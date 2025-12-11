@@ -119,6 +119,10 @@ func allDisjointObjExprMap(m map[ObjExpr]any) error {
 	return nil
 }
 
+func (e ObjExpr) Match(db string, schema string, obj string) {
+	return e[Database].Match(db) && e[Schema].Match(schema) && e[Object].Match(obj)
+}
+
 func (e ObjExpr) MatchesAllObjectsInDB (db string) {
 	if !e[Database].Match(db) {
 		return false

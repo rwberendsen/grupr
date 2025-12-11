@@ -22,15 +22,13 @@ func newAccountObjsFromMatched(m *matchedAccountObjs) *AccountObjs {
 func newAccountObjs(o *AccountObjs, e semantics.ObjExpr, om semantics.ObjMatcher) *AccountObjs {
 	r := &AccountObjs{DBs: map[DBKey]*DBObjs{},}
 	for db, dbObjects := range o.DBs {
-		dbExcluded := false
+		if !e[semantics.Database].Match(db.Name) { continue }
 		for excludeExpr := range om.Exclude {
 			if excludeExpr.MatchesAllObjectsInDB(db.Name) {
-				dbExcluded = true
+				continue
 			}
 		}
-		if !dbExcluded {
-			r.DBs[db] = newDBObjs(db, dbObjects, e, om)
-		}
+		r.DBs[db] = newDBObjs(db, dbObjects, e, om)
 	}
 }
 

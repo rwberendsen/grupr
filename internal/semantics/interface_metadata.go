@@ -140,15 +140,16 @@ func (imSem *InterfaceMetadata) setObjectMatchers(cnf *Config, imSyn syntax.Inte
 		}
 		return &PolicyError{"ObjectMatcher is a required field"}
 	}
-	if m, err := newObjMatcher(cnf, imSyn.Objects, imSyn.ObjectsExclude, dtaps, imSem.UserGroups); err != nil {
-		return fmt.Errorf("ObjectMatcher: %w", err)
+	if m, err := newObjMatchers(cnf, imSyn.Objects, imSyn.ObjectsExclude, dtaps, imSem.UserGroups); err != nil {
+		return fmt.Errorf("ObjectMatchers: %w", err)
 	} else {
-		imSem.ObjectMatcher = m
+		imSem.ObjectMatchers = m
 	}
 	if parent != nil {
-		if !imSem.ObjectMatcher.subsetOf(parent.ObjectMatcher) {
+		if !imSem.ObjectMatchers.subsetOf(parent.ObjectMatchers) {
 			return &PolicyError{"ObjectMatcher should be a subset of parent ObjectMatcher"}
 		}
+		imSem.ObjectMatchers = imSem.ObjectMatchers.setSubsetOf(parent.ObjectMatchers)
 	}
 	return nil
 }
