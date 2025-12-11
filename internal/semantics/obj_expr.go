@@ -123,7 +123,14 @@ func (e ObjExpr) MatchesAllObjectsInDB (db string) {
 	if !e[Database].Match(db) {
 		return false
 	}
-	return e[Schema].MatchAll() && s[Object].MatchAll()
+	return e[Schema].MatchAll() && e[Object].MatchAll()
+}
+
+func (e ObjExpr) MatchesAllObjectsInAnySchemaInDB(db string) {
+	if !e[Database].Match(db) {
+		return false
+	}
+	return e[Object].MatchAll()
 }
 
 func (e ObjExpr) MatchesAllObjectsInSchema (db string, schema string) {

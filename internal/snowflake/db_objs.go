@@ -1,5 +1,9 @@
 package snowflake
 
+import (
+	"github.com/rwberendsen/grupr/internal/semantics"
+)
+
 type DBObjs struct {
 	Schemas  map[string]*SchemaObjs
 	MatchAllSchemas bool
@@ -15,11 +19,40 @@ func newDBObjsFromMatched(m *matchedDBObjs) *DBObjs {
 	return o
 }
 
-func (o *DBObjs) addSchema(schema string) {
-	if _, ok := o.Schemas[schema]; !ok {
-		if o.Schemas == nil {
-			o.Schemas = map[string]*SchemaObjs{}
+func newDBObjs(db DBKey, o *DBObjs, e semantics.ObjExpr, om semantics.ObjMatcher) *DBObjs {
+	r := &DBObjs{Schemas: map[string]*SchemaObjs{},}
+	r.setMatchAllSchemas(db, e, om)
+	r.setMatchAllObjects(db, e, om)
+	for schema, schemaObjs := range o.Schemas {
+		schemaExcluded = false
+		for excludeExpr := range om.Exclude {
+			if excludeExpr.MatchesAllObjectsInSchema(db.Name, schema) {
+				schemaExcluded = true
+			}
 		}
-		o.Schemas[schema] = &SchemaObjs{}
+		if !schemaExcluded {
+			o.Schemas[schema] = newSchemaObjs(db, schema, schemaObjs, e, om)
+		}
+	}
+}
+
+func (o *DBObjs) setMatchAllSchemas(db DBKey, e semantics.ObjExpr, om semantics.ObjMatcher) {
+	if !e[semantics.Schema].MatchAll() { return }
+	o.MatchAllSchemas = true
+	for excludeExpr := range om.Exclude {
+		if excludeExpr.MatchesAllObjectsInAnySchemaInDB(db.Name) {
+			o.MatchAllSchemas = false
+		}
+	}
+}
+
+func (o *DBObjs) setMatchAllObjects(db DBKey, e semantics.ObjExpr, om semantics.ObjMatcher) {
+	if !o.MatchAllSchemas { return }
+	if !e[semantics.Object].MatchAll() { return }
+	o.MatchAllObjects = true
+	for excludeExpr := range om.Exclude {
+		if excludeExpr[Database].Match(db.Name) {
+			o.MatchAllObjects = false
+		}
 	}
 }
