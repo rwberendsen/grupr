@@ -8,8 +8,8 @@ import (
 )
 
 type Product struct {
-	AccountObjects map[semantics.ObjExpr]*AccountObjs
-	Interfaces map[string]map[semantics.ObjExpr]*AccountObjs
+	Interface
+	Interfaces map[string]*Interface
 	pSem semantics.Product
 	refreshCount int
 	matchedAccountObjects map[semantics.ObjExpr]*matchedAccountObjs
@@ -55,26 +55,19 @@ func (p *Product) refreshObjExprs(ctx context.Context, conn *sql.DB, c *accountC
 }
 
 func (p *Product) calcObjects() {
-	p.AccountObjects = map[semantics.ObjExpr]*AccountObjects{}
-	for e, om := range p.pSem.ObjectMatchers {
-		tmpAccountObjs = newAccountObjsFromMatched(p.matchedAccountObjects[e])
-		p.AccountObjects[e] = newAccountObjects(tmpAccountObjs, e, om)
-	}
-	p.Interfaces = map[string]map[semantics.ObjExpr]*AccountObjects{}
+	p.Interface = *newInterfaceFromMatched(p.MatchedAccountObjects, p.pSem.ObjectMatchers)
+	p.Interfaces = map[string]*Interface{}
 	for k, v := range p.pSem.Interfaces {
-		p.Interfaces[k] = map[semantics.ObjExpr]*AccountObjects{}
-		for e, om := range v.ObjectMatchers {
-			p.Interfaces[k][e] = newAccountObjects(p.AccountObjects[om.SubsetOf])
-		}
+		p.Interfaces[k] = newInterface(p.AccountObjects, v.ObjectMatchers)
 	}
 }
 
-func (pSnow *Product) grant(ctx context.Context, cnf *Config, conn *sql.DB, pSem semantics.Product, c *accountCache) error {
+func (pSnow *Product) grant(ctx context.Context, cnf *Config, conn *sql.DB) error {
 	// if during granting we get ErrObjectNotExistOrAuthorized, we should refresh the product and try again
 	return nil
 }
 
-func (pSnow *Product) revoke(ctx context.Context, cnf *Config, conn *sql.DB, pSem semantics.Product, c *accountCache) error {
+func (pSnow *Product) revoke(ctx context.Context, cnf *Config, conn *sql.DB) error {
 	// if during granting we get ErrObjectNotExistOrAuthorized, we should refresh the product and then first grant
 	// again, and then revoke
 	return nil

@@ -5,13 +5,25 @@ import (
 )
 
 type Interface struct {
-	Matched Matched
+	AccountObjects map[semantics.ObjExpr]*AccountObjs
+	GrantsTo struct{}
+	GrantsOn struct{}
+	GrantsOf struct{}
 }
 
-func newInterface(i semantics.InterfaceMetadata) *Interface {
-	return &Interface{newMatched(i.ObjectMatchers)}
+func newInterfaceFromMatched(m map[semantics.ObjExpr]*matchedAccountObjects, oms semantics.ObjMatchers) *Interface {
+	i := &Interface{AccountObjects: map[semantics.ObjExpr]*AccountObjs{},}
+	for e, om := range oms {
+		tmpAccountObjs = newAccountObjsFromMatched(m[e])
+		i.AccountObjects[e] = newAccountObjects(tmpAccountObjs, e, om)
+	}
+	return i
 }
 
-func refreshInterface() {
-	return
+func newInterface(m map[semantics.ObjExpr]*AccountObjects, oms semantics.ObjMatchers) *Interface {
+	i := &Interface{AccountObjects: map[semantics.ObjExpr]*AccountObjs{},}
+	for e, om := range oms {
+		i.AccountObjects[e] = newAccountObjects(m[om.SubsetOf])
+	}
+	return i
 }

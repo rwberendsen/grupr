@@ -32,6 +32,10 @@ func newDBObjs(db DBKey, o *DBObjs, e semantics.ObjExpr, om semantics.ObjMatcher
 		}
 		o.Schemas[schema] = newSchemaObjs(db, schema, schemaObjs, e, om)
 	}
+	// WIP: immediately query grants for database roles here? In that case, we
+	//      need error handling here, too, which might trigger another product refresh
+	//	again
+	// Or: do it later, and even store this info in yet another AccountObjs-like tree structure?
 }
 
 func (o *DBObjs) setMatchAllSchemas(db DBKey, e semantics.ObjExpr, om semantics.ObjMatcher) {
