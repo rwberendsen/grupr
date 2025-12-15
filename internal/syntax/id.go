@@ -6,8 +6,6 @@ import (
 	"slices"
 )
 
-const Infix = "_x_"
-
 var validID *regexp.Regexp = regexp.MustCompile(`^[a-z0-9_]+$`)
 
 func validateID(i string) error {
@@ -17,7 +15,7 @@ func validateID(i string) error {
 	return nil
 }
 
-func validateIDPart(s string) error {
+func validateIDPart(cnf *Config, s string) error {
 	if err := validateID(s); err != nil { return err }
 	/*
 	"Is there a suffix on the part that can be used with a prefix of the infix to form a complete infix?
@@ -25,9 +23,9 @@ func validateIDPart(s string) error {
 
 	Concat: part + infix + part; and validate that there is exactly one infix present on a single position in the string
 	*/
-	cat := s + Infix + s
+	cat := s + cnf.Infix + s
 	catRunes := []rune(cat)
-	infixRunes := []rune(Infix)
+	infixRunes := []rune(cnf.Infix)
 	matches := []int{}
 	for i := 0; i <= len(catRunes) - len(infixRunes); i++ {
 		if slices.Compare(catRunes[i:i+len(infixRunes)], infixRunes) == 0 {

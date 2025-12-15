@@ -15,12 +15,12 @@ type Product struct {
 	InterfaceMetadata                   `yaml:",inline"`
 }
 
-func (p *Product) validate() error {
-	if err := validateIDPart(p.ID); err != nil {
+func (p *Product) validate(cnf *Config) error {
+	if err := validateIDPart(cnf, p.ID); err != nil {
 		return err
 	}
 	if p.DTAPs != nil {
-		if err := p.DTAPs.validate(); err != nil {
+		if err := p.DTAPs.validate(cnf); err != nil {
 			return fmt.Errorf("product id: %s, DTAPs: %w", p.ID, err)
 		}
 		if err := p.DTAPRendering.validate(); err != nil {
@@ -37,7 +37,7 @@ func (p *Product) validate() error {
 		}
 	}
 	if p.UserGroupMapping != "" {
-		if err := validateIDPart(i.UserGroupMapping); err != nil {
+		if err := validateIDPart(cnf, i.UserGroupMapping); err != nil {
 			return fmt.Errorf("user_group_mapping: %w", err)
 		}
 	}
@@ -45,7 +45,7 @@ func (p *Product) validate() error {
 		if len(p.UserGroups) == 0 {
 			return fmt.Errorf("UserGroupColumn specified but not UserGroups")
 		}
-		if err := validateIDPart(p.UserGroupColumn); err != nil {
+		if err := validateIDPart(cnf, p.UserGroupColumn); err != nil {
 			return fmt.Errorf("user_group_column: %w", err)
 		}
 	}
@@ -60,7 +60,7 @@ func (p *Product) validate() error {
 	for _, cs := range p.Consumes {
 		if err := cs.validate(); err != nil { return err }
 	}
-	if err := p.InterfaceMetadata.validate(); err != nil {
+	if err := p.InterfaceMetadata.validate(cnf); err != nil {
 		return fmt.Errorf("product %s: %w", p.ID, err)
 	}
 	return nil

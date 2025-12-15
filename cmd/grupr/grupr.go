@@ -38,8 +38,9 @@ func main() {
 	// temp key in S3 and then copy them; S3 CopyObject does support condtional write
 	// headers; most likely they would be applied on the target object for the copy
 	// operation. So, yeah, most likely this would work.
+	synCnf := syntax.GetConfig()
 	semCnf := semantics.GetConfig()
-	newGrupin, err := util.GetGrupinFromPath(semCnf, flag.Arg(0))
+	newGrupin, err := util.GetGrupinFromPath(synCnf, semCnf, flag.Arg(0))
 	if err != nil {
 		log.Fatalf("get new grupin: %v", err)
 	}

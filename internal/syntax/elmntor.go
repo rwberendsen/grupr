@@ -12,7 +12,7 @@ type ElmntOr struct {
 	Interface        *Interface        `yaml:"interface,omitempty"`
 }
 
-func (e ElmntOr) validateAndAdd(g *Grupin) error {
+func (e ElmntOr) validateAndAdd(cnf *Config, g *Grupin) error {
 	n_elements := 0
 	if e.Classes != nil {
 		if g.Classes != nil {
@@ -51,7 +51,7 @@ func (e ElmntOr) validateAndAdd(g *Grupin) error {
 	}
 	if e.Product != nil {
 		n_elements += 1
-		if err := e.Product.validate(); err != nil {
+		if err := e.Product.validate(cnf); err != nil {
 			return err
 		}
 		if _, ok := g.Products[e.Product.ID]; ok {
@@ -61,7 +61,7 @@ func (e ElmntOr) validateAndAdd(g *Grupin) error {
 	}
 	if e.Interface != nil {
 		n_elements += 1
-		if err := e.Interface.validate(); err != nil {
+		if err := e.Interface.validate(cnf); err != nil {
 			return err
 		}
 		iid := InterfaceID{

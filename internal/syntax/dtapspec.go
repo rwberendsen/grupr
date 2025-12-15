@@ -9,16 +9,16 @@ type DTAPSpec struct {
 	Prod    *string   `yaml:",omitempty"`
 }
 
-func (d DTAPSpec) validate() error {
+func (d DTAPSpec) validate(cnf *Config) error {
 	dtaps := map[string]bool{}
 	if d.Prod != nil {
-		if err := validateIDPart(*d.Prod); err != nil {
+		if err := validateIDPart(cnf, *d.Prod); err != nil {
 			return fmt.Errorf("prod DTAP id: %w", err)
 		}
 	}
 	dtaps[*d.Prod] = true
 	for _, i := range d.NonProd {
-		if err := validateIDPart(i); err != nil {
+		if err := validateIDPart(cnf, i); err != nil {
 			return fmt.Errorf("non prod DTAP id: %w", err)
 		}
 		if _, ok := dtaps[i]; ok {

@@ -6,19 +6,21 @@ import (
 
 	"golang.org/x/sync/errgroup" 
 	"github.com/rwberendsen/grupr/internal/semantics"
+	"github.com/rwberendsen/grupr/internal/syntax"
 	"gopkg.in/yaml.v3"
 )
 
 type Grupin struct {
 	Products map[string]*Product
-	Roles map[string]bool // false means no evidence from YAML (yet) that we need this role
-	DatabaseRoles map[string]map[string]bool // false means no evidence from YAML (yet) that we need this role
+	Roles map[string]struct
+	DatabaseRoles map[string]map[string]struct
+	gSem semantics.Grupin
 	accountCache *accountCache
 	// TODO: where we use map[string]bool but the bool has no meaning, use struct{} instead: more clearly meaningless
 }
 
 func NewGrupin(ctx context.Context, cnf *Config, conn *sql.DB, g semantics.Grupin) (Grupin, error) {
-	r := Grupin{Products: map[string]*Product{}, accountCache: &accountCache{},}
+	r := Grupin{Products: map[string]*Product{}, gSem: g, accountCache: &accountCache{},}
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(cnf.MaxProductThreads)
 	for k, v := range g.Products {
@@ -29,14 +31,16 @@ func NewGrupin(ctx context.Context, cnf *Config, conn *sql.DB, g semantics.Grupi
 	return r, err
 }
 
-func (g *Grupin) ManageReadAcces(ctx context.Context, cnf *Config, conn *sql.DB) error {
+func (g *Grupin) ManageAccess(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB) error {
+	if err := g.setRoles(); err != nil { return err }
+	if err := g.setDatabaseRoles(ctx, conn); err != nil { return err }
 	// first process grants, then revokes, to minimize downtime
-	if err := g.grant(ctx, cnf, conn); err != nil { return err }
-	if err := g.revoke(ctx, cnf, conn); err != nil { return err }
+	if err := g.grantRead(ctx, cnf, conn); err != nil { return err }
+	if err := g.revokeRead(ctx, cnf, conn); err != nil { return err }
+	if err := g.dropRoles(ctx, synCnf, cnf, conn); err != nil { return err }
 }
 
-func (g *grupin) grant(ctx context.context, cnf *Config, conn *sql.db) error {
-	if err := g.setDatabaseRoles(ctx, conn); err != nil { return err }
+func (g *grupin) grantRead(ctx context.context, cnf *Config, conn *sql.db) error {
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(cnf.MaxProductThreads)
 	for k, v := range g.Products {
@@ -60,30 +64,26 @@ func (g *grupin) revoke(ctx context.context, cnf *Config, conn *sql.db) error {
 	}
 }
 
+func
+
 func (g *Grupin) setDatabaseRoles(ctx context.Context, conn *sql.DB) error {
 	// query SHOW DATABASES IN ACCOUNT
 	for db := range dbs {
 		// query SHOW DATABASE ROLES IN DATABASE db
+		// if db does not exist anymore, continue with next one
 		for role {
 			g.DatabaseRoles[db][role] = Existence{Exists: true,}
 		}
 	}
 	for pid, p := range g.Products {
-		for db := range p.AccountObjects() {
-			if dbRoles, ok := g.DatabaseRoles[db]; ok {
-				if _, ok = dbRoles['prefix_pid_r']; ok {
-					dbRoles['prefix_pid_r'] = true
-				}
-			}
-			g.DatabaseRoles[db]['prefix_pid_r'] = true
-		}
-		for iid, i := range p.Interfaces
-			for db := range i.AccountObjects {
-				if ... 
-			}
-		}
 	}
-	// in the end, we'll drop roles that existed, but were not matched by any product in the yaml; if nobody has been granted these roles
+}
+
+func (g *Grupin) dropRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB) error {
+	for role := g.Roles {
+		dtap, pID, mode := get
+		if g.gSem.
+	}
 }
 
 

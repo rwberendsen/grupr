@@ -18,7 +18,7 @@ type Grupin struct {
 	Interfaces        map[InterfaceID]Interface
 }
 
-func NewGrupin(r io.Reader) (Grupin, error) {
+func NewGrupin(cnf *Config, r io.Reader) (Grupin, error) {
 	start := time.Now()
 	log.Printf("Parsing YAML documents...\n")
 	dec := yaml.NewDecoder(r)
@@ -37,7 +37,7 @@ func NewGrupin(r io.Reader) (Grupin, error) {
 		if err != nil {
 			return g, fmt.Errorf("decoding YAML: %w", err)
 		}
-		if err := e.validateAndAdd(&g); err != nil {
+		if err := e.validateAndAdd(cnf, &g); err != nil {
 			return g, fmt.Errorf("decoding YAML: %w", err)
 		}
 	}
