@@ -64,7 +64,17 @@ func (g *grupin) revoke(ctx context.context, cnf *Config, conn *sql.db) error {
 	}
 }
 
-func
+func (g *Grupin) setRoles(ctx context.Context, cnf *Config, conn *sql.DB) error {
+	g.Roles = map[string]struct{}	
+	rows, err := conn.QueryContext(ctx, `SHOW TERSE ROLES LIKE ? ->> SELECT "name" FROM $1`, cnf.Prefix)
+	if err != nil { return err }
+	for rows.Next() {
+		var roleName string
+		if err = rows.Scan(&roleName); err != nil { return err }
+		g.Roles[roleName] = struct{}
+	}
+	if err = rows.Err(); err != nil { return err }
+}
 
 func (g *Grupin) setDatabaseRoles(ctx context.Context, conn *sql.DB) error {
 	// query SHOW DATABASES IN ACCOUNT
@@ -82,7 +92,7 @@ func (g *Grupin) setDatabaseRoles(ctx context.Context, conn *sql.DB) error {
 func (g *Grupin) dropRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB) error {
 	for role := g.Roles {
 		dtap, pID, mode := get
-		if g.gSem.
+		if g.gSem. // WIP: just over the YAML, and check whether the (database) roles we found can possibly be matched by the YAML; if not; check if roles are granted to any (non-system) role and if not then drop
 	}
 }
 

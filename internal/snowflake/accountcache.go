@@ -170,8 +170,8 @@ func (c *accountCache) hasDB(k DBKey) bool {
 	return c.dbExists != nil && c.dbExists[k]
 }
 
-func queryDBs(ctx context.Context, conn *sql.DB) (map[DBKey]true, error) {
-	dbs := map[DBKey]string{}
+func queryDBs(ctx context.Context, conn *sql.DB) (map[DBKey]struct, error) {
+	dbs := map[DBKey]struct{}
 	start := time.Now()
 	log.Printf("Querying Snowflake for database names...\n")
 	// TODO: consider how much work it would be to support APPLICATION DATABASE
@@ -188,7 +188,7 @@ func queryDBs(ctx context.Context, conn *sql.DB) (map[DBKey]true, error) {
 		}
 		db := DBKey{dbName, dbKind}
 		if _, ok := dbs[db]; ok { return nil, fmt.Errorf("duplicate db: %v", db) }
-		dbs[db] = true
+		dbs[db] = struct
 	}
 	if err = rows.Err(); err != nil {
 		return nil, fmt.Errorf("queryDBs: error after looping over results: %w", err)
