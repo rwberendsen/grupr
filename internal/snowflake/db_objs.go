@@ -8,6 +8,9 @@ type DBObjs struct {
 	Schemas  map[string]*SchemaObjs
 	MatchAllSchemas bool
 	MatchAllObjects bool
+	GrantsTo
+	GrantsOn
+	GrantsOf
 }
 
 func newDBObjsFromMatched(m *matchedDBObjs) *DBObjs {
@@ -57,4 +60,8 @@ func (o *DBObjs) setMatchAllObjects(db DBKey, e semantics.ObjExpr, om semantics.
 			o.MatchAllObjects = false
 		}
 	}
+}
+
+func (o *DBObjs) setGrantsOn/To/Of() {
+	return
 }

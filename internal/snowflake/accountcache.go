@@ -175,6 +175,7 @@ func queryDBs(ctx context.Context, conn *sql.DB) (map[DBKey]true, error) {
 	start := time.Now()
 	log.Printf("Querying Snowflake for database names...\n")
 	// TODO: consider how much work it would be to support APPLICATION DATABASE
+	// TODO: when there are more than 10K results, paginate
 	rows, err := conn.QueryContext(ctx, `SHOW TERSE DATABASES IN ACCOUNT ->> SELECT "name", "kind" FROM S1 WHERE "kind" IN ('STANDARD', 'IMPORTED DATABASE')`)
 	if err != nil {
 		return nil, fmt.Errorf("queryDBs error: %w", err)

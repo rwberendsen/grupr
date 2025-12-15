@@ -62,14 +62,22 @@ func (p *Product) calcObjects() {
 	}
 }
 
-func (pSnow *Product) grant(ctx context.Context, cnf *Config, conn *sql.DB) error {
+func (p *Product) grant (ctx context.Context, cnf *Config, conn *sql.DB, databaseRoles map[string]bool) error {
 	// if during granting we get ErrObjectNotExistOrAuthorized, we should refresh the product and try again
+	if err := p.Interface.grant(ctx, cnf, conn, databaseRoles); err != nil { return err }
+	for iid, i := range p.Interfaces {
+		if err := i.grant(ctx, cnf, conn, databaseRoles); err != nil { return err }
+	}
 	return nil
 }
 
-func (pSnow *Product) revoke(ctx context.Context, cnf *Config, conn *sql.DB) error {
+func (p *Product) revoke(ctx context.Context, cnf *Config, conn *sql.DB) error {
 	// if during granting we get ErrObjectNotExistOrAuthorized, we should refresh the product and then first grant
 	// again, and then revoke
+	if err := p.Interface.revoke(ctx, cnf, conn, databaseRoles); err != nil { return err }
+	for iid, i := range p.Interfaces {
+		if err := i.revoke(ctx, cnf, conn, databaseRoles); err != nil { return err }
+	}
 	return nil
 }
 

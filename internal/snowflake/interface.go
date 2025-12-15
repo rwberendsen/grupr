@@ -6,9 +6,6 @@ import (
 
 type Interface struct {
 	AccountObjects map[semantics.ObjExpr]*AccountObjs
-	GrantsTo struct{}
-	GrantsOn struct{}
-	GrantsOf struct{}
 }
 
 func newInterfaceFromMatched(m map[semantics.ObjExpr]*matchedAccountObjects, oms semantics.ObjMatchers) *Interface {
@@ -26,4 +23,18 @@ func newInterface(m map[semantics.ObjExpr]*AccountObjects, oms semantics.ObjMatc
 		i.AccountObjects[e] = newAccountObjects(m[om.SubsetOf])
 	}
 	return i
+}
+
+func (i *Interface) grant(ctx context.Context, cnf *Config, conn *sql.DB, databaseRoles map[string]bool) error {
+	for db, dbObjs := range i.AccountObjs {
+		if databaseRoles[db]['prefix_pid_r'] {
+			// SHOW GRANTS TO / ON / OF database role, and store them in DBObjs
+		} else {
+			// CREATE DATABASE ROLE, and store empty grants in DBObjs
+			if cnf.DryRUn { // then don't execute command, but merely log it
+			}
+		}
+		// compute necessary grant statements
+		// GRANT privilege to ROLE ... if dry run then merely log it
+	}
 }

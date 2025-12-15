@@ -61,6 +61,7 @@ func querySchemas(ctx context.Context, conn *sql.DB, dbName string) (map[string]
 	schemas := map[string]bool{}
 	start := time.Now()
 	log.Printf("Querying Snowflake for schema  names in DB: %s ...\n", dbName)
+	// TODO: when there are more than 10K results, paginate
 	rows, err := conn.QueryContext(ctx, `SHOW TERSE SCHEMAS IN DATABASE IDENTIFIER(?) ->> SELECT "name" FROM S1`, dbName)
 	if err != nil {
 		if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
