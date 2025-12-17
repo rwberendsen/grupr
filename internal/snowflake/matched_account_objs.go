@@ -31,3 +31,15 @@ func (o *matchedAccountObjs) dropDB(k DBKey) {
 func (o *matchedAccountObjs) hasDB(k DBKey) {
 	return o.dbExists != nil && o.dbExists[k]
 }
+
+func (o *matchedAccountObjs) getDBs() iter.Seq2[DBKey, *matchedDBObjs] {
+	return func(yield func(DBKey, *matchedDBObjs) bool) {
+		for k, v := range o.dbs {
+			if o.dbExists[k] {
+				if !yield(k, v) {
+					return
+				}
+			}
+		}
+	}
+}

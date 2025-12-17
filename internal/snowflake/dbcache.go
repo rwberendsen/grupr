@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"iter"
 	"log"
 	"strings"
 	"sync"
@@ -37,6 +38,18 @@ func (c *dbCache) dropSchema(k string) {
 
 func (c *dbCache) hasSchema(k string) {
 	return c.schemaExists != nil && c.schemaExists[k];
+}
+
+func (c *dbCache) getSchemas() iter.Seq2[string, *schemaCache] {
+	return func(yield func(string, *schemaCache) bool) {
+		for k, v := range c.schemas {
+			if c.schemaExists(k) {
+				if !yield(k, v) {
+					return
+				}
+			}
+		}
+	}
 }
 
 func (c *dbCache) refreshSchemas(ctx context.Context, conn *sql.DB, dbName string) error {

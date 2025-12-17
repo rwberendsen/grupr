@@ -35,12 +35,10 @@ func (c *accountCache) match(ctx context.Context, conn *sql.DB, e semantics.ObjE
 	// will modify both c and o
 	err := c.matchDBs(ctx, e[semantics.Database], o)
 	if err != nil { return err }
-	for db, dbObjs := range o.dbs {
-		if !o.hasDB(db) { continue }
+	for db, dbObjs := range o.getDBs() {
 		err := c.matchSchemas(ctx, conn, db, e, dbObjs)
 		if err != nil { return err }
-		for schema, schemaObjs := range dbObjs.schemas {
-			if !dbObjs.hasSchema(schema) { continue }
+		for schema, schemaObjs := range dbObjs.getSchemas() {
 			err = c.matchObjects(ctx, conn, db, schema, e, schemaObjs)
 			if err != nil { return err }
 		}
@@ -56,14 +54,12 @@ func (c *accountCache) matchDBs(ctx context.Context, conn *sql.DB, ep semantics.
 		if err != nil { return err }
 	}
 	o.version = c.version
-	for k, _ := range o.dbs {
-		if !o.hasDB(k) { continue }
+	for k, _ := range o.getDBs() {
 		if !c.hasDB(k) {
 			o.dropDB(k)
 		}
 	}
-	for k := range c.dbs {
-		if !c.hasDB(k) { continue }
+	for k := range c.getDBs() {
 		if ep.Match(k.Name) {
 			o.addDB(k)
 		}
@@ -75,7 +71,7 @@ func (c *accountCache) matchSchemas(ctx context.Context, conn *sql.DB, db DBKey,
 	c.mu.RLock() // Block till a (requesting) writer (obtains and) releases the lock, if any, get a read lock, now you can read this node, 
 		     // concurrently with other readers
 	defer c.mu.RUnlock()
-	if _, ok := c.dbs[db]; !ok {
+	if !c.hasDB(db) {
 		// Another thread may have modified c, refreshing db's, and deleted this db.
 		return ErrObjectNotExistOrAuthorized
 	}
@@ -91,14 +87,12 @@ func (c *accountCache) matchSchemas(ctx context.Context, conn *sql.DB, db DBKey,
 		if err != nil { return err }
 	}
 	o.version = c.dbs[db].version
-	for k, _ := range o.schemas {
-		if !o.hasSchema(k) { continue }
+	for k, _ := range o.getSchemas() {
 		if !c.dbs[db].hasSchema(k) {
 			o.dropSchema(k)
 		}
 	}
-	for k := range c.dbs[db].schemas {
-		if !c.dbs[db].hasSchema(k) { continue }
+	for k := range c.dbs[db].getSchemas() {
 		if ep.Match(k) {
 			o.addSchema(k)
 		}
@@ -109,10 +103,10 @@ func (c *accountCache) matchSchemas(ctx context.Context, conn *sql.DB, db DBKey,
 func (c *accountCache) matchObjects(ctx context.Context, conn *sql.DB, db DBKey, schema string, ep semantics.ObjExprPart, o *matchedSchemaObjs) error {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	if _, ok := c.dbs[db]; !ok { return ErrObjectNotExistOrAuthorized }
+	if !c.hasDB(db) { return ErrObjectNotExistOrAuthorized }
 	c.dbs[db].mu.RLock()
 	defer c.dbs[db].mu.RUnlock()
-	if _, ok := c.dbs[db].schemas[schema]; !ok { return ErrObjectNotExistOrAuthorized }
+	if !c.dbs[db].hasSchema(schema) { return ErrObjectNotExistOrAuthorized }
 	c.dbs[db].schemas[schema].mu.Lock() // get a write lock on this schema
 	defer c.dbs[db].schemas[schema].mu.Unlock()
 	if o.version == c.dbs[db].schemas[schema].version {
@@ -170,13 +164,25 @@ func (c *accountCache) hasDB(k DBKey) bool {
 	return c.dbExists != nil && c.dbExists[k]
 }
 
+func (c *accountCache) getDBs() iter.Seq2[DBKey, *dbCache] {
+	return func(yield func(DBKey, *dbCache) bool) {
+		for k, v := range c.dbs {
+			if c.dbExists(k) {
+				if !yield(k, v) {
+					return
+				}
+			}
+		}
+	}
+}
+
 func queryDBs(ctx context.Context, conn *sql.DB) (map[DBKey]struct, error) {
 	dbs := map[DBKey]struct{}
 	start := time.Now()
 	log.Printf("Querying Snowflake for database names...\n")
-	// TODO: consider how much work it would be to support APPLICATION DATABASE
-	// TODO: when there are more than 10K results, paginate
-	rows, err := conn.QueryContext(ctx, `SHOW TERSE DATABASES IN ACCOUNT ->> SELECT "name", "kind" FROM S1 WHERE "kind" IN ('STANDARD', 'IMPORTED DATABASE')`)
+	// TODO: Develop models (if any) for working with IMPORTED DATABASE, and APPLICATION DATABASE
+	// TODO: When there are more than 10K results, paginate
+	rows, err := conn.QueryContext(ctx, `SHOW TERSE DATABASES IN ACCOUNT ->> SELECT "name", "kind" FROM S1 WHERE "kind" IN ('STANDARD')`)
 	if err != nil {
 		return nil, fmt.Errorf("queryDBs error: %w", err)
 	}
@@ -188,7 +194,7 @@ func queryDBs(ctx context.Context, conn *sql.DB) (map[DBKey]struct, error) {
 		}
 		db := DBKey{dbName, dbKind}
 		if _, ok := dbs[db]; ok { return nil, fmt.Errorf("duplicate db: %v", db) }
-		dbs[db] = struct
+		dbs[db] = struct{}{}
 	}
 	if err = rows.Err(); err != nil {
 		return nil, fmt.Errorf("queryDBs: error after looping over results: %w", err)

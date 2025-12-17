@@ -3,6 +3,8 @@ package snowflake
 import (
 	"context"
 	"database/sql"
+	"errgroup"
+	"strings"
 
 	"golang.org/x/sync/errgroup" 
 	"github.com/rwberendsen/grupr/internal/semantics"
@@ -44,7 +46,7 @@ func (g *grupin) grantRead(ctx context.context, cnf *Config, conn *sql.db) error
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(cnf.MaxProductThreads)
 	for k, v := range g.Products {
-		eg.Go(func() error { return v.grant(ctx, cnf, conn, g.DatabaseRoles) }
+		eg.Go(func() error { return v.grant(ctx, cnf, conn, g.DatabaseRoles) })
 	}
 	for _, p := range g.Products {
 		for iid, dtapMapping := range v.pSem.Consumes {
@@ -60,33 +62,35 @@ func (g *grupin) revoke(ctx context.context, cnf *Config, conn *sql.db) error {
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(cnf.MaxProductThreads)
 	for k, v := range g.Products {
-		eg.Go(func() error { return v.revoke(ctx, cnf, conn) }
+		eg.Go(func() error { return v.revoke(ctx, cnf, conn) })
 	}
+	err := eg.Wait()
+	return err 
 }
 
 func (g *Grupin) setRoles(ctx context.Context, cnf *Config, conn *sql.DB) error {
 	g.Roles = map[string]struct{}	
-	rows, err := conn.QueryContext(ctx, `SHOW TERSE ROLES LIKE ? ->> SELECT "name" FROM $1`, cnf.Prefix)
+	rows, err := conn.QueryContext(ctx, `SHOW TERSE ROLES LIKE ? ->> SELECT "name" FROM $1`, cnf.Prefix + "%")
 	if err != nil { return err }
 	for rows.Next() {
 		var roleName string
 		if err = rows.Scan(&roleName); err != nil { return err }
-		g.Roles[roleName] = struct{}
+		g.Roles[roleName] = struct{}{}
 	}
 	if err = rows.Err(); err != nil { return err }
 }
 
-func (g *Grupin) setDatabaseRoles(ctx context.Context, conn *sql.DB) error {
-	// query SHOW DATABASES IN ACCOUNT
-	for db := range dbs {
-		// query SHOW DATABASE ROLES IN DATABASE db
-		// if db does not exist anymore, continue with next one
-		for role {
-			g.DatabaseRoles[db][role] = Existence{Exists: true,}
-		}
+func (g *Grupin) setDatabaseRoles(ctx context.Context, cnf *Config, conn *sql.DB) error {
+	g.DatabaseRoles = map[string]map[string]struct{}
+	eg, ctx := errgroup.WithContext(ctx)
+	eg.SetLimit(cnf.MaxProductThreads) // we are not handling products here, but still a sensible choice
+	for db := range g.accountCache.getDBs() {
+		m := map[string]struct{}
+		g.DatabaseRoles[db.Name] = m
+		eg.Go(func() error { return queryDatabaseRoles(ctx, cnf, conn, m) })
 	}
-	for pid, p := range g.Products {
-	}
+	err := eg.Wait()
+	return err
 }
 
 func (g *Grupin) dropRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB) error {
@@ -96,6 +100,22 @@ func (g *Grupin) dropRoles(ctx context.Context, synCnf *syntax.Config, cnf *Conf
 	}
 }
 
+func queryDatabaseRoles(ctx context.Context, cnf *Config, conn *sql.DB, m map[string]struct) error {
+	rows, err := conn.QueryContext(ctx, `SHOW DATABASE ROLES IN DATABASE IDENTIFIER(?) ->> SELECT "name" FROM $1 WHERE "owner" = ? `, cnf.Prefix + "%", strings.ToUpper(cnf.Role))
+	if err != nil { 
+		if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
+			return nil // perhaps DB was removed concurrently, just don't populate m
+		}
+		return err 
+	}
+	for rows.Next() {
+		var roleName string
+		if err = rows.Scan(&roleName); err != nil { return err }
+		m[roleName] = struct{}{}
+	}
+	if err = rows.Err(); err != nil { return err }
+	return nil
+}
 
 func (g Grupin) String() string {
 	// TODO: consider stripping this silly yaml serializing from semantics and snowflake package; it's really the domain of the syntax package only
