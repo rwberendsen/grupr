@@ -155,6 +155,36 @@ func queryDatabaseRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config,
 	return nil
 }
 
+func dropRole(ctx context.Context, conn *sql.DB, role string) error {
+	// We don't want to inherit ownership, so if there are (future) grants of ownership on any objects, do not drop the role
+	// It could still be that when we check, there is nothing, but when we drop the role, concurrently the role was used to create an object, and it did get
+	// ownership on an object. So, if there are create privileges, also we do not drop the role.
+	//
+	// Other than that? Any read or write or operate privileges? We can distinguish privileges that would normally be managed by grupr and other
+	// privileges, such as using a stored procedure, or a stage, or whatever. Such privileges would have been added manually, and we could
+	// demand of the Snowflake administration team that such privileges should be manually revoked, prior to us dropping the role?
+	//
+	// It could be that the role was granted to users or service accounts
+	// Notice that we will be aware of all users and service accounts, as grupr will manage grants of product roles to them
+	// But if a product is removed altogether from the YAML, ofcourse also all grants of the product roles to users would have 
+	// been removed. We could still check if we are aware of the users to whom the role had been granted. And if we are,
+	// Then we can drop the role. But if the users are not in the YAML? Well, perhaps we should still drop the role in that case.
+	rows, err := conn.QueryContxt(ctx, `SHOW GRANTS ON ROLE IDENTIFIER(?)`, role)
+	if err != nil { return err }
+	for rows.Next() {
+		var
+	}
+	return nil
+	// DROP ROLE IF EXISTS
+	// TODO: note that DROP ROLE might time out if many grants would need to be transferred, in which case we can safely retry; except
+	// in our case we don't want any transferring to happen.
+}
+
+func dropDatabaseRole(ctx context.Context, conn *sql.DB, dbName, dbRole string) error {
+	// if the DB no longer exists, the role would not exist either anymore, we can ignore this error
+	return nil
+}
+
 func (g Grupin) String() string {
 	// TODO: consider stripping this silly yaml serializing from semantics and snowflake package; it's really the domain of the syntax package only
 	data, err := yaml.Marshal(g)

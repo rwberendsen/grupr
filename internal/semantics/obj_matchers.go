@@ -120,3 +120,9 @@ func (lhs ObjMatchers) setSubsetOf(rhs ObjMatchers) ObjMatchers {
 	}
 	return ret	
 }
+
+func (om ObjMatchers) MatchObjectsInDB(db string) bool {
+	e := ObjExpr{ExprPart{S: db, IsQuoted: true,}, ExprPart{S: "*"}, ExprPart{S: "*"}}		
+	omRHS := map[ObjExpr]ObjMatcher{e: ObjMatcher{Include: e,}}
+	return !om.disjoint(omRHS)
+}
