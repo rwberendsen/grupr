@@ -14,8 +14,8 @@ import (
 
 type Grupin struct {
 	Products map[string]*Product
-	Roles map[string]struct
-	DatabaseRoles map[string]map[string]struct
+	Roles map[ProductRole]struct{}
+	DatabaseRoles map[string]map[DatabaseRole]struct{}
 	gSem semantics.Grupin
 	accountCache *accountCache
 	// TODO: where we use map[string]bool but the bool has no meaning, use struct{} instead: more clearly meaningless
@@ -69,25 +69,28 @@ func (g *grupin) revoke(ctx context.context, cnf *Config, conn *sql.db) error {
 }
 
 func (g *Grupin) setRoles(ctx context.Context, cnf *Config, conn *sql.DB) error {
-	g.Roles = map[string]struct{}	
+	g.Roles = map[ProductRole]struct{}{}
 	rows, err := conn.QueryContext(ctx, `SHOW TERSE ROLES LIKE ? ->> SELECT "name" FROM $1`, cnf.Prefix + "%")
 	if err != nil { return err }
 	for rows.Next() {
 		var roleName string
 		if err = rows.Scan(&roleName); err != nil { return err }
-		g.Roles[roleName] = struct{}{}
+		if r, err := newProductRole(roleName); err != nil {
+			return err
+		} else {
+			g.Roles[r] = struct{}{}
+		}
 	}
 	if err = rows.Err(); err != nil { return err }
 }
 
 func (g *Grupin) setDatabaseRoles(ctx context.Context, cnf *Config, conn *sql.DB) error {
-	g.DatabaseRoles = map[string]map[string]struct{}
+	g.DatabaseRoles = map[string]map[DatabaseRole]struct{}{}
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(cnf.MaxProductThreads) // we are not handling products here, but still a sensible choice
 	for db := range g.accountCache.getDBs() {
-		m := map[string]struct{}
-		g.DatabaseRoles[db.Name] = m
-		eg.Go(func() error { return queryDatabaseRoles(ctx, cnf, conn, m) })
+		g.DatabaseRoles[db.Name] = map[DatabaseRole]struct{}{}
+		eg.Go(func() error { return queryDatabaseRoles(ctx, cnf, conn, g.DatabaseRoles[db.Name]) })
 	}
 	err := eg.Wait()
 	return err
@@ -95,7 +98,6 @@ func (g *Grupin) setDatabaseRoles(ctx context.Context, cnf *Config, conn *sql.DB
 
 func (g *Grupin) dropRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB) error {
 	for role := g.Roles {
-		dtap, pID, mode := get
 		if g.gSem. // WIP: just over the YAML, and check whether the (database) roles we found can possibly be matched by the YAML; if not; check if roles are granted to any (non-system) role and if not then drop
 	}
 }
@@ -111,7 +113,11 @@ func queryDatabaseRoles(ctx context.Context, cnf *Config, conn *sql.DB, m map[st
 	for rows.Next() {
 		var roleName string
 		if err = rows.Scan(&roleName); err != nil { return err }
-		m[roleName] = struct{}{}
+		if r, err := newDatabaseRole(roleName); err != nil {
+			return err
+		} else {
+			m[r] = struct{}{}
+		}
 	}
 	if err = rows.Err(); err != nil { return err }
 	return nil
