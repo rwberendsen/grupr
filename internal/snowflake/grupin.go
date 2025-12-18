@@ -14,8 +14,8 @@ import (
 
 type Grupin struct {
 	Products map[string]*Product
-	Roles map[ProductRole]struct{}
-	DatabaseRoles map[string]map[DatabaseRole]struct{}
+	ProductRoles map[ProductRole]struct{}
+	DatabaseRoles map[DBKey]map[DatabaseRole]struct{}
 	gSem semantics.Grupin
 	accountCache *accountCache
 	// TODO: where we use map[string]bool but the bool has no meaning, use struct{} instead: more clearly meaningless
@@ -34,12 +34,12 @@ func NewGrupin(ctx context.Context, cnf *Config, conn *sql.DB, g semantics.Grupi
 }
 
 func (g *Grupin) ManageAccess(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB) error {
-	if err := g.setRoles(); err != nil { return err }
+	if err := g.setProductRoles(ctx, synCnf, cnf, conn); err != nil { return err }
 	if err := g.setDatabaseRoles(ctx, conn); err != nil { return err }
 	// first process grants, then revokes, to minimize downtime
 	if err := g.grantRead(ctx, cnf, conn); err != nil { return err }
 	if err := g.revokeRead(ctx, cnf, conn); err != nil { return err }
-	if err := g.dropRoles(ctx, synCnf, cnf, conn); err != nil { return err }
+	if err := g.dropProductRoles(ctx, synCnf, cnf, conn); err != nil { return err }
 }
 
 func (g *grupin) grantRead(ctx context.context, cnf *Config, conn *sql.db) error {
@@ -68,42 +68,74 @@ func (g *grupin) revoke(ctx context.context, cnf *Config, conn *sql.db) error {
 	return err 
 }
 
-func (g *Grupin) setRoles(ctx context.Context, cnf *Config, conn *sql.DB) error {
-	g.Roles = map[ProductRole]struct{}{}
+func (g *Grupin) setProductRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB) error {
+	g.ProductRoles = map[ProductRole]struct{}{}
 	rows, err := conn.QueryContext(ctx, `SHOW TERSE ROLES LIKE ? ->> SELECT "name" FROM $1`, cnf.Prefix + "%")
 	if err != nil { return err }
 	for rows.Next() {
 		var roleName string
 		if err = rows.Scan(&roleName); err != nil { return err }
-		if r, err := newProductRole(roleName); err != nil {
+		if r, err := newProductRoleFromString(synCnf, cnf, roleName); err != nil {
 			return err
 		} else {
-			g.Roles[r] = struct{}{}
+			g.ProductRoles[r] = struct{}{}
 		}
 	}
 	if err = rows.Err(); err != nil { return err }
 }
 
-func (g *Grupin) setDatabaseRoles(ctx context.Context, cnf *Config, conn *sql.DB) error {
-	g.DatabaseRoles = map[string]map[DatabaseRole]struct{}{}
+func (g *Grupin) setDatabaseRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB) error {
+	g.DatabaseRoles = map[DBKey]map[DatabaseRole]struct{}{}
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(cnf.MaxProductThreads) // we are not handling products here, but still a sensible choice
 	for db := range g.accountCache.getDBs() {
-		g.DatabaseRoles[db.Name] = map[DatabaseRole]struct{}{}
-		eg.Go(func() error { return queryDatabaseRoles(ctx, cnf, conn, g.DatabaseRoles[db.Name]) })
+		g.DatabaseRoles[db] = map[DatabaseRole]struct{}{}
+		eg.Go(func() error { return queryDatabaseRoles(ctx, synCnf, cnf, conn, g.DatabaseRoles[db]) })
 	}
 	err := eg.Wait()
 	return err
 }
 
-func (g *Grupin) dropRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB) error {
-	for role := g.Roles {
-		if g.gSem. // WIP: just over the YAML, and check whether the (database) roles we found can possibly be matched by the YAML; if not; check if roles are granted to any (non-system) role and if not then drop
+func (g *Grupin) dropProductRoles(ctx context.Context, conn *sql.DB) error {
+	for r := range g.ProductRoles {
+		if pSem, ok := g.gSem.Products[r.ProductID]; ok {
+			if pSem.DTAPs.HasDTAP(r.DTAP) {
+				continue // no need to drop this role
+			}
+		}
+		if err := dropRole(ctx, conn, r.ID); err != nil { return err }
 	}
 }
 
-func queryDatabaseRoles(ctx context.Context, cnf *Config, conn *sql.DB, m map[string]struct) error {
-	rows, err := conn.QueryContext(ctx, `SHOW DATABASE ROLES IN DATABASE IDENTIFIER(?) ->> SELECT "name" FROM $1 WHERE "owner" = ? `, cnf.Prefix + "%", strings.ToUpper(cnf.Role))
+func (g *Grupin) dropDatabaseRoles(ctx context.Context, conn *sql.DB) error {
+	// WIP: just over the YAML, and check whether the
+	//(database) roles we found can possibly be matched by the YAML; if not; check if
+	//roles are granted to any (non-system) role and if not then drop
+	for db, dbRoles := range g.DatabaseRoles {
+		for r := range dbRoles {
+			if pSem, ok := g.Sem.Products[r.ProductID]; ok {
+				if pSem.DTAPs.HasDTAP(r.DTAP) {
+					if r.InterfaceID == "" {
+						if pSem.ObjectMatchers.MatchObjectsInDB(db.Name) {
+							continue // this role is still needed
+						}
+						if err := dropDatabaseRole(ctx, conn, r.ID); err != nil { return err }
+						continue
+					}
+					if iSem, ok := pSem.Interfaces[r.InterfaceID]; ok {
+						if iSem.ObjectMatchers.MatchObjectsInDB(db.Name) {
+							continue // this role is still needed
+						}
+						if err := dropDatabaseRole(ctx, conn, r.ID); err != nil { return err }
+					}
+				}
+			}
+		}
+	}
+}
+
+func queryDatabaseRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, db DBKey, m map[string]struct) error {
+	rows, err := conn.QueryContext(ctx, `SHOW DATABASE ROLES IN DATABASE IDENTIFIER(?) ->> SELECT "name" FROM $1 WHERE "owner" = ? `, db.Name, strings.ToUpper(cnf.Role))
 	if err != nil { 
 		if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
 			return nil // perhaps DB was removed concurrently, just don't populate m
@@ -113,7 +145,7 @@ func queryDatabaseRoles(ctx context.Context, cnf *Config, conn *sql.DB, m map[st
 	for rows.Next() {
 		var roleName string
 		if err = rows.Scan(&roleName); err != nil { return err }
-		if r, err := newDatabaseRole(roleName); err != nil {
+		if r, err := newDatabaseRoleFromString(synCnf, cnf, roleName); err != nil {
 			return err
 		} else {
 			m[r] = struct{}{}

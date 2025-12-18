@@ -11,9 +11,19 @@ type ProductRole struct {
 	ProductID string
 	DTAP string
 	Mode bool
+	ID string
 }
 
-func newProductRole(synCnf *syntax.Config, cnf *Config, role string) (ProductRole, error) {
+func newProductRole(synCnf *syntax.Config, cnf *Config, productID string, dtap string, mode string) ProductRole {
+	return ProductRole{
+		ProductID: productID,
+		DTAP: dtap,
+		Mode: mode,
+		ID: strings.ToUpper(synCnf.Prefix + productID + cnf.Infix + dtap + cnf.Infix + mode),
+	}
+}
+
+func newProductRoleFromString(synCnf *syntax.Config, cnf *Config, role string) (ProductRole, error) {
 	r := ProductRole{ID: role,}
 	if !role.HasPrefix(cnf.Prefix) { return r, fmt.Errorf("role does not start with Grupr prefix: '%s'", r.ID) }
 	role = strings.TrimPrefix(role, cnf.Prefix)
@@ -26,6 +36,6 @@ func newProductRole(synCnf *syntax.Config, cnf *Config, role string) (ProductRol
 	return r, nil
 }
 
-func (r DatabaseRole) String() string {
-	return dr.ID
+func (r ProductRole) String() string {
+	return r.ID
 }
