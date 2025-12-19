@@ -158,10 +158,9 @@ func queryDatabaseRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config,
 func dropRole(ctx context.Context, conn *sql.DB, role string) error {
 	// If a role has CREATE, OWNERSHIP (ON FUTURE) privileges, do not drop it, or cnf.Role could end up owning objects.
 	// Instead log a warning prompting administrators to GRANT OWNERSHIP to new owner and REVOKE any CREATE privileges.
-	rows, err := conn.QueryContxt(ctx, `SHOW GRANTS ON ROLE IDENTIFIER(?)`, role)
-	if err != nil { return err }
-	for rows.Next() {
-		// WIP
+	for grant, err := range queryGrantsToRole(ctx, conn, role) {
+		if err != nil { return err }
+		// WIP: process role, e.g., if we find a CREATE or OWNERSHIP grant, no need to iterate further
 	}
 	return nil
 	// DROP ROLE IF EXISTS
