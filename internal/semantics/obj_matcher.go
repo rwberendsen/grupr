@@ -10,7 +10,7 @@ import (
 type ObjMatcher struct {
 	Include        ObjExpr
 	ObjExprAttr
-	Exclude        map[ObjExpr]bool // No need to store ObjExprAttr of excluded objects
+	Exclude        map[ObjExpr]struct{} // No need to store ObjExprAttr of excluded objects
 	SubsetOf 	ObjExpr // used for any ObjMatcher that is part of an interface; "" means none
 }
 
@@ -66,6 +66,36 @@ func (lhs ObjMatcher) validateExprAgainst(rhs ObjMatcher) error {
 	// Caller must ensure lhs is subset of rhs
 	if lhs.ObjExprAttr != rhs.ObjExprAttr { return fmt.Errorf("mismatch in ObjExprAttr") }
 	// TODO: we need context here: if we want to support people to on an interface for a single usergroup not use a usergroup template, where they would on a product. But do we need to support that, really?
+}
+
+func (lhs ObjMatcher) DisjointFromDB(db string) bool {
+	e := ObjExpr{ExprPart{S: db, IsQuoted: true,}, ExprPart{S: "*",}, ExprPart{S: "*",}}		
+	rhs := ObjMatcher{Include: e,}
+	return lhs.disjoint(rhs)
+}
+
+func (lhs ObjMatcher) DisjointFromSchema(db string, schema string) bool {
+	e := ObjExpr{ExprPart{S: db, IsQuoted: true,}, ExprPart{S: schema, IsQuoted: true,}, ExprPart{S: "*",}}		
+	rhs := ObjMatcher{Include: e,}
+	return lhs.disjoint(rhs)
+}
+
+func (lhs ObjMatcher) DisjointFromObject(db string, schema string, object string) bool {
+	e := ObjExpr{ExprPart{S: db, IsQuoted: true,}, ExprPart{S: schema, IsQuoted: true,}, ExprPart{S: object, IsQuoted: true,}}		
+	rhs := ObjMatcher{Include: e,}
+	return lhs.disjoint(rhs)
+}
+
+func (lhs ObjMatcher) SupersetOfDB(db string) bool {
+	e := ObjExpr{ExprPart{S: db, IsQuoted: true,}, ExprPart{S: "*",}, ExprPart{S: "*",}}		
+	rhs := ObjMatcher{Include: e,}
+	return rhs.subsetOf(lhs)
+}
+
+func (lhs ObjMatcher) SupersetOfSchema(db string, schema string) bool {
+	e := ObjExpr{ExprPart{S: db, IsQuoted: true,}, ExprPart{S: schema, IsQuoted: true,}, ExprPart{S: "*",}}		
+	rhs := ObjMatcher{Include: e,}
+	return rhs.subsetOf(lhs)
 }
 
 func (lhs ObjMatcher) Equal(rhs ObjMatcher) bool {

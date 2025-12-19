@@ -10,55 +10,54 @@ import (
 type ObjMatchers map[ObjExpr]ObjMatcher
 
 func newObjMatchers(cnf *Config, include []string, exclude []string, dtaps syntax.Rendering, userGroups syntax.Rendering) (ObjMatchers, error) {
-	m := map[ObjExpr]ObjMatcher{}
+	oms := ObjMatchers{}
 	// Create ObjMatcher objects for each include expression
 	for _, expr := range include {
 		objExprs, err := newObjExprs(cnf, expr, dtaps, userGroups)
 		if err != nil {
-			return m, fmt.Errorf("parsing obj expr: %s", err)
+			return oms, fmt.Errorf("parsing obj expr: %s", err)
 		}
 		for e, ea := range objExprs {
-			if _, ok := m.Include[e]; ok {
-				return m, fmt.Errorf("duplicate include expr: '%v', with attributes: '%v'", e, ea)
+			if _, ok := oms[e]; ok {
+				return oms, fmt.Errorf("duplicate include expr: '%v', with attributes: '%v'", e, ea)
 			}
-			m[e] = ObjMatcher{Include: e, ObjExprAttr: ea}
+			oms[e] = ObjMatcher{Include: e, ObjExprAttr: ea,}
 		}
 	}
 	// Check that ObjMatcher objects are all disjoint with regard to each other in the context of this ObjMatchers object;
 	// Note that we do not consider exclude expressions here.
-	if err := allDisjointObjExprMap(m); err != nil {
-		return m, err
+	if err := allDisjointObjExprMap(oms); err != nil {
+		return oms, err
 	}
 	// For each rendered exclude expression, assign it to the correct rendered include expression
 	for _, expr := range exclude {
 		objExprs, err := newObjExprs(expr, dtaps, userGroups)
 		if err != nil {
-			return m, fmt.Errorf("parsing obj expr: %s", err)
+			return oms, fmt.Errorf("parsing obj expr: %s", err)
 		}
 		for e, _ := range objExprs { // We don't care about DTAP and UserGroup for excluded objects
 			hasStrictSuperset := false
-			for i, _ range m {
+			for i, om range oms {
 				if e.subsetOf(i) && !i.subsetOf(e) { // e should be a strict subset of exactly one i
-					if _, ok := i.Exclude[e]; ok {
-						return m, fmt.Errorf("duplicate exclude expr")
+					if _, ok := om.Exclude[e]; ok {
+						return oms, fmt.Errorf("duplicate exclude expr")
 					}
-					i.Exlude[e] = true
+					om.Exlude[e] = struct{}{}
 					hasStrictSuperset = true
 				}
 			}
 			if !hasStrictSuperset {
-				return m, fmt.Errorf("orphaned exlude expr")
+				return oms, fmt.Errorf("orphaned exlude expr")
 			}
-			m.Exclude[e] = ea
 		}
 	}
 	// Check, after adding each exclude ObjExpr to the correct include ObjExpr, that each include has disjoint excludes
-	for _, objMatcher := range m {
-		if err := allDisjointObjExprMap(m.Exclude); err != nil {
-			return m, fmt.Errorf("exclude exprs: %w", err)
+	for _, objMatcher := range oms {
+		if err := allDisjointObjExprMap(oms.Exclude); err != nil {
+			return oms, fmt.Errorf("exclude exprs: %w", err)
 		}
 	}
-	return m, nil
+	return oms, nil
 }
 
 func (lhs ObjMatchers) validateExprAttrAgainst(rhs ObjMatchers) error {
@@ -121,8 +120,3 @@ func (lhs ObjMatchers) setSubsetOf(rhs ObjMatchers) ObjMatchers {
 	return ret	
 }
 
-func (om ObjMatchers) MatchObjectsInDB(db string) bool {
-	e := ObjExpr{ExprPart{S: db, IsQuoted: true,}, ExprPart{S: "*"}, ExprPart{S: "*"}}		
-	omRHS := map[ObjExpr]ObjMatcher{e: ObjMatcher{Include: e,}}
-	return !om.disjoint(omRHS)
-}

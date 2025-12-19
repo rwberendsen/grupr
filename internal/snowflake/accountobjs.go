@@ -12,23 +12,18 @@ type AccountObjs struct {
 
 func newAccountObjsFromMatched(m *matchedAccountObjs) *AccountObjs {
 	o := &AccountObjs{DBS: map[DBKey]*DBObjs{},}
-	for k, v := range m.dbs {
-		if !m.hasDB(k) { continue }
+	for k, v := range m.getDBs() {
 		o.DBs[k] = newDBObjsFromMatched(v)
 	}
 	return o
 }
 
-func newAccountObjs(o *AccountObjs, e semantics.ObjExpr, om semantics.ObjMatcher) *AccountObjs {
+func newAccountObjs(o *AccountObjs, om semantics.ObjMatcher) *AccountObjs {
 	r := &AccountObjs{DBs: map[DBKey]*DBObjs{},}
 	for db, dbObjects := range o.DBs {
-		if !e[semantics.Database].Match(db.Name) { continue }
-		for excludeExpr := range om.Exclude {
-			if excludeExpr.MatchesAllObjectsInDB(db.Name) {
-				continue
-			}
+		if !om.DisjointFromDB(db.Name) {
+			r.DBs[db] = newDBObjs(db, dbObjects, om)
 		}
-		r.DBs[db] = newDBObjs(db, dbObjects, e, om)
 	}
 }
 

@@ -31,21 +31,21 @@ func escapeString(s string) string {
 	return strings.ReplaceAll(s, "'", "\\'")
 }
 
-func (c *accountCache) match(ctx context.Context, conn *sql.DB, e semantics.ObjExpr, o *matchedAccountObjs) error {
+func (c *accountCache) match(ctx context.Context, conn *sql.DB, om semantics.ObjMatcher, o *matchedAccountObjs) error {
 	// will modify both c and o
-	err := c.matchDBs(ctx, e[semantics.Database], o)
+	err := c.matchDBs(ctx, om, o)
 	if err != nil { return err }
 	for db, dbObjs := range o.getDBs() {
-		err := c.matchSchemas(ctx, conn, db, e, dbObjs)
+		err := c.matchSchemas(ctx, conn, db, om, dbObjs)
 		if err != nil { return err }
 		for schema, schemaObjs := range dbObjs.getSchemas() {
-			err = c.matchObjects(ctx, conn, db, schema, e, schemaObjs)
+			err = c.matchObjects(ctx, conn, db, schema, om, schemaObjs)
 			if err != nil { return err }
 		}
 	}
 }
 
-func (c *accountCache) matchDBs(ctx context.Context, conn *sql.DB, ep semantics.ObjExprPart, o *matchedAccountObjs) error {
+func (c *accountCache) matchDBs(ctx context.Context, conn *sql.DB, om semantics.ObjMatcher, o *matchedAccountObjs) error {
 	c.mu.Lock() // block till all another writer or any active readers are done, get a write lock, now you are the only one modifying the tree
 	defer c.mu.Unlock()
 	if o.version == c.version {
@@ -60,14 +60,14 @@ func (c *accountCache) matchDBs(ctx context.Context, conn *sql.DB, ep semantics.
 		}
 	}
 	for k := range c.getDBs() {
-		if ep.Match(k.Name) {
+		if !om.DisjointFromDB(k.Name) {
 			o.addDB(k)
 		}
 	}
 	return nil
 }
 
-func (c *accountCache) matchSchemas(ctx context.Context, conn *sql.DB, db DBKey, ep semantics.ObjExprPart, o *matchedDBObjs) error {
+func (c *accountCache) matchSchemas(ctx context.Context, conn *sql.DB, db DBKey, om semantics.ObjMatcher, o *matchedDBObjs) error {
 	c.mu.RLock() // Block till a (requesting) writer (obtains and) releases the lock, if any, get a read lock, now you can read this node, 
 		     // concurrently with other readers
 	defer c.mu.RUnlock()
@@ -93,14 +93,14 @@ func (c *accountCache) matchSchemas(ctx context.Context, conn *sql.DB, db DBKey,
 		}
 	}
 	for k := range c.dbs[db].getSchemas() {
-		if ep.Match(k) {
+		if !om.DisjointFromSchema(db.Name, k) {
 			o.addSchema(k)
 		}
 	}
 	return false, nil
 }
 
-func (c *accountCache) matchObjects(ctx context.Context, conn *sql.DB, db DBKey, schema string, ep semantics.ObjExprPart, o *matchedSchemaObjs) error {
+func (c *accountCache) matchObjects(ctx context.Context, conn *sql.DB, db DBKey, schema string, om semantics.ObjMatcher, o *matchedSchemaObjs) error {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if !c.hasDB(db) { return ErrObjectNotExistOrAuthorized }
@@ -115,10 +115,10 @@ func (c *accountCache) matchObjects(ctx context.Context, conn *sql.DB, db DBKey,
 		if err != nil { return err }
 	}
 	o.version = c.dbs[db].schemas[schema].version
-	o.objects = map[ObjKey]struct{}
+	o.objects = map[ObjKey]struct{}{}
 	for k := range c.dbs[db].schemas[schema].objects {
-		if ep.Match(k.Name) {
-			o.objects[k] = struct{}
+		if !om.DisjointFromObject(db.Name, schema, k.Name) {
+			o.objects[k] = struct{}{}
 		}
 	}
 	return false, nil
@@ -176,8 +176,8 @@ func (c *accountCache) getDBs() iter.Seq2[DBKey, *dbCache] {
 	}
 }
 
-func queryDBs(ctx context.Context, conn *sql.DB) (map[DBKey]struct, error) {
-	dbs := map[DBKey]struct{}
+func queryDBs(ctx context.Context, conn *sql.DB) (map[DBKey]struct{}, error) {
+	dbs := map[DBKey]struct{}{}
 	start := time.Now()
 	log.Printf("Querying Snowflake for database names...\n")
 	// TODO: Develop models (if any) for working with IMPORTED DATABASE, and APPLICATION DATABASE

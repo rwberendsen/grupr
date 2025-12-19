@@ -46,8 +46,8 @@ func (p *Product) refreshRecur(ctx context.Context, cnf *Config, conn *sql.DB, c
 }
 
 func (p *Product) refreshObjExprs(ctx context.Context, conn *sql.DB, c *accountCache) error {
-	for e, _ := range p.pSem.ObjectMatchers {
-		if err := c.match(ctx, conn, e, p.matchedAccountObjects[e]); err != nil {
+	for e, om := range p.pSem.ObjectMatchers {
+		if err := c.match(ctx, conn, om, p.matchedAccountObjects[e]); err != nil {
 			return err
 		}
 	}
