@@ -6,14 +6,14 @@ import (
 
 type matchedAccountObjs struct {
 	version int
-	dbs map[DBKey]*matchedDBObjs
-	dbExists map[DBKey]bool
+	dbs map[string]*matchedDBObjs
+	dbExists map[string]bool
 }
 
-func (o *matchedAccountObjs) addDB(k DBKey) {
+func (o *matchedAccountObjs) addDB(k string) {
 	if o.dbs == nil {
-		o.dbs = map[DBKey]*matchedDBObjs{}
-		o.dbExists = map[DBKey]bool{}
+		o.dbs = map[string]*matchedDBObjs{}
+		o.dbExists = map[string]bool{}
 	}
 	if _, ok := o.dbs[k]; !ok {
 		o.dbs[k] = &matchedDBObjs{}
@@ -21,19 +21,19 @@ func (o *matchedAccountObjs) addDB(k DBKey) {
 	o.dbExists[k] = true
 }
 
-func (o *matchedAccountObjs) dropDB(k DBKey) {
+func (o *matchedAccountObjs) dropDB(k string) {
 	if _, ok := o.dbs[k]; !ok {
-		panic(fmt.Sprintf("DBKey not found: '%s'", k))
+		panic(fmt.Sprintf("string not found: '%s'", k))
 	}
 	o.dbExists[k] = false
 }
 
-func (o *matchedAccountObjs) hasDB(k DBKey) {
+func (o *matchedAccountObjs) hasDB(k string) {
 	return o.dbExists != nil && o.dbExists[k]
 }
 
-func (o *matchedAccountObjs) getDBs() iter.Seq2[DBKey, *matchedDBObjs] {
-	return func(yield func(DBKey, *matchedDBObjs) bool) {
+func (o *matchedAccountObjs) getDBs() iter.Seq2[string, *matchedDBObjs] {
+	return func(yield func(string, *matchedDBObjs) bool) {
 		for k, v := range o.dbs {
 			if o.dbExists[k] {
 				if !yield(k, v) {

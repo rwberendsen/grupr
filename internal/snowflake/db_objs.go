@@ -13,7 +13,7 @@ type DBObjs struct {
 	GrantsOf
 }
 
-func newDBObjs(db DBKey, o *DBObjs, om semantics.ObjMatcher) *DBObjs {
+func newDBObjs(db string, o *DBObjs, om semantics.ObjMatcher) *DBObjs {
 	r := &DBObjs{Schemas: map[string]*SchemaObjs{},}
 	r.setMatchAllSchemas(db, om)
 	r.setMatchAllObjects(db, om)
@@ -32,7 +32,7 @@ func newDBObjsFromMatched(m *matchedDBObjs) *DBObjs {
 	return o
 }
 
-func (o *DBObjs) setMatchAllSchemas(db DBKey, om semantics.ObjMatcher) {
+func (o *DBObjs) setMatchAllSchemas(db string, om semantics.ObjMatcher) {
 	if !om.Include[semantics.Schema].MatchAll() { return }
 	o.MatchAllSchemas = true
 	for excludeExpr := range om.Exclude {
@@ -42,7 +42,7 @@ func (o *DBObjs) setMatchAllSchemas(db DBKey, om semantics.ObjMatcher) {
 	}
 }
 
-func (o *DBObjs) setMatchAllObjects(db DBKey, om semantics.ObjMatcher) {
+func (o *DBObjs) setMatchAllObjects(db string, om semantics.ObjMatcher) {
 	if om.SupersetOf(db.Name) {
 		o.MatchAllObjects = true
 	}

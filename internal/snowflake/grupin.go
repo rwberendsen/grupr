@@ -15,7 +15,7 @@ import (
 type Grupin struct {
 	Products map[string]*Product
 	ProductRoles map[ProductRole]struct{}
-	DatabaseRoles map[DBKey]map[DatabaseRole]struct{}
+	DatabaseRoles map[string]map[DatabaseRole]struct{}
 	gSem semantics.Grupin
 	accountCache *accountCache
 	// TODO: where we use map[string]bool but the bool has no meaning, use struct{} instead: more clearly meaningless
@@ -85,7 +85,7 @@ func (g *Grupin) setProductRoles(ctx context.Context, synCnf *syntax.Config, cnf
 }
 
 func (g *Grupin) setDatabaseRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB) error {
-	g.DatabaseRoles = map[DBKey]map[DatabaseRole]struct{}{}
+	g.DatabaseRoles = map[string]map[DatabaseRole]struct{}{}
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(cnf.MaxProductThreads) // we are not handling products here, but still a sensible choice
 	for db := range g.accountCache.getDBs() {
@@ -134,7 +134,7 @@ func (g *Grupin) dropDatabaseRoles(ctx context.Context, conn *sql.DB) error {
 	}
 }
 
-func queryDatabaseRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, db DBKey, m map[string]struct) error {
+func queryDatabaseRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, db string, m map[string]struct) error {
 	rows, err := conn.QueryContext(ctx, `SHOW DATABASE ROLES IN DATABASE IDENTIFIER(?) ->> SELECT "name" FROM $1 WHERE "owner" = ? `, db.Name, strings.ToUpper(cnf.Role))
 	if err != nil { 
 		if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo

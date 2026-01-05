@@ -5,7 +5,7 @@ type SchemaObjs struct {
 	MatchAllObjects bool
 }
 
-func newSchemaObjs(db DBKey, schema string, o *SchemaObjs, om semantics.ObjMatcher) *SchemaObjs {
+func newSchemaObjs(db string, schema string, o *SchemaObjs, om semantics.ObjMatcher) *SchemaObjs {
 	r := &SchemaObjs{Objects: map[ObjKey]struct{}{},}
 	r.setMatchAllObjects(db, om)
 	for objKey := range o.Objects {
@@ -22,7 +22,7 @@ func newSchemaObjsFromMatched(m *matchedSchemaObjs) *SchemaObjs {
 	}
 }
 
-func (o *SchemaObjs) setMatchAllObjects(db DBKey, schema string, om semantics.ObjMatcher) {
+func (o *SchemaObjs) setMatchAllObjects(db string, schema string, om semantics.ObjMatcher) {
 	if om.SupersetOfSchema(db.Name, schema) {
 		o.MatchAllObjects = true
 	}

@@ -18,8 +18,8 @@ import (
 type accountCache struct {
 	mu	sync.RWMutex // guards dbs, dbExists, and version
 	version int
-	dbs     map[DBKey]*dbCache // nil: never requested; empty: none found
-	dbExists map[DBKey]bool
+	dbs     map[string]*dbCache // nil: never requested; empty: none found
+	dbExists map[string]bool
 }
 
 // TODO: move this to some file with global functions
@@ -67,7 +67,7 @@ func (c *accountCache) matchDBs(ctx context.Context, conn *sql.DB, om semantics.
 	return nil
 }
 
-func (c *accountCache) matchSchemas(ctx context.Context, conn *sql.DB, db DBKey, om semantics.ObjMatcher, o *matchedDBObjs) error {
+func (c *accountCache) matchSchemas(ctx context.Context, conn *sql.DB, db string, om semantics.ObjMatcher, o *matchedDBObjs) error {
 	c.mu.RLock() // Block till a (requesting) writer (obtains and) releases the lock, if any, get a read lock, now you can read this node, 
 		     // concurrently with other readers
 	defer c.mu.RUnlock()
@@ -100,7 +100,7 @@ func (c *accountCache) matchSchemas(ctx context.Context, conn *sql.DB, db DBKey,
 	return false, nil
 }
 
-func (c *accountCache) matchObjects(ctx context.Context, conn *sql.DB, db DBKey, schema string, om semantics.ObjMatcher, o *matchedSchemaObjs) error {
+func (c *accountCache) matchObjects(ctx context.Context, conn *sql.DB, db string, schema string, om semantics.ObjMatcher, o *matchedSchemaObjs) error {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if !c.hasDB(db) { return ErrObjectNotExistOrAuthorized }
@@ -142,10 +142,10 @@ func (c *accountCache) refreshDBs(ctx context.Context, conn *sql.DB) error {
 	return nil
 }
 
-func (c *accountCache) addDB(k DBKey) {
+func (c *accountCache) addDB(k string) {
 	if c.dbs == nil {
-		c.dbs = map[DBKey]*dbCache{}
-		c.dbExists = map[DBKey]bool{}
+		c.dbs = map[string]*dbCache{}
+		c.dbExists = map[string]bool{}
 	}
 	if _, ok := c.dbs[k]; !ok {
 		c.dbs[k] = &dbCache{}
@@ -153,19 +153,19 @@ func (c *accountCache) addDB(k DBKey) {
 	c.dbExists[k] = true
 }
 
-func (c *accountCache) dropDB(k DBKey) {
+func (c *accountCache) dropDB(k string) {
 	if _, ok := c.dbs[k]; !ok {
-		panic(fmt.Sprintf("DBKey not found: '%s'", k))
+		panic(fmt.Sprintf("database not found: '%s'", k))
 	}
 	c.dbExists[k] = false
 }
 
-func (c *accountCache) hasDB(k DBKey) bool {
+func (c *accountCache) hasDB(k string) bool {
 	return c.dbExists != nil && c.dbExists[k]
 }
 
-func (c *accountCache) getDBs() iter.Seq2[DBKey, *dbCache] {
-	return func(yield func(DBKey, *dbCache) bool) {
+func (c *accountCache) getDBs() iter.Seq2[string, *dbCache] {
+	return func(yield func(string, *dbCache) bool) {
 		for k, v := range c.dbs {
 			if c.dbExists(k) {
 				if !yield(k, v) {
@@ -176,23 +176,21 @@ func (c *accountCache) getDBs() iter.Seq2[DBKey, *dbCache] {
 	}
 }
 
-func queryDBs(ctx context.Context, conn *sql.DB) (map[DBKey]struct{}, error) {
-	dbs := map[DBKey]struct{}{}
+func queryDBs(ctx context.Context, conn *sql.DB) (map[string]struct{}, error) {
+	dbs := map[string]struct{}{}
 	start := time.Now()
 	log.Printf("Querying Snowflake for database names...\n")
 	// TODO: Develop models (if any) for working with IMPORTED DATABASE, and APPLICATION DATABASE
 	// TODO: When there are more than 10K results, paginate
-	rows, err := conn.QueryContext(ctx, `SHOW TERSE DATABASES IN ACCOUNT ->> SELECT "name", "kind" FROM S1 WHERE "kind" IN ('STANDARD')`)
+	rows, err := conn.QueryContext(ctx, `SHOW TERSE DATABASES IN ACCOUNT ->> SELECT "name" FROM S1 WHERE "kind" = 'STANDARD'`)
 	if err != nil {
 		return nil, fmt.Errorf("queryDBs error: %w", err)
 	}
 	for rows.Next() {
-		var dbName string
-		var dbKind string
-		if err = rows.Scan(&dbName, &dbKind); err != nil {
+		var db string
+		if err = rows.Scan(&db); err != nil {
 			return nil, fmt.Errorf("queryDBs: error scanning row: %w", err)
 		}
-		db := DBKey{dbName, dbKind}
 		if _, ok := dbs[db]; ok { return nil, fmt.Errorf("duplicate db: %v", db) }
 		dbs[db] = struct{}{}
 	}
