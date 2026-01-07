@@ -28,7 +28,7 @@ func (o *matchedAccountObjs) dropDB(k string) {
 	o.dbExists[k] = false
 }
 
-func (o *matchedAccountObjs) hasDB(k string) {
+func (o *matchedAccountObjs) hasDB(k string) bool {
 	return o.dbExists != nil && o.dbExists[k]
 }
 

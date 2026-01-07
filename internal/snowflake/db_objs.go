@@ -8,9 +8,7 @@ type DBObjs struct {
 	Schemas  map[string]*SchemaObjs
 	MatchAllSchemas bool
 	MatchAllObjects bool
-	GrantsTo
-	GrantsOn
-	GrantsOf
+	RevokeGrantsTo []GrantToRecord
 }
 
 func newDBObjs(db string, o *DBObjs, om semantics.ObjMatcher) *DBObjs {
@@ -19,9 +17,10 @@ func newDBObjs(db string, o *DBObjs, om semantics.ObjMatcher) *DBObjs {
 	r.setMatchAllObjects(db, om)
 	for schema, schemaObjs := range o.Schemas {
 		if !om.DisjointFromSchema(db.Name, schema) {
-			o.Schemas[schema] = newSchemaObjs(db, schema, schemaObjs, om)
+			r.Schemas[schema] = newSchemaObjs(db, schema, schemaObjs, om)
 		}
 	}
+	return r
 }
 
 func newDBObjsFromMatched(m *matchedDBObjs) *DBObjs {

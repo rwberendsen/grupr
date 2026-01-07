@@ -8,17 +8,17 @@ type SchemaObjs struct {
 func newSchemaObjs(db string, schema string, o *SchemaObjs, om semantics.ObjMatcher) *SchemaObjs {
 	r := &SchemaObjs{Objects: map[ObjKey]struct{}{},}
 	r.setMatchAllObjects(db, om)
-	for objKey := range o.Objects {
-		if !om.DisjointFromObject(db.Name, schema, objKey.Name) {
-			o.Objects[objKey] = struct{}{}
+	for k := range o.Objects {
+		if !om.DisjointFromObject(db.Name, schema, k.Name) {
+			r.Objects[k] = struct{}{}
 		}
 	}
 }
 
 func newSchemaObjsFromMatched(m *matchedSchemaObjs) *SchemaObjs {
-	o := &SchemaObjs{Objects: map[ObjKey]struct{}{},}
+	r := &SchemaObjs{Objects: map[ObjKey]struct{}{},}
 	for k := range m.objects {
-		o.objects[k] = struct{}{}
+		r.Objects[k] = struct{}{}
 	}
 }
 

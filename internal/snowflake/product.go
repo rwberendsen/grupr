@@ -9,7 +9,7 @@ import (
 
 type Product struct {
 	Interface
-	Interfaces map[string]*Interface
+	Interfaces map[string]Interface
 	pSem semantics.Product
 	refreshCount int
 	matchedAccountObjects map[semantics.ObjExpr]*matchedAccountObjs
@@ -62,11 +62,25 @@ func (p *Product) calcObjects() {
 	}
 }
 
-func (p *Product) grant (ctx context.Context, cnf *Config, conn *sql.DB, databaseRoles map[string]bool) error {
+func (p *Product) createRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config,
+			      conn *sql.DB, productRoles map[ProductRole]struct{}) error {
+	for dtap := range p.pSem.DTAPs.All() {
+		for mode := range cnf.Modes {
+			productRole := newProductRole(synCnf, cnf, p.pSem.ID, dtap, mode)
+			if _, ok := productRoles[productRole]; !ok {
+				productRole.create(ctx, cnf, conn)	
+			}
+		}
+	}
+}
+
+func (p *Product) grantRead (ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB,
+		productRoles map[ProductRole]struct{}, databaseRoles map[string]map[DatabaseRole]struct{}) error {
+	if err := p.createRoles(ctx, synCnf, cnf, conn, productRoles); err != nil { return err }
 	// if during granting we get ErrObjectNotExistOrAuthorized, we should refresh the product and try again
-	if err := p.Interface.grant(ctx, cnf, conn, databaseRoles); err != nil { return err }
+	if err := p.Interface.grantRead(ctx, cnf, conn, databaseRoles); err != nil { return err }
 	for iid, i := range p.Interfaces {
-		if err := i.grant(ctx, cnf, conn, databaseRoles); err != nil { return err }
+		if err := i.grantRead(ctx, cnf, conn, databaseRoles); err != nil { return err }
 	}
 	return nil
 }

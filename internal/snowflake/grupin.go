@@ -42,11 +42,11 @@ func (g *Grupin) ManageAccess(ctx context.Context, synCnf *syntax.Config, cnf *C
 	if err := g.dropProductRoles(ctx, synCnf, cnf, conn); err != nil { return err }
 }
 
-func (g *grupin) grantRead(ctx context.context, cnf *Config, conn *sql.db) error {
+func (g *grupin) grantRead(ctx context.context, synCnf *syntax.Config, cnf *Config, conn *sql.db) error {
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(cnf.MaxProductThreads)
 	for k, v := range g.Products {
-		eg.Go(func() error { return v.grant(ctx, cnf, conn, g.DatabaseRoles) })
+		eg.Go(func() error { return v.grantRead(ctx, synCnf, cnf, conn, g.DatabaseRoles) })
 	}
 	for _, p := range g.Products {
 		for iid, dtapMapping := range v.pSem.Consumes {
@@ -55,7 +55,7 @@ func (g *grupin) grantRead(ctx context.context, cnf *Config, conn *sql.db) error
 	}
 }
 
-func (g *grupin) revoke(ctx context.context, cnf *Config, conn *sql.db) error {
+func (g *grupin) revokeRead(ctx context.context, cnf *Config, conn *sql.db) error {
 	for _, p := range g.Products {
 		// revoke relevant database roles from product role
 	}
@@ -96,18 +96,18 @@ func (g *Grupin) setDatabaseRoles(ctx context.Context, synCnf *syntax.Config, cn
 	return err
 }
 
-func (g *Grupin) dropProductRoles(ctx context.Context, conn *sql.DB) error {
+func (g *Grupin) dropProductRoles(ctx context.Context, cnf *Config, conn *sql.DB) error {
 	for r := range g.ProductRoles {
 		if pSem, ok := g.gSem.Products[r.ProductID]; ok {
 			if pSem.DTAPs.HasDTAP(r.DTAP) {
 				continue // no need to drop this role
 			}
 		}
-		if err := dropRole(ctx, conn, r.ID); err != nil { return err }
+		if err := dropRole(ctx, cnf, conn, r.ID); err != nil { return err }
 	}
 }
 
-func (g *Grupin) dropDatabaseRoles(ctx context.Context, conn *sql.DB) error {
+func (g *Grupin) dropDatabaseRoles(ctx context.Context, cnf *Config, conn *sql.DB) error {
 	// WIP: just over the YAML, and check whether the
 	//(database) roles we found can possibly be matched by the YAML; if not; check if
 	//roles are granted to any (non-system) role and if not then drop
@@ -119,23 +119,21 @@ func (g *Grupin) dropDatabaseRoles(ctx context.Context, conn *sql.DB) error {
 						if pSem.ObjectMatchers.MatchObjectsInDB(db.Name) {
 							continue // this role is still needed
 						}
-						if err := dropDatabaseRole(ctx, conn, r.ID); err != nil { return err }
-						continue
-					}
-					if iSem, ok := pSem.Interfaces[r.InterfaceID]; ok {
+					} else if iSem, ok := pSem.Interfaces[r.InterfaceID]; ok {
 						if iSem.ObjectMatchers.MatchObjectsInDB(db.Name) {
 							continue // this role is still needed
 						}
-						if err := dropDatabaseRole(ctx, conn, r.ID); err != nil { return err }
 					}
 				}
 			}
+			if err := dropDatabaseRole(ctx, conn, r.ID); err != nil { return err }
 		}
 	}
 }
 
 func queryDatabaseRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, db string, m map[string]struct) error {
-	rows, err := conn.QueryContext(ctx, `SHOW DATABASE ROLES IN DATABASE IDENTIFIER(?) ->> SELECT "name" FROM $1 WHERE "owner" = ? `, db.Name, strings.ToUpper(cnf.Role))
+	rows, err := conn.QueryContext(ctx, `SHOW DATABASE ROLES IN DATABASE IDENTIFIER(?)
+->> SELECT "name" FROM $1 WHERE "owner" = ? `, db.Name, strings.ToUpper(cnf.Role))
 	if err != nil { 
 		if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
 			return nil // perhaps DB was removed concurrently, just don't populate m
@@ -155,10 +153,11 @@ func queryDatabaseRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config,
 	return nil
 }
 
-func dropRole(ctx context.Context, conn *sql.DB, role string) error {
+func dropRole(ctx context.Context, cnf *Config, conn *sql.DB, role string) error {
 	// If a role has CREATE, OWNERSHIP (ON FUTURE) privileges, do not drop it, or cnf.Role could end up owning objects.
 	// Instead log a warning prompting administrators to GRANT OWNERSHIP to new owner and REVOKE any CREATE privileges.
-	for grant, err := range queryGrantsToRole(ctx, conn, role) {
+	grants := []grantToRole{}
+	for grant, err := range queryGrantsToRole(ctx, conn, role, false) {
 		if err != nil { return err }
 		// WIP: process role, e.g., if we find a CREATE or OWNERSHIP grant, no need to iterate further
 	}
@@ -168,7 +167,7 @@ func dropRole(ctx context.Context, conn *sql.DB, role string) error {
 	// in our case we don't want any transferring to happen.
 }
 
-func dropDatabaseRole(ctx context.Context, conn *sql.DB, dbName, dbRole string) error {
+func dropDatabaseRole(ctx context.Context, cnf *Config, conn *sql.DB, dbName, dbRole string) error {
 	// if the DB no longer exists, the role would not exist either anymore, we can ignore this error
 	// WIP
 	return nil

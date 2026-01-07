@@ -1,6 +1,8 @@
 package snowflake
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
 	"strings"
 
@@ -34,6 +36,31 @@ func newProductRoleFromString(synCnf *syntax.Config, cnf *Config, role string) (
 	if r.Mode, err := parseMode(strings.ToLower(parts[2])); err != nil { return r, fmt.Errorf("invalid role: '%s': %w", r.ID, err) }
 	if mode != Read { return r, fmt.Errorf("unimplemented mode '%s' for role '%s'", mode, role) }
 	return r, nil
+}
+
+func (r ProductRole) create(ctx context.Context, cnf *Config, conn *sql.DB) error {
+	sql1 := `CREATE ROLE IF NOT EXISTS IDENTIFIER(?)`
+	sql2 := `GRANT ROLE IDENTIFIER(?) TO ROLE SYSADMIN` // Snowflake best practice
+	param1 := r.String()
+	if cnf.DryRun {
+		printSQL(sql1, param1)
+		printSQL(sql2, param1)
+		return nil
+	}
+	if _, err := conn.QueryContext(ctx, sql1, param1); err != nil { return err }
+	if _, err := conn.QueryContext(ctx, sql2, param1); err != nil { return err }
+	return nil
+}
+
+func (r ProductRole) drop(ctx context.Context, cnf *Config, conn *sql.DB) error {
+	sql1 := `DROP ROLE IF EXISTS IDENTIFIER(?)`
+	param1 := r.String()
+	if cnf.DryRun {
+		printSQL(sql1, param1)
+		return nil
+	}
+	if _, err := conn.QueryContext(ctx, sql1, param1); err != nil { return err }
+	return nil
 }
 
 func (r ProductRole) String() string {

@@ -1,6 +1,7 @@
 package semantics
 
 import (
+	"iter"
 	"maps"
 
 	"github.com/rwberendsen/grupr/internal/syntax"
@@ -8,7 +9,7 @@ import (
 
 type DTAPSpec struct {
 	Prod          *string
-	NonProd       map[string]bool
+	NonProd       map[string]struct{}
 	DTAPRendering syntax.Rendering
 }
 
@@ -21,7 +22,7 @@ func newDTAPSpec(cnf *Config, dsSyn *syntax.DTAPSpec, dtapRendering syntax.Rende
 	}
 	dsSem := DTAPSpec{
 		Prod:          dsSyn.Prod,
-		NonProd:       make(map[string]bool, len(dsSyn.NonProd)),
+		NonProd:       make(map[string]struct{}, len(dsSyn.NonProd)),
 		DTAPRendering: make(syntax.Rendering, len(dsSyn.NonProd)+1),
 	}
 	if dsSyn.Prod != nil {
@@ -30,7 +31,7 @@ func newDTAPSpec(cnf *Config, dsSyn *syntax.DTAPSpec, dtapRendering syntax.Rende
 		dsSem.DTAPRendering[s] = s // default value when not in dtapRendering
 	}
 	for _, d := range dsSyn.NonProd {
-		dsSem.NonProd[d] = true
+		dsSem.NonProd[d] = struct{}{}
 		dsSem.DTAPRendering[d] = d // default value when not in dtapRendering
 	}
 	for d, r := range dtapRendering {
@@ -47,6 +48,21 @@ func (spec DTAPSpec) HasDTAP(dtap string) bool {
 	}
 	_, ok := spec.NonProd[dtap]
 	return ok
+}
+
+func (spec DTAPSpec) All() iter.Seq[string] {
+	return func(yield func(string)) {
+		if spec.Prod != nil {
+			if !yield(*spec.Prod) {
+				return
+			}
+		}
+		for k := range spec.NonProd {
+			if !yield(k) {
+				return
+			}
+		}
+	}
 }
 
 func (lhs DTAPSpec) Equal(rhs DTAPSpec) bool {

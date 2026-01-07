@@ -1,6 +1,7 @@
 package snowflake
 
 import (
+	"database/sql"
 	"fmt"
 	"strings"
 
@@ -12,15 +13,17 @@ type DatabaseRole struct {
 	DTAP string
 	InterfaceID string // "" means this is a product-level database role
 	Mode bool
+	Database string
 	ID string
 }
 
-func newDatabaseRole(synCnf *syntax.Config, cnf *Config, productID string, dtap string, interfaceID string, mode string) DatabaseRole {
+func newDatabaseRole(synCnf *syntax.Config, cnf *Config, productID string, dtap string, interfaceID string, mode string, db string) DatabaseRole {
 	r := DatabaseRole{
 		ProductID: productID,
 		DTAP: dtap,
 		InterfaceID: interfaceID,
 		Mode: mode,
+		Database: db,
 	}
 	if interfaceID == "" {
 		r.ID = strings.ToUpper(synCnf.Prefix + productID + cnf.Infix + dtap + +cnf.Infix + mode)
@@ -30,8 +33,8 @@ func newDatabaseRole(synCnf *syntax.Config, cnf *Config, productID string, dtap 
 	return r
 }
 
-func newDatabaseRoleFromString(synCnf *syntax.Config, cnf *Config, role string) (DatabaseRole, error) {
-	r := DatabaseRole{ID: role,}
+func newDatabaseRoleFromString(synCnf *syntax.Config, cnf *Config, role string, db string) (DatabaseRole, error) {
+	r := DatabaseRole{ID: role, Database: db,}
 	if !role.HasPrefix(cnf.Prefix) { return r, fmt.Errorf("role does not start with Grupr prefix: '%s'", r.ID) }
 	role = strings.TrimPrefix(role, cnf.Prefix)
 	parts := strings.Split(role, synCnf.Infix)
@@ -46,6 +49,26 @@ func newDatabaseRoleFromString(synCnf *syntax.Config, cnf *Config, role string) 
 	if mode, err := parseMode(strings.ToLower(parts[posMode])); err != nil { return r, fmt.Errorf("invalid role: '%s': %w", r.ID, err) }
 	if mode != Read { return r, fmt.Errorf("unimplemented mode '%s' for role '%s'", mode, role) }
 	return r, nil
+}
+
+func (r DatabaseRole) grantToSelf(ctx context.Context, cnf *Config, conn *sql.DB) error {
+	sql1 := `GRANT CREATE DATABASE ROLE ON DATABASE IDENTIFIER(?) TO ROLE (?)`
+	param1 := r.Database
+	param2 := cnf.Role
+	if cnf.DryRun {
+		printSQL(sql1, param1, param2)
+		return nil
+	}
+	if _, err := conn.QueryContext(ctx, sql1, param1, param2); err != nil { return err }
+	return nil
+}
+
+func (r DatabaseRole) create(ctx context.Context, cnf *Config, conn *sql.DB, grantSelf bool) error {
+	if grantSelf {
+		if err := r.grantToSelf(ctx, cnf, conn); err != nil { return err }
+	}
+	sql1 := `CREATE DATABASE ROLE IF NOT EXISTS ... WIP`
+	return nil
 }
 
 func (r DatabaseRole) String() string {
