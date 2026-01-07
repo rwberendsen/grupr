@@ -34,9 +34,13 @@ func NewGrupin(ctx context.Context, cnf *Config, conn *sql.DB, g semantics.Grupi
 }
 
 func (g *Grupin) ManageAccess(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB) error {
+	// first process grants, then revokes, to minimize downtime
+	// first process write rights, then read rights, otherwise COPY GRANTS on GRANT OWNERSHIP statements
+	//   may copy unnecessarily many grants
+	// whether granting or revoking, first process FUTURE GRANTS, then usual grants; otherwise concurrently created
+	//   objects may be missed out in a run.
 	if err := g.setProductRoles(ctx, synCnf, cnf, conn); err != nil { return err }
 	if err := g.setDatabaseRoles(ctx, conn); err != nil { return err }
-	// first process grants, then revokes, to minimize downtime
 	if err := g.grantRead(ctx, cnf, conn); err != nil { return err }
 	if err := g.revokeRead(ctx, cnf, conn); err != nil { return err }
 	if err := g.dropProductRoles(ctx, synCnf, cnf, conn); err != nil { return err }
@@ -46,7 +50,7 @@ func (g *grupin) grantRead(ctx context.context, synCnf *syntax.Config, cnf *Conf
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(cnf.MaxProductThreads)
 	for k, v := range g.Products {
-		eg.Go(func() error { return v.grantRead(ctx, synCnf, cnf, conn, g.DatabaseRoles) })
+		eg.Go(func() error { return v.grant(ctx, synCnf, cnf, conn, g.DatabaseRoles) })
 	}
 	for _, p := range g.Products {
 		for iid, dtapMapping := range v.pSem.Consumes {

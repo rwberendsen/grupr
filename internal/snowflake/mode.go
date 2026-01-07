@@ -17,3 +17,7 @@ func parseMode(s string) Mode, error {
 	if mode, ok := m[s]; !ok { return Read, fmt.Errorf("invalid mode: '%s'", s) }
 	return mode, nil
 }
+
+func (m Mode) String() string {
+	return map[Mode]string{Read: "r", Write: "w", Operate: "o"}[m]
+}

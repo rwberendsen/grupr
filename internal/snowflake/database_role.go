@@ -12,23 +12,23 @@ type DatabaseRole struct {
 	ProductID string
 	DTAP string
 	InterfaceID string // "" means this is a product-level database role
-	Mode bool
+	mode Mode // R, O, W
 	Database string
 	ID string
 }
 
-func newDatabaseRole(synCnf *syntax.Config, cnf *Config, productID string, dtap string, interfaceID string, mode string, db string) DatabaseRole {
+func newDatabaseRole(synCnf *syntax.Config, cnf *Config, productID string, dtap string, interfaceID string, mode Mode, db string) DatabaseRole {
 	r := DatabaseRole{
 		ProductID: productID,
 		DTAP: dtap,
 		InterfaceID: interfaceID,
-		Mode: mode,
+		mode: mode,
 		Database: db,
 	}
 	if interfaceID == "" {
-		r.ID = strings.ToUpper(synCnf.Prefix + productID + cnf.Infix + dtap + +cnf.Infix + mode)
+		r.ID = strings.ToUpper(synCnf.Prefix + productID + cnf.Infix + dtap + +cnf.Infix + fmt.Sprintf("%v", mode))
 	} else {
-		r.ID = strings.ToUpper(synCnf.Prefix + productID + cnf.Infix + dtap + +cnf.Infix + interfaceID + cnf.Infix + mode)
+		r.ID = strings.ToUpper(synCnf.Prefix + productID + cnf.Infix + dtap + +cnf.Infix + interfaceID + cnf.Infix + fmt.Sprintf("%v", mode))
 	}
 	return r
 }
@@ -67,8 +67,13 @@ func (r DatabaseRole) create(ctx context.Context, cnf *Config, conn *sql.DB, gra
 	if grantSelf {
 		if err := r.grantToSelf(ctx, cnf, conn); err != nil { return err }
 	}
-	sql1 := `CREATE DATABASE ROLE IF NOT EXISTS ... WIP`
-	return nil
+	sql1 := `CREATE DATABASE ROLE IF NOT EXISTS IDENTIFIER(?)`
+	param1 := r.Database
+	if cnf.DryRun {
+		printSQL(sql1, param1)
+		return nil
+	}
+	if _, err := conn.QueryContext(ctx, sql1, param1, param2); err != nil { return err }
 }
 
 func (r DatabaseRole) String() string {

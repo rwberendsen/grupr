@@ -37,22 +37,15 @@ func (i Interface) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config
 				}
 				if _, ok := databaseRoles[db][dbRole]; !ok {
 					if err := dbRole.create(ctx, cnf, conn, len(databaseRoles[db]) == 0); err != nil { return err }
+				} else {
+					dbObjs.queryGrants(ctx, conn, dbRole)
 				}
 			}
+			dbObjs.grant(ctx, cnf, conn)
 		}
-		oms[e].DTAP
-		if databaseRoles[db]['prefix_pid_[iid]_r'] {
 			// SHOW GRANTS TO / ON / OF database role, and store them in DBObjs
 			// grants on objects should be stored on the respective accountobjects
 			// if no accountobjects is there, it means this is a grant that should be revoked, later,
 			// and it should be stored separately, for later processing, after all grants have been done.
-		} else {
-			// CREATE DATABASE ROLE, and store empty grants in DBObjs
-			if cnf.DryRUn { // then don't execute command, but merely print it
-			}
-		}
-		// compute necessary grant statements
-		// GRANT privilege to ROLE ... if dry run then merely log it
-		// loop over accountobjs to 
 	}
 }

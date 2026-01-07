@@ -47,6 +47,6 @@ func (o *DBObjs) setMatchAllObjects(db string, om semantics.ObjMatcher) {
 	}
 }
 
-func (o *DBObjs) setGrantsOn/To/Of() {
+func (o *DBObjs) grant() {
 	return
 }

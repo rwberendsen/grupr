@@ -20,7 +20,7 @@ type Config struct {
 	MaxIdleConns int
 	MaxProductThreads int
 	MaxProductRefreshes int
-	Modes [1]string
+	Modes [1]Mode
 	DryRun bool
 }
 
@@ -31,7 +31,7 @@ func GetConfig(semCnf *semantics.Config) *Config, error {
 		MaxIdleConns: 3,	// MaxProductThreads - 1 (sometimes we use only one conn before quickly fanning out again)
 		MaxProductThreads: 4,
 		MaxProductRefreshes: 4, 
-		Modes: [1]string{"R"}, // Read; to be extended with O: Operate, W: Write
+		Modes: [1]Mode{Read},
 		DryRun: true
 	}
 
