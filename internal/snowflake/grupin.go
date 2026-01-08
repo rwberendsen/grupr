@@ -15,6 +15,7 @@ import (
 type Grupin struct {
 	Products map[string]*Product
 	ProductRoles map[ProductRole]struct{}
+	createDBRoleGrants map[string]struct{}
 	DatabaseRoles map[string]map[DatabaseRole]struct{}
 	gSem semantics.Grupin
 	accountCache *accountCache
@@ -41,12 +42,12 @@ func (g *Grupin) ManageAccess(ctx context.Context, synCnf *syntax.Config, cnf *C
 	//   objects may be missed out in a run.
 	if err := g.setProductRoles(ctx, synCnf, cnf, conn); err != nil { return err }
 	if err := g.setDatabaseRoles(ctx, conn); err != nil { return err }
-	if err := g.grantRead(ctx, cnf, conn); err != nil { return err }
-	if err := g.revokeRead(ctx, cnf, conn); err != nil { return err }
+	if err := g.grant(ctx, cnf, conn); err != nil { return err }
+	if err := g.revoke(ctx, cnf, conn); err != nil { return err }
 	if err := g.dropProductRoles(ctx, synCnf, cnf, conn); err != nil { return err }
 }
 
-func (g *grupin) grantRead(ctx context.context, synCnf *syntax.Config, cnf *Config, conn *sql.db) error {
+func (g *grupin) grant(ctx context.context, synCnf *syntax.Config, cnf *Config, conn *sql.db) error {
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(cnf.MaxProductThreads)
 	for k, v := range g.Products {
@@ -59,7 +60,7 @@ func (g *grupin) grantRead(ctx context.context, synCnf *syntax.Config, cnf *Conf
 	}
 }
 
-func (g *grupin) revokeRead(ctx context.context, cnf *Config, conn *sql.db) error {
+func (g *grupin) revoke(ctx context.context, cnf *Config, conn *sql.db) error {
 	for _, p := range g.Products {
 		// revoke relevant database roles from product role
 	}
@@ -70,6 +71,14 @@ func (g *grupin) revokeRead(ctx context.context, cnf *Config, conn *sql.db) erro
 	}
 	err := eg.Wait()
 	return err 
+}
+
+func (g *Grupin) setCreateDBRoleGrants(ctx context.Context, cnf *Config, conn *sql.DB) error {
+	g.createDBRoleGrants = map[string]struct{}{}
+	for grants := range queryGrantsToRole(ctx, conn, cnf.Role, )
+	rows, err := conn.QueryContext(ctx, `SHOW GRANTS TO ROLE IDENTIFIER(?)`, cnf.Role)
+	if err != nil { return err }
+	for rows.Next()
 }
 
 func (g *Grupin) setProductRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB) error {
@@ -135,7 +144,7 @@ func (g *Grupin) dropDatabaseRoles(ctx context.Context, cnf *Config, conn *sql.D
 	}
 }
 
-func queryDatabaseRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, db string, m map[string]struct) error {
+func queryDatabaseRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, db string, m map[DatabaseRole]struct{}) error {
 	rows, err := conn.QueryContext(ctx, `SHOW DATABASE ROLES IN DATABASE IDENTIFIER(?)
 ->> SELECT "name" FROM $1 WHERE "owner" = ? `, db.Name, strings.ToUpper(cnf.Role))
 	if err != nil { 
