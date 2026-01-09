@@ -1,6 +1,8 @@
 package snowflake
 
 import (
+	"context"
+
 	"github.com/rwberendsen/grupr/internal/syntax"
 	"github.com/rwberendsen/grupr/internal/semantics"
 )
@@ -26,20 +28,21 @@ func newInterfaceFromMatched(m map[semantics.ObjExpr]*matchedAccountObjects, oms
 	return i
 }
 
-func (i Interface) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, databaseRoles map[string]map[DatabaseRole]struct{},
-		dtaps semantics.DTAPSpec, pID string, iID string, oms semantics.ObjMatchers) error {
+func (i Interface) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, createDBRoleGrants map[string]struct{},
+		databaseRoles map[string]map[DatabaseRole]struct{}, dtaps semantics.DTAPSpec, pID string, iID string, oms semantics.ObjMatchers) error {
 	for e, accObjs := range i.AccountObjects {
 		for db, dbObjs := range accObjs.DBs {
-			for mode := range cnf.Modes {
-				dbRole := newDatabaseRole(synCnf, conf, pID, oms[e].DTAP, iID, mode, db)
-				if _, ok := databaseRoles[db]; !ok {
-					return ErrObjectNotExistOrAuthorized // db no longer there in cache, indicating removal of DB
+			dbRole := newDatabaseRole(synCnf, conf, pID, oms[e].DTAP, iID, ModeRead, db)
+			if _, ok := databaseRoles[db]; !ok {
+				return ErrObjectNotExistOrAuthorized // db may have been dropped concurrently
+			}
+			if _, ok := databaseRoles[db][dbRole]; !ok {
+				if _, ok = createDBRoleGrants[db]; !ok {
+					if err := GrantCreateDatabaseRoleToSelf(ctx, cnf, conn, db); err != nil { return err }
 				}
-				if _, ok := databaseRoles[db][dbRole]; !ok {
-					if err := dbRole.create(ctx, cnf, conn, len(databaseRoles[db]) == 0); err != nil { return err }
-				} else {
-					dbObjs.queryGrants(ctx, conn, dbRole)
-				}
+				if err := dbRole.Create(ctx, cnf, conn); err != nil { return err }
+			} else {
+				dbObjs.queryGrants(ctx, conn, dbRole)
 			}
 			dbObjs.grant(ctx, cnf, conn)
 		}

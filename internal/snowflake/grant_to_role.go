@@ -9,45 +9,52 @@ import (
 	"strings"
 )
 
-type grantToRole struct {
-	privilege 	Privilege
-	createObjType   *ObjectType // nil: not applicable (not a create privilege)
-	grantedOn 	ObjectType
-	name 		string
-	grantOption	bool
-	grantedBy	string
+type GrantToRole struct {
+	Privilege 		Privilege
+	CreateObjectType	ObjType // "": not applicable (privilege != prvCreate)
+	GrantedOn 		ObjType
+	Name 			string
+	GrantOption		bool
+	GrantedBy		string
 }
 
-func newGrantToRole(privilege string, createObjType *string, grantedOn string, name string,
-		grantOption bool, grantedBy string) error {
-	r := grantToRole{
-		name: name,
-		grantOption: grantOption,
-		grantedBy: grantedBy,
+func NewGrantToRole(privilege string, createObjType string, grantedOn string, name string,
+		grantOption bool, grantedBy string) GrantToRole {
+	return GrantToRole{
+		Privilege: parsePrivilege(privilege),
+		CreateObjectType: parseObjType(createObjType),
+		GrantedOn: parseObjType(grantedOn),
+		Name: name,
+		GrantOption: grantOption,
+		GrantedBy: grantedBy,
 	}
-	if p, err := newPrivilege(privilege); err != nil {
-		return err
-	} else {
-		r.privilege = p
-	} // WIP
 }
 
-func queryGrantsToRoleFiltered(ctx context.Context, conn *sql.DB, role string,
-		privileges map[Privilege]struct{}, createObjTypes map[ObjectType]struct{}) iter.Seq2[grantToRole, error] {
-	return queryGrants(ctx, conn, role, false, privileges, createObjTypes)
+func QueryGrantsToRoleFiltered(ctx context.Context, conn *sql.DB, role string,
+		privileges map[Privilege]struct{}, createObjTypes map[ObjType]struct{}) iter.Seq2[GrantToRole, error] {
+	return queryGrantsToRole(ctx, conn, "", role, privileges, createObjTypes)
 }
 
-func queryGrantsToDBRoleFiltered(ctx context.Context, conn *sql.DB, role string,
-		privileges map[Privilege]struct{}, createObjTypes map[ObjectType]struct{}) iter.Seq2[grantToRole, error] {
-	return queryGrants(ctx, conn, role, true, privileges, createObjTypes)
+func QueryGrantsToDBRoleFiltered(ctx context.Context, conn *sql.DB, db string, role string,
+		privileges map[Privilege]struct{}, createObjTypes map[ObjType]struct{}) iter.Seq2[GrantToRole, error] {
+	return queryGrantsToRole(ctx, conn, db, role, privileges, createObjTypes)
 }
 
-func queryGrantsToRole(ctx context.Context, conn *sql.DB, role string, isDatabaseRole bool,
-		privileges map[Privilege]struct{}, createObjTypes map[ObjectType]struct{}) iter.Seq2[grantToRole, error] {
+func QueryGrantsToRole(ctx context.Context, conn *sql.DB, role string) iter.Seq2[GrantToRole, error] {
+	return queryGrantsToRole(ctx, conn, "", role, nil, nil)
+}
+
+func QueryGrantsToDBRole(ctx context.Context, conn *sql.DB, db string, role string) iter.Seq2[GrantToRole, error] {
+	return queryGrantsToRole(ctx, conn, db, role, nil, nil)
+}
+
+func buildSQL(db string, role string, privileges map[Privilege]struct{}, createObjTypes map[ObjType]struct{}) (sql string, param string) {
 	// fetch grants for DATABASE ROLE if needed, rather than ROLE
 	var dbClause string
-	if isDatabaseRole {
+	param = role
+	if db != "" {
 		dbClause = `DATABASE `
+		param = fmt.Sprintf(`%s.%s`, db, role)
 	}
 
 	// Check if we need to separately handle a CREATE privilege, restricting it to certain object types
@@ -114,11 +121,17 @@ OR%s
 FROM $1
 %s`, dbClause, whereClause)
 
-	return func(yield func(grantToRole, error) bool) {
-		rows, err := conn.QueryContext(ctx, sql, role)
+return
+}
+
+func queryGrantsToRole(ctx context.Context, conn *sql.DB, db string, role string,
+		privileges map[Privilege]struct{}, createObjTypes map[ObjType]struct{}) iter.Seq2[GrantToRole, error] {
+	sql, param := buildSQL(db, role, privileges, createObjTypes)
+	return func(yield func(GrantToRole, error) bool) {
+		rows, err := conn.QueryContext(ctx, sql, param)
 		defer rows.Close()
 		if err != nil { 
-			yield(grantToRole{}, err)
+			yield(GrantToRole{}, err)
 			return
 		}
 		for rows.Next() {
@@ -129,12 +142,12 @@ FROM $1
 			var grantOption bool
 			var grantedBy string
 			if err = rows.Scan(&privilege, &creatObjType, &grantedOn, &name, &grantOption, &grantedBy); err != nil {
-				yield(grantToRole{}, err)
+				yield(GrantToRole{}, err)
 				return
 			}
-			if !yield(grantToRole{
+			if !yield(GrantToRole{
 				privilege: privilege,
-				createObjectType: 
+				createObjType: 
 				grantedOn: grantedOn,
 				name: name,
 				grantOption: grantOption,
@@ -144,7 +157,7 @@ FROM $1
 			}
 		}
 		if err = rows.Err(); err != nil {
-			yield(grantToRole{}, err)
+			yield(GrantToRole{}, err)
 			return
 		}
 	}

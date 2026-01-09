@@ -1,49 +1,39 @@
 package snowflake
 
-import {
-	"fmt"
-}
-
 type Privilege int
 
 const (
-	Create Privilege = iota
-	Monitor
-	Operate
-	Ownership
-	References
-	Select
-	Usage
-	PrivilegeOther
+	PrvOther Privilege = iota // zero type is PrvOther
+	PrvCreate
+	PrvMonitor
+	PrvOperate
+	PrvOwnership
+	PrvReferences
+	PrvSelect
+	PrvUsage
 )
 
-func parsePrivilege(p string) (Privilege, error) {
+func ParsePrivilege(p string) (Privilege, error) {
 	m := map[string]Privilege{
-		"CREATE": Create,
-		"MONITOR": Monitor,
-		"OPERATE": Operate,
-		"OWNERSHIP": Ownership,
-		"REFERENCES": References,
-		"SELECT": Select,
-		"USAGE": Usage,
-	}
-	if v, ok := m[p]; !ok {
-		return PrivilegeOther, fmt.Errorf("unknown privilege")
-	} else {
-		return v, nil
-	}
+		"CREATE": PrvCreate,
+		"MONITOR": PrvMonitor,
+		"OPERATE": PrvOperate,
+		"OWNERSHIP": PrvOwnership,
+		"REFERENCES": PrvReferences,
+		"SELECT": PrvSelect,
+		"USAGE": PrvUsage,
+	}[p]
 }
 
 func (p Privilege) String() string {
-	m := map[Privilege]string{
-		Create: "CREATE",
-		Monitor: "MONITOR",
-		Operate: "OPERATE",
-		Ownership: "OWNERSHIP",
-		References: "REFERENCES",
-		Select: "SELECT",
-		Usage: "USAGE",
-		PrivilegeOther: "OTHER",
-	}
-	return m[p]
+	return map[Privilege]string{
+		PrvOther: "OTHER",
+		PrvCreate: "CREATE",
+		PrvMonitor: "MONITOR",
+		PrvOperate: "OPERATE",
+		PrvOwnership: "OWNERSHIP",
+		PrvReferences: "REFERENCES",
+		PrvSelect: "SELECT",
+		PrvUsage: "USAGE",
+	}[p]
 }

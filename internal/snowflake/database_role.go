@@ -12,12 +12,12 @@ type DatabaseRole struct {
 	ProductID string
 	DTAP string
 	InterfaceID string // "" means this is a product-level database role
-	mode Mode // R, O, W
+	Mode Mode
 	Database string
 	ID string
 }
 
-func newDatabaseRole(synCnf *syntax.Config, cnf *Config, productID string, dtap string, interfaceID string, mode Mode, db string) DatabaseRole {
+func NewDatabaseRole(synCnf *syntax.Config, cnf *Config, productID string, dtap string, interfaceID string, mode Mode, db string) DatabaseRole {
 	r := DatabaseRole{
 		ProductID: productID,
 		DTAP: dtap,
@@ -26,14 +26,14 @@ func newDatabaseRole(synCnf *syntax.Config, cnf *Config, productID string, dtap 
 		Database: db,
 	}
 	if interfaceID == "" {
-		r.ID = strings.ToUpper(synCnf.Prefix + productID + cnf.Infix + dtap + +cnf.Infix + fmt.Sprintf("%v", mode))
+		r.ID = strings.ToUpper(fmt.Sprintf("%s.%s%s%s%s%s%v", r.Database, synCnf.Prefix, productID, cnf.Infix, dtap, cnf.Infix, mode))
 	} else {
-		r.ID = strings.ToUpper(synCnf.Prefix + productID + cnf.Infix + dtap + +cnf.Infix + interfaceID + cnf.Infix + fmt.Sprintf("%v", mode))
+		r.ID = strings.ToUpper(fmt.Sprintf("%s.%s%s%s%s%s%s%s%v", r.Database, synCnf.Prefix, productID, cnf.Infix, dtap, cnf.Infix, interfaceID, cnf.Infix, mode))
 	}
 	return r
 }
 
-func newDatabaseRoleFromString(synCnf *syntax.Config, cnf *Config, role string, db string) (DatabaseRole, error) {
+func NewDatabaseRoleFromString(synCnf *syntax.Config, cnf *Config, db string, role string) (DatabaseRole, error) {
 	r := DatabaseRole{ID: role, Database: db,}
 	if !role.HasPrefix(cnf.Prefix) { return r, fmt.Errorf("role does not start with Grupr prefix: '%s'", r.ID) }
 	role = strings.TrimPrefix(role, cnf.Prefix)
@@ -51,29 +51,43 @@ func newDatabaseRoleFromString(synCnf *syntax.Config, cnf *Config, role string, 
 	return r, nil
 }
 
-func (r DatabaseRole) grantToSelf(ctx context.Context, cnf *Config, conn *sql.DB) error {
-	sql1 := `GRANT CREATE DATABASE ROLE ON DATABASE IDENTIFIER(?) TO ROLE (?)`
-	param1 := r.Database
-	param2 := cnf.Role
-	if cnf.DryRun {
-		printSQL(sql1, param1, param2)
-		return nil
+func QueryDatabaseRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, db string) iter.Seq2[DatabaseRole, error]{
+	return func(yield func(DatabaseRole, error) bool) {
+		rows, err := conn.QueryContext(ctx, `SHOW DATABASE ROLES IN DATABASE IDENTIFIER(?)
+	->> SELECT "name" FROM $1 WHERE "owner" = ? `, db.Name, strings.ToUpper(cnf.Role))
+		defer rows.Close()
+		if err != nil { 
+			if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
+				err = ErrObjectNotExistOrAuthorized
+			}
+			yield(DatabaseRole{}, err) 
+			return
+		}
+		for rows.Next() {
+			var roleName string
+			if err = rows.Scan(&roleName); err != nil {
+				yield(DatabaseRole{}, err}
+				return
+			}
+			if r, err := newDatabaseRoleFromString(synCnf, cnf, db, roleName); err != nil {
+				yield(DatabaseRole, err)
+				return
+			} else {
+				if !yield(r, nil) { return }
+			}
+		}
+		if err = rows.Err(); err != nil {
+			yield(DatabaseRole{}, err)
+		}
 	}
-	if _, err := conn.QueryContext(ctx, sql1, param1, param2); err != nil { return err }
-	return nil
 }
 
-func (r DatabaseRole) create(ctx context.Context, cnf *Config, conn *sql.DB, grantSelf bool) error {
-	if grantSelf {
-		if err := r.grantToSelf(ctx, cnf, conn); err != nil { return err }
-	}
-	sql1 := `CREATE DATABASE ROLE IF NOT EXISTS IDENTIFIER(?)`
-	param1 := r.Database
-	if cnf.DryRun {
-		printSQL(sql1, param1)
-		return nil
-	}
-	if _, err := conn.QueryContext(ctx, sql1, param1, param2); err != nil { return err }
+func GrantCreateDatabaseRoleToSelf(ctx context.Context, cnf *Config, conn *sql.DB, db string) error {
+	return runSQL(ctx, conn, `GRANT CREATE DATABASE ROLE ON DATABASE IDENTIFIER(?) TO ROLE (?)`, db, cnf.Role)
+}
+
+func (r DatabaseRole) Create(ctx context.Context, cnf *Config, conn *sql.DB) error {
+	return runSQL(ctx, conn, `CREATE DATABASE ROLE IF NOT EXISTS IDENTIFIER(?)`, r.ID)
 }
 
 func (r DatabaseRole) String() string {

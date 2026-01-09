@@ -41,6 +41,7 @@ func (g *Grupin) ManageAccess(ctx context.Context, synCnf *syntax.Config, cnf *C
 	// whether granting or revoking, first process FUTURE GRANTS, then usual grants; otherwise concurrently created
 	//   objects may be missed out in a run.
 	if err := g.setProductRoles(ctx, synCnf, cnf, conn); err != nil { return err }
+	if err := g.setCreateDBRoleGrants(ctx, cnf, conn); err != nil { return err }
 	if err := g.setDatabaseRoles(ctx, conn); err != nil { return err }
 	if err := g.grant(ctx, cnf, conn); err != nil { return err }
 	if err := g.revoke(ctx, cnf, conn); err != nil { return err }
@@ -51,7 +52,7 @@ func (g *grupin) grant(ctx context.context, synCnf *syntax.Config, cnf *Config, 
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(cnf.MaxProductThreads)
 	for k, v := range g.Products {
-		eg.Go(func() error { return v.grant(ctx, synCnf, cnf, conn, g.DatabaseRoles) })
+		eg.Go(func() error { return v.grant(ctx, synCnf, cnf, conn, g.ProductRoles, g.DatabaseRoles, g.CreateDBRoleGrants) })
 	}
 	for _, p := range g.Products {
 		for iid, dtapMapping := range v.pSem.Consumes {
@@ -73,14 +74,6 @@ func (g *grupin) revoke(ctx context.context, cnf *Config, conn *sql.db) error {
 	return err 
 }
 
-func (g *Grupin) setCreateDBRoleGrants(ctx context.Context, cnf *Config, conn *sql.DB) error {
-	g.createDBRoleGrants = map[string]struct{}{}
-	for grants := range queryGrantsToRole(ctx, conn, cnf.Role, )
-	rows, err := conn.QueryContext(ctx, `SHOW GRANTS TO ROLE IDENTIFIER(?)`, cnf.Role)
-	if err != nil { return err }
-	for rows.Next()
-}
-
 func (g *Grupin) setProductRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB) error {
 	g.ProductRoles = map[ProductRole]struct{}{}
 	rows, err := conn.QueryContext(ctx, `SHOW TERSE ROLES LIKE ? ->> SELECT "name" FROM $1`, cnf.Prefix + "%")
@@ -97,13 +90,31 @@ func (g *Grupin) setProductRoles(ctx context.Context, synCnf *syntax.Config, cnf
 	if err = rows.Err(); err != nil { return err }
 }
 
+func (g *Grupin) setCreateDBRoleGrants(ctx context.Context, cnf *Config, conn *sql.DB) error {
+	g.createDBRoleGrants = map[string]struct{}{}
+	for grant, err := range QueryGrantsToRoleFiltered(ctx, conn, cnf.Role,
+			map[Privilege]struct{}{PrvCreate: {},}
+			map[CreateObjType]struct{}{ObjTpDatabaseRole: {},}) {
+		if err != nil { return err }
+		g.createDBRoleGrants[grant.Name] = struct{}{}
+	}
+}
+
 func (g *Grupin) setDatabaseRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB) error {
 	g.DatabaseRoles = map[string]map[DatabaseRole]struct{}{}
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(cnf.MaxProductThreads) // we are not handling products here, but still a sensible choice
 	for db := range g.accountCache.getDBs() {
 		g.DatabaseRoles[db] = map[DatabaseRole]struct{}{}
-		eg.Go(func() error { return queryDatabaseRoles(ctx, synCnf, cnf, conn, g.DatabaseRoles[db]) })
+		eg.Go(func() error { 
+			for r, err := range QueryDatabaseRoles(ctx, synCnf, cnf, conn, db) {
+				if err != nil {
+					if err != ErrObjectNotExistOrAuthorized { return err }
+					return nil // db may have been dropped concurrently, just ignore
+				}
+				g.DatabaseRoles[db][r] = struct{}{}
+			}
+		})
 	}
 	err := eg.Wait()
 	return err
@@ -142,28 +153,6 @@ func (g *Grupin) dropDatabaseRoles(ctx context.Context, cnf *Config, conn *sql.D
 			if err := dropDatabaseRole(ctx, conn, r.ID); err != nil { return err }
 		}
 	}
-}
-
-func queryDatabaseRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, db string, m map[DatabaseRole]struct{}) error {
-	rows, err := conn.QueryContext(ctx, `SHOW DATABASE ROLES IN DATABASE IDENTIFIER(?)
-->> SELECT "name" FROM $1 WHERE "owner" = ? `, db.Name, strings.ToUpper(cnf.Role))
-	if err != nil { 
-		if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
-			return nil // perhaps DB was removed concurrently, just don't populate m
-		}
-		return err 
-	}
-	for rows.Next() {
-		var roleName string
-		if err = rows.Scan(&roleName); err != nil { return err }
-		if r, err := newDatabaseRoleFromString(synCnf, cnf, roleName); err != nil {
-			return err
-		} else {
-			m[r] = struct{}{}
-		}
-	}
-	if err = rows.Err(); err != nil { return err }
-	return nil
 }
 
 func dropRole(ctx context.Context, cnf *Config, conn *sql.DB, role string) error {

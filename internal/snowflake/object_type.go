@@ -1,27 +1,39 @@
 package snowflake
 
-type ObjectType int
+type ObjType int
 
 const (
-	Account ObjectType = iota
-	Database
-	Schema
-	Table
-	View
-	Role
-	DatabaseRole
-	ObjectTypeOther
+	ObjTpOther ObjType = iota // zero type
+	ObjTpAccount
+	ObjTpDatabase
+	ObjTpDatabaseRole
+	ObjTpRole
+	ObjTpSchema
+	ObjTpTable
+	ObjTpView
 )
 
-func (ot ObjectType) String() string {
-	return map[ObjectType]string{
+func ParseObjType(s string) ObjType {
+	return map[string]ObjType{
+		"ACCOUNT": ObjTpAccount,
+		"DATABASE": ObjTpDatabase,
+		"DATABASE ROLE": ObjTpDatabaseRole,
+		"ROLE": ObjTpRole,
+		"SCHEMA": ObjTpSchema,
+		"TABLE": ObjTpTable,
+		"VIEW": ObkTpView,
+	}[s]
+}
+
+func (ot ObjType) String() string {
+	return map[ObjType]string{
+		Other: "OTHER",
 		Account: "ACCOUNT",
 		Database: "DATABASE",
+		DatabaseRole: "DATABASE ROLE",
+		Role: "ROLE",
 		Schema: "SCHEMA",
 		Table: "TABLE",
 		View: "VIEW",
-		Role: "ROLE",
-		DatabaseRole: "DATABASE ROLE",
-		ObjectTYpeOther: "OTHER",
 	}[ot]
 }
