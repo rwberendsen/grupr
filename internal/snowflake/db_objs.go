@@ -47,6 +47,28 @@ func (o *DBObjs) setMatchAllObjects(db string, om semantics.ObjMatcher) {
 	}
 }
 
-func (o *DBObjs) grant() {
+func (o *DBObjs) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, pID string, dtap string, iID string,
+		db string, createDBRoleGrants map[string]struct{}, databaseRoles map[string]map[DatabaseRole]struct{}) {
+	dbRole := NewDatabaseRole(synCnf, conf, pID, dtap, iID, ModeRead, db)
+	if _, ok := databaseRoles[db][dbRole]; !ok {
+		if _, ok = createDBRoleGrants[db]; !ok {
+			if err := GrantCreateDatabaseRoleToSelf(ctx, cnf, conn, db); err != nil { return err }
+		}
+		if err := dbRole.Create(ctx, cnf, conn); err != nil { return err }
+	} else {
+		for grant, err := range QueryGrantsToDBRoleFiltered(ctx, conn, db, dbRole.Name,
+				map[Privilege]struct{}{
+					PrvUsage: {},
+					PrvSelect: {},
+					PrvReferences: {},
+				},
+				nil) {
+			// do something WIP
+		}
+	}
 	return
+			// SHOW GRANTS TO / ON / OF database role, and store them in DBObjs
+			// grants on objects should be stored on the respective accountobjects
+			// if no accountobjects is there, it means this is a grant that should be revoked, later,
+			// and it should be stored separately, for later processing, after all grants have been done.
 }

@@ -14,7 +14,8 @@ type DatabaseRole struct {
 	InterfaceID string // "" means this is a product-level database role
 	Mode Mode
 	Database string
-	ID string
+	Name string
+	FQN string
 }
 
 func NewDatabaseRole(synCnf *syntax.Config, cnf *Config, productID string, dtap string, interfaceID string, mode Mode, db string) DatabaseRole {
@@ -26,19 +27,20 @@ func NewDatabaseRole(synCnf *syntax.Config, cnf *Config, productID string, dtap 
 		Database: db,
 	}
 	if interfaceID == "" {
-		r.ID = strings.ToUpper(fmt.Sprintf("%s.%s%s%s%s%s%v", r.Database, synCnf.Prefix, productID, cnf.Infix, dtap, cnf.Infix, mode))
+		r.Name = strings.ToUpper(fmt.Sprintf("%s%s%s%s%s%v", synCnf.Prefix, productID, cnf.Infix, dtap, cnf.Infix, mode))
 	} else {
-		r.ID = strings.ToUpper(fmt.Sprintf("%s.%s%s%s%s%s%s%s%v", r.Database, synCnf.Prefix, productID, cnf.Infix, dtap, cnf.Infix, interfaceID, cnf.Infix, mode))
+		r.Name = strings.ToUpper(fmt.Sprintf("%s%s%s%s%s%s%s%v", synCnf.Prefix, productID, cnf.Infix, dtap, cnf.Infix, interfaceID, cnf.Infix, mode))
 	}
+	r.FQN = fmt.Sprintf(`"%s".%s`, r.Database, r.Name)
 	return r
 }
 
 func NewDatabaseRoleFromString(synCnf *syntax.Config, cnf *Config, db string, role string) (DatabaseRole, error) {
-	r := DatabaseRole{ID: role, Database: db,}
-	if !role.HasPrefix(cnf.Prefix) { return r, fmt.Errorf("role does not start with Grupr prefix: '%s'", r.ID) }
+	r := DatabaseRole{Name: role, Database: db,}
+	if !role.HasPrefix(cnf.Prefix) { return r, fmt.Errorf("role does not start with Grupr prefix: '%s'", r.Name) }
 	role = strings.TrimPrefix(role, cnf.Prefix)
 	parts := strings.Split(role, synCnf.Infix)
-	if len(parts) != 3 && len(parts) != 4 { return r, fmt.Errorf("role does not have three or four parts: '%s'", r.ID) }
+	if len(parts) != 3 && len(parts) != 4 { return r, fmt.Errorf("role does not have three or four parts: '%s'", r.Name) }
 	r.ProductID = strings.ToLower(parts[0])
 	r.DTAP = strings.ToLower(parts[1])
 	posMode := 2
@@ -46,7 +48,7 @@ func NewDatabaseRoleFromString(synCnf *syntax.Config, cnf *Config, db string, ro
 		r.InterfaceID = strings.ToLower(parts[2])
 		posMode += 1
 	}
-	if mode, err := parseMode(strings.ToLower(parts[posMode])); err != nil { return r, fmt.Errorf("invalid role: '%s': %w", r.ID, err) }
+	if mode, err := parseMode(strings.ToLower(parts[posMode])); err != nil { return r, fmt.Errorf("invalid role: '%s': %w", r.Name, err) }
 	if mode != Read { return r, fmt.Errorf("unimplemented mode '%s' for role '%s'", mode, role) }
 	return r, nil
 }
@@ -54,7 +56,7 @@ func NewDatabaseRoleFromString(synCnf *syntax.Config, cnf *Config, db string, ro
 func QueryDatabaseRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, db string) iter.Seq2[DatabaseRole, error]{
 	return func(yield func(DatabaseRole, error) bool) {
 		rows, err := conn.QueryContext(ctx, `SHOW DATABASE ROLES IN DATABASE IDENTIFIER(?)
-	->> SELECT "name" FROM $1 WHERE "owner" = ? `, db.Name, strings.ToUpper(cnf.Role))
+	->> SELECT "name" FROM $1 WHERE "owner" = ? `, db, strings.ToUpper(cnf.Role))
 		defer rows.Close()
 		if err != nil { 
 			if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
@@ -87,9 +89,9 @@ func GrantCreateDatabaseRoleToSelf(ctx context.Context, cnf *Config, conn *sql.D
 }
 
 func (r DatabaseRole) Create(ctx context.Context, cnf *Config, conn *sql.DB) error {
-	return runSQL(ctx, conn, `CREATE DATABASE ROLE IF NOT EXISTS IDENTIFIER(?)`, r.ID)
+	return runSQL(ctx, conn, `CREATE DATABASE ROLE IF NOT EXISTS IDENTIFIER(?)`, r.FQN)
 }
 
 func (r DatabaseRole) String() string {
-	return r.ID
+	return r.FQN
 }

@@ -54,7 +54,7 @@ func buildSQL(db string, role string, privileges map[Privilege]struct{}, createO
 	param = role
 	if db != "" {
 		dbClause = `DATABASE `
-		param = fmt.Sprintf(`%s.%s`, db, role)
+		param = fmt.Sprintf(`"%s".%s`, db, role)
 	}
 
 	// Check if we need to separately handle a CREATE privilege, restricting it to certain object types
