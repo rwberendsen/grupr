@@ -2,6 +2,7 @@ package snowflake
 
 import (
 	"context"
+	"csv"
 	"database/sql"
 	"fmt"
 	"iter"
@@ -13,21 +14,55 @@ type GrantToRole struct {
 	Privilege 		Privilege
 	CreateObjectType	ObjType // "": not applicable (privilege != prvCreate)
 	GrantedOn 		ObjType
-	Name 			string
+	Database		string
+	Schema			string
+	Object			string
+	Role			string
 	GrantOption		bool
 	GrantedBy		string
 }
 
-func NewGrantToRole(privilege string, createObjType string, grantedOn string, name string,
-		grantOption bool, grantedBy string) GrantToRole {
-	return GrantToRole{
-		Privilege: parsePrivilege(privilege),
-		CreateObjectType: parseObjType(createObjType),
-		GrantedOn: parseObjType(grantedOn),
-		Name: name,
+func newGrantToRole(privilege string, createObjType string, grantedOn string, name string,
+		grantOption bool, grantedBy string) (GrantToRole, error) {
+	g := GrantToRole{
+		Privilege: ParsePrivilege(privilege),
+		CreateObjectType: ParseObjType(createObjType),
+		GrantedOn: PparseObjType(grantedOn),
 		GrantOption: grantOption,
 		GrantedBy: grantedBy,
 	}
+	fpr := map[ObjType]int{
+		ObjTpAccount: 1,
+		ObjTpDatabase: 1,
+		ObjTpDatabaseRole: 2,
+		ObjTpRole: 1,
+		ObjTpSchema: 2,
+		ObjTpTable: 3,
+		ObjTpView: 3,
+	}
+	r := csv.NewReader(strings.NewReader(name) // handles quoted fields as they appear in name
+	r.Comma = '.'
+	r.FieldsPerRecord = fpr[g.GrantedOn]
+	rec, err := r.Read()
+	if err != nil { return g, err }
+	_, err = r.Read(); err != io.EOF { return g, err } // more than one record
+	switch g.GrantedOn {
+	case ObjTpDatabase: 
+		g.Database = rec[0]
+	case ObjTpDatabaseRole:
+		g.Database = rec[0]
+		g.Role = rec[1]
+	case ObjTpRole:
+		g.Role = rec[0]
+	case ObjTpSchema:
+		g.Database = rec[0]
+		g.Schema = rec[1]
+	case ObjTpTable, ObjTpView:
+		g.Database = rec[0]
+		g.Schema = rec[1]
+		g.Object = rec[2]
+	}
+	return g, nil
 }
 
 func QueryGrantsToRoleFiltered(ctx context.Context, conn *sql.DB, role string,
@@ -48,59 +83,78 @@ func QueryGrantsToDBRole(ctx context.Context, conn *sql.DB, db string, role stri
 	return queryGrantsToRole(ctx, conn, db, role, nil, nil)
 }
 
-func buildSQL(db string, role string, privileges map[Privilege]struct{}, createObjTypes map[ObjType]struct{}) (sql string, param string) {
+func buildSQLGrant(g GrantToRole, match bool) (string, int) {
+	// zero values
+	var privilege Privilege
+	var createObjectType ObjType
+	var grantedOn ObjType
+
+	// comparison operator str
+	cmp := "="	
+	if !match {
+		cmp = "!="
+	}
+
+	clauses := []string{}
+	if g.Privilege != privilege {
+		clauses = append(clauses, fmt.Sprintf("privilege %s '%v'", cmp, g.Privilege))	
+		if g.Privilege == PrvCreate && g.CreateObjectType != createObjectType {
+			clauses = append(clauses, fmt.Sprintf("create_object_type %s '%v'", cmp, g.CreateObjectType))
+		}
+	}
+	if g.GrantedOn != grantedOn {
+		clauses = append(clauses, fmt.Sprintf("granted_on %s '%v'", cmp, g.GrantedOn))
+	}
+	return strings.Join(clauses, " AND "), len(clauses)
+}
+
+func buildSQLGrants(grants map[GrantToRole]struct{}, match bool) (string, int) {
+	clauses = []string{}
+	for g := range grants {
+		s, l := buildSQLGrant(g, match)
+		if l > 0 {
+			clauses = append(clauses, s)
+		}
+	}	
+	return strings.Join(clauses, " OR\n"), len(clauses)
+}
+
+func buildSLQMatch(match map[GrantToRole]struct{}, notMatch map[GrantToRole]struct{}) (string, int) {
+	clauses := []string{}
+	if match != nil {
+		s, l := buildSQLGrants(match, true)
+		if l > 0 {
+			clauses = append(clauses, s)
+		}
+	}
+	if notMatch != nil {
+		s, l := buildSQLGrants(notMatch, false)
+		if l > 0 {
+			clauses = append(clauses, s)
+		}
+	}
+	if len(clauses) == 2 {
+		for i, clause := range clauses {
+			clauses[i] = fmt.Sprintf("(%s)", clause)
+		}
+	}
+	return strings.Join(clauses, "\nAND\n"), len(clauses)
+}
+
+func buildSQL(db string, role string, match map[GrantToRole]struct{}, notMatch map[GrantToRole]struct{}) (sql string, param string) {
 	// fetch grants for DATABASE ROLE if needed, rather than ROLE
 	var dbClause string
 	param = role
 	if db != "" {
 		dbClause = `DATABASE `
+		// Note how we quote the db identifier, other processes created it and may have used special characters.
 		param = fmt.Sprintf(`"%s".%s`, db, role)
 	}
 
-	// Check if we need to separately handle a CREATE privilege, restricting it to certain object types
-	var createPrvlgClause string
-	if _, ok := privileges[Create]; ok {
-		if len(createObjTypes) > 0 {
-			objTypeStr := []string{}
-			for k := range maps.Keys(createObjTypes) {
-				objTypeStr = append(objTypeStr, fmt.Sprintf("%v", p))
-			}
-			objTypeStrJoin := strings.Join(objTypeStr, ", ")
-			createPrvlgClause = fmt.Sprintf(`
-(
-      privilege = 'CREATE'
-  AND create_obj_type IN (%s)
-)`, objTypesStrJoin)
-		}
-	}
-
-	// Do the remaining privileges, if any
-	var prvlgClause string
-	prvlgs := map[Privilege]struct{} // copy, cause we want to delete an item in here possibly
-	for k := range privileges {
-		prvlgs[k] = struct{}{}
-	}
-	if len(createPrvlgClause) > 0 { // we have handled the CREATE privilege in a seperate clause
-		delete(prvlgs, Create) // not nice to delete on argument passed in by caller
-	}
-	if len(prvlgs) > 0 { // there are remaining privileges to include
-		privilegesStr := []string{}
-		for k := range prvlgs.Keys() {
-			privilegesStr = append(privilegesStr, fmt.Sprintf("%v", p))
-		}
-		privilegesStrJoin := strings.Join(privilegesStr, ", ")
-		prvlgClause = fmt.Sprintf(`privilege IN (%s)`, privlegesStrJoin)
-	}
-
 	var whereClause string
-	if len(prvlgClause) > 0 && len(createPrvlgClause) > 0 {
-		whereClause = fmt.Sprintf(`WHERE %s
-OR%s
-`, prvlgClause, createPrvlgClause)
-	} else if len(prvlgClause) > 0 {
-		whereClause = fmt.Sprintf(`WHERE %s`, prvlgClause)
-	} else if len(createPrvlgClause) > 0 {
-		whereClause = fmt.Sprintf(`WHERE%s`, createPrvlgClause)
+	clauseStr, nClauses := buildSQLMatch(match, notMatch)
+	if nClauses > 0 {
+		whereClause = fmt.Sprintf("\nWHERE\n  %s", strings.ReplaceAll(clauseStr, "\n", "\n  "))
 	}
 
 	var sql string
@@ -113,7 +167,7 @@ OR%s
   , CASE
     WHEN STARTSWITH("privilege", 'CREATE ') THEN SUBSTR("privilege", 8)
     ELSE NULL
-    END AS create_obj_type
+    END AS create_object_type
   , "granted_on"	AS granted_on
   , "name"		AS name
   , "grant_option"	AS grant_option
@@ -121,12 +175,12 @@ OR%s
 FROM $1
 %s`, dbClause, whereClause)
 
-return
+	return
 }
 
 func queryGrantsToRole(ctx context.Context, conn *sql.DB, db string, role string,
-		privileges map[Privilege]struct{}, createObjTypes map[ObjType]struct{}) iter.Seq2[GrantToRole, error] {
-	sql, param := buildSQL(db, role, privileges, createObjTypes)
+		match map[GrantToRole]struct{}, notMatch map[GrantToRole]struct{}) iter.Seq2[GrantToRole, error] {
+	sql, param := buildSQL(db, role, match, notMatch)
 	return func(yield func(GrantToRole, error) bool) {
 		rows, err := conn.QueryContext(ctx, sql, param)
 		defer rows.Close()
@@ -136,23 +190,20 @@ func queryGrantsToRole(ctx context.Context, conn *sql.DB, db string, role string
 		}
 		for rows.Next() {
 			var privilege string
-			var createObjType *string
+			var createObjectType string
 			var grantedOn string
 			var name string
 			var grantOption bool
 			var grantedBy string
-			if err = rows.Scan(&privilege, &creatObjType, &grantedOn, &name, &grantOption, &grantedBy); err != nil {
+			if err = rows.Scan(&privilege, &createObjectType, &grantedOn, &name, &grantOption, &grantedBy); err != nil {
 				yield(GrantToRole{}, err)
 				return
 			}
-			if !yield(GrantToRole{
-				privilege: privilege,
-				createObjType: 
-				grantedOn: grantedOn,
-				name: name,
-				grantOption: grantOption,
-				grantedBy string,
-			}, nil) {
+			g, err := newGrantToRole(privilege, createObjectType, grantedOn, name, grantOption, grantedBy)
+			if err != nil {
+				yield(GrantToRole{}, err}
+			}
+			if !yield(g, nil)
 				return
 			}
 		}

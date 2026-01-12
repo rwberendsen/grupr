@@ -126,6 +126,18 @@ func (e ObjExpr) MatchesAllObjectsInAnySchemaInDB(db string) {
 	return e[Object].MatchAll()
 }
 
+func (e ObjExpr) Database() ExprPart {
+	return e[0]
+}
+
+func (e ObjExpr) Schema() ExprPart {
+	return e[1]
+}
+
+func (e ObjExpr) Object() ExprPart {
+	return e[2]
+}
+
 func (e ObjExpr) String() string {
 	a := []string{}
 	for _, ep := range e {
