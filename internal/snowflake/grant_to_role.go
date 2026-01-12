@@ -17,7 +17,9 @@ type GrantToRole struct {
 	Database		string
 	Schema			string
 	Object			string
-	Role			string
+	// Note how Role is not the grantee, but the object on which a privilege is granted;
+	// it can be the name of a database role, if GrantedOn == ObjTpDatabaseRole
+	Role			string 
 	GrantOption		bool
 	GrantedBy		string
 }
@@ -66,13 +68,13 @@ func newGrantToRole(privilege string, createObjType string, grantedOn string, na
 }
 
 func QueryGrantsToRoleFiltered(ctx context.Context, conn *sql.DB, role string,
-		privileges map[Privilege]struct{}, createObjTypes map[ObjType]struct{}) iter.Seq2[GrantToRole, error] {
-	return queryGrantsToRole(ctx, conn, "", role, privileges, createObjTypes)
+		match map[GrantToRole]struct{}, notMatch map[GrantToRole]struct{}) iter.Seq2[GrantToRole, error] {
+	return queryGrantsToRole(ctx, conn, "", role, match, notMatch)
 }
 
 func QueryGrantsToDBRoleFiltered(ctx context.Context, conn *sql.DB, db string, role string,
-		privileges map[Privilege]struct{}, createObjTypes map[ObjType]struct{}) iter.Seq2[GrantToRole, error] {
-	return queryGrantsToRole(ctx, conn, db, role, privileges, createObjTypes)
+		match map[GrantToRole]struct{}, notMatch map[GrantToRole]struct{}) iter.Seq2[GrantToRole, error] {
+	return queryGrantsToRole(ctx, conn, db, role, match, notMatch)
 }
 
 func QueryGrantsToRole(ctx context.Context, conn *sql.DB, role string) iter.Seq2[GrantToRole, error] {
@@ -83,35 +85,29 @@ func QueryGrantsToDBRole(ctx context.Context, conn *sql.DB, db string, role stri
 	return queryGrantsToRole(ctx, conn, db, role, nil, nil)
 }
 
-func buildSQLGrant(g GrantToRole, match bool) (string, int) {
+func buildSQLGrant(g GrantToRole) (string, int) {
 	// zero values
 	var privilege Privilege
 	var createObjectType ObjType
 	var grantedOn ObjType
 
-	// comparison operator str
-	cmp := "="	
-	if !match {
-		cmp = "!="
-	}
-
 	clauses := []string{}
 	if g.Privilege != privilege {
-		clauses = append(clauses, fmt.Sprintf("privilege %s '%v'", cmp, g.Privilege))	
+		clauses = append(clauses, fmt.Sprintf("privilege = '%v'", g.Privilege))	
 		if g.Privilege == PrvCreate && g.CreateObjectType != createObjectType {
-			clauses = append(clauses, fmt.Sprintf("create_object_type %s '%v'", cmp, g.CreateObjectType))
+			clauses = append(clauses, fmt.Sprintf("create_object_type = '%v'", g.CreateObjectType))
 		}
 	}
 	if g.GrantedOn != grantedOn {
-		clauses = append(clauses, fmt.Sprintf("granted_on %s '%v'", cmp, g.GrantedOn))
+		clauses = append(clauses, fmt.Sprintf("granted_on = '%v'", g.GrantedOn))
 	}
 	return strings.Join(clauses, " AND "), len(clauses)
 }
 
-func buildSQLGrants(grants map[GrantToRole]struct{}, match bool) (string, int) {
+func buildSQLGrants(grants map[GrantToRole]struct{}) (string, int) {
 	clauses = []string{}
 	for g := range grants {
-		s, l := buildSQLGrant(g, match)
+		s, l := buildSQLGrant(g)
 		if l > 0 {
 			clauses = append(clauses, s)
 		}
@@ -122,15 +118,15 @@ func buildSQLGrants(grants map[GrantToRole]struct{}, match bool) (string, int) {
 func buildSLQMatch(match map[GrantToRole]struct{}, notMatch map[GrantToRole]struct{}) (string, int) {
 	clauses := []string{}
 	if match != nil {
-		s, l := buildSQLGrants(match, true)
+		s, l := buildSQLGrants(match)
 		if l > 0 {
 			clauses = append(clauses, s)
 		}
 	}
 	if notMatch != nil {
-		s, l := buildSQLGrants(notMatch, false)
+		s, l := buildSQLGrants(notMatch)
 		if l > 0 {
-			clauses = append(clauses, s)
+			clauses = append(clauses, fmt.Sprintf("NOT (%s)", s))
 		}
 	}
 	if len(clauses) == 2 {
@@ -144,11 +140,11 @@ func buildSLQMatch(match map[GrantToRole]struct{}, notMatch map[GrantToRole]stru
 func buildSQL(db string, role string, match map[GrantToRole]struct{}, notMatch map[GrantToRole]struct{}) (sql string, param string) {
 	// fetch grants for DATABASE ROLE if needed, rather than ROLE
 	var dbClause string
-	param = role
+	param = quoteIdentifier(role)
 	if db != "" {
 		dbClause = `DATABASE `
 		// Note how we quote the db identifier, other processes created it and may have used special characters.
-		param = fmt.Sprintf(`"%s".%s`, db, role)
+		param = fmt.Sprintf(`%s.%s`, quoteIdentifier(db), param)
 	}
 
 	var whereClause string
@@ -172,19 +168,23 @@ func buildSQL(db string, role string, match map[GrantToRole]struct{}, notMatch m
   , "name"		AS name
   , "grant_option"	AS grant_option
   , "granted_by"	AS granted_by
-FROM $1
-%s`, dbClause, whereClause)
+FROM $1%s`, dbClause, whereClause)
 
 	return
 }
 
 func queryGrantsToRole(ctx context.Context, conn *sql.DB, db string, role string,
 		match map[GrantToRole]struct{}, notMatch map[GrantToRole]struct{}) iter.Seq2[GrantToRole, error] {
+	// Note that both db and string will be quoted before going to Snowflake, so
+	// if the names in Snowflake are upper case, present them here in upper case, too.
 	sql, param := buildSQL(db, role, match, notMatch)
 	return func(yield func(GrantToRole, error) bool) {
 		rows, err := conn.QueryContext(ctx, sql, param)
 		defer rows.Close()
 		if err != nil { 
+			if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
+				err = ErrObjectNotExistOrAuthorized
+			}
 			yield(GrantToRole{}, err)
 			return
 		}

@@ -12,7 +12,7 @@ const (
 	ModeOperate
 )
 
-func parseMode(s string) Mode, error {
+func ParseMode(s string) Mode, error {
 	m := map[string]Mode{"r": ModeRead, "w": ModeWrite, "o": ModeOperate}	
 	if mode, ok := m[s]; !ok { return Read, fmt.Errorf("invalid mode: '%s'", s) }
 	return mode, nil

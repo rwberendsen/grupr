@@ -6,9 +6,10 @@ import (
 
 type DBObjs struct {
 	Schemas  map[string]*SchemaObjs
-	MatchAllSchemas bool
-	MatchAllObjects bool
-	RevokeGrantsTo []GrantToRecord
+	MatchAllSchemas 	bool
+	MatchAllObjects 	bool
+	RevokeGrantsTo 		map[Mode]map[GrantToRecord]struct{}
+	GrantsTo		map[Mode]map[Privilege]struct{}
 }
 
 func newDBObjs(db string, o *DBObjs, om semantics.ObjMatcher) *DBObjs {
@@ -31,6 +32,10 @@ func newDBObjsFromMatched(m *matchedDBObjs) *DBObjs {
 	return o
 }
 
+func (o *DBObjs) hasSchema(s string) bool {
+	return o.Schemas[s] != nil
+}
+
 func (o *DBObjs) setMatchAllSchemas(db string, om semantics.ObjMatcher) {
 	if !om.Include[semantics.Schema].MatchAll() { return }
 	o.MatchAllSchemas = true
@@ -47,6 +52,18 @@ func (o *DBObjs) setMatchAllObjects(db string, om semantics.ObjMatcher) {
 	}
 }
 
+func (o *DBObjs) setGrantTo(m Mode, p Privilege) {
+	if o.GrantsTo == nil { o.GrantsTo = map[Mode]map[Privilege]struct{}{} }
+	if _, ok := o.GrantsTo[m]; !ok { o.GrantsTo[m] = map[Privilege]struct{}{} }
+	o.GrantsTo[m][p] = struct{}
+}
+
+func (o *DBObjs) setRevokeGrantTo(m Mode, g GrantToRole) {
+	if o.RevokeGrantsTo == nil { o.RevokeGrantsTo = map[Mode]map[GrantToRole]struct{}{} }
+	if _, ok := o.RevokeGrantsTo[m]; !ok { o.RevokeGrantsTo[m] = map[GrantToRole]struct{}{} }
+	o.RevokeGrantsTo[m][g] = struct{}{}
+}
+
 func (o *DBObjs) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, pID string, dtap string, iID string,
 		db string, createDBRoleGrants map[string]struct{}, databaseRoles map[string]map[DatabaseRole]struct{}) {
 	dbRole := NewDatabaseRole(synCnf, conf, pID, dtap, iID, ModeRead, db)
@@ -56,15 +73,59 @@ func (o *DBObjs) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, 
 		}
 		if err := dbRole.Create(ctx, cnf, conn); err != nil { return err }
 	} else {
-		for grant, err := range QueryGrantsToDBRoleFiltered(ctx, conn, db, dbRole.Name,
-				map[Privilege]struct{}{
-					PrvUsage: {},
-					PrvSelect: {},
-					PrvReferences: {},
+		// TODO: if the database was dropped concurrently, then so was the database role
+		// Then grant here may return err == ErrObjectNotExistOrAuthorized
+		// Then we could refresh the product, once we reach back to the product level
+		// Then, if the database was re-created concurrently, we would come back here eventually,
+		// for the same database. And then, according to our records in databaseRoles, the database
+		// role should still exist (but in reality it does not). That would cause a loop, where 
+		// the product would be refreshed again and again until refreshes are exhausted.
+		// So, when we refresh a product, we should also refresh databaseRoles. But that is weird,
+		// products are running in separate threads. Therefore, we may have to abandon the global
+		// databaseRoles map. Or, make it part of the accountCache perhaps, so that when we
+		// refresh a product, the presence or absence of database roles is handled, too.
+		for g, err := range QueryGrantsToDBRoleFiltered(ctx, conn, db, dbRole.Name,
+				map[GrantToRole]struct{}{
+					GrantToRole{
+						Privilege: PrvUsage,
+						GrantedOn: ObjTpDatabase,
+					}: {},
+					GrantToRole{
+						Privilege: PrvUsage,
+						GrantedOn: ObjTpSchema,
+					}: {},
+					GrantToRole{
+						Privilege: PrvSelect,
+						GrantedOn: ObjTpTable,
+					}: {},
+					GrantToRole{
+						Privilege: PrvSelect,
+						GrantedOn: ObjTpView,
+					}: {},
+					GrantToRole{
+						Privilege: PrvReferences,
+						GrantedOn: ObjTpTable,
+					}: {},
+					GrantToRole{
+						Privilege: PrvReferences,
+						GrantedOn: ObjTpView,
+					}: {},
 				},
 				nil) {
-			// do something WIP
+			if err != nil { return err }
+			switch {
+			case g.Privilege == PrvUsage && g.GrantedOn == ObjTpDatabase && g.Database == db:
+				o.setGrantTo(ModeRead, PrvUsage)
+			case g.Privilege == Usage && g.GrantedOn == ObjTpSchema && g.Database == db && o.hasSchema(g.Schema): 
+				o.Schemas[g.Schema].setGrantTo(ModeRead, PrvUsage)
+			case (g.Privilege == PrvSelect || g.Privilege == References) && (g.GrantedOn == ObjTpTable || g.GrantedOn == ObjTypeView) \
+					&& g.Database == db && o.hasSchema(g.Schema) && o.Schemas[g.Schema].hasObject(g.Object, g.GrantedOn):
+				o.Schemas[g.Schema].Objects[ObjKey{Name: g.Object, ObjectType: g.GrantedOn}].setGrantTo(ModeRead, g.Privilege)
+			default:
+				o.setRevokeGrantTo(ModeRead, g)
+			}
 		}
+		// and now we run over the objects in our DBObjs, and if the necessary privileges have not yet been granted, we grant them
 	}
 	return
 			// SHOW GRANTS TO / ON / OF database role, and store them in DBObjs

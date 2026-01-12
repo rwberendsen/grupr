@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 )
 
 func runSQL(ctx context.Context, cnf *Config, conn *sql.DB, sql string, params ...any) error {
@@ -13,6 +14,11 @@ func runSQL(ctx context.Context, cnf *Config, conn *sql.DB, sql string, params .
 	}
 	if _, err := conn.QueryContext(ctx, sql, params...); err != nil { return err }
 	return nil
+}
+
+func quoteIdentifier(s string) string {
+	s = strings.ReplaceAll(`"`, `""`)
+	return `"` + s + `"`
 }
 
 func printSQL(sql string, params ...any) {
