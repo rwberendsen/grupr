@@ -31,7 +31,7 @@ func queryObjects(ctx context.Context, conn *sql.DB, dbName string, schemaName s
 	start := time.Now()
 	log.Printf("Querying Snowflake for object names in schema: %s.%s ...\n", dbName, schemaName)
 	// TODO: when there are more than 10K results, paginate
-	rows, err := getDB().Query(`SHOW TERSE OBJECTS IN SCHEMA IDENTIFIER(?) ->> SELECT "name", "kind" FROM S1`, dbName + "." + schemaName)
+	rows, err := getDB().Query(`SHOW TERSE OBJECTS IN SCHEMA IDENTIFIER(?) ->> SELECT "name", "kind" FROM S1`, quoteIdentifier(dbName) + "." + quoteIdentifier(schemaName))
 	if err != nil {
 		if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
 			return nil, ErrObjectNotExistOrAuthorized

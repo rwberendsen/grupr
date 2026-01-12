@@ -130,8 +130,7 @@ func (c *accountCache) refreshDBs(ctx context.Context, conn *sql.DB) error {
 	dbs, err := queryDBs(ctx, conn)
 	if err != nil { return err }
 	c.version += 1
-	for k, v := range c.dbs {
-		if !c.hasDB(k) { continue }
+	for k, v := range c.getDBs() {
 		if _, ok := dbs[k]; !ok {
 			c.dropDB(k)
 		}
@@ -167,7 +166,7 @@ func (c *accountCache) hasDB(k string) bool {
 func (c *accountCache) getDBs() iter.Seq2[string, *dbCache] {
 	return func(yield func(string, *dbCache) bool) {
 		for k, v := range c.dbs {
-			if c.dbExists(k) {
+			if c.hasDB(k) {
 				if !yield(k, v) {
 					return
 				}

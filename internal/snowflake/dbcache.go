@@ -58,8 +58,7 @@ func (c *dbCache) refreshSchemas(ctx context.Context, conn *sql.DB, dbName strin
 	schemas, err := querySchemas(ctx, conn, dbName)
 	if err != nil { return err }
 	c.version += 1
-	for k, _ := range c.schemas {
-		if !c.hasSchema(k) { continue }
+	for k, _ := range c.getSchemas() {
 		if _, ok := schemas[k]; !ok {
 			c.dropSchema(k)
 		}
@@ -71,11 +70,16 @@ func (c *dbCache) refreshSchemas(ctx context.Context, conn *sql.DB, dbName strin
 }
 
 func querySchemas(ctx context.Context, conn *sql.DB, dbName string) (map[string]bool, error) {
+	// TODO: should we also aim to refresh database roles here?
+	// the only purpose of that would be to detect that they have gone in the scenario
+	// where a database was dropped and then recreated without the database roles.
+	// Perhaps it's not that odd to do it here. The scope of this function then is to
+	// refresh database level objects--not just schemas, also database roles
 	schemas := map[string]bool{}
 	start := time.Now()
 	log.Printf("Querying Snowflake for schema  names in DB: %s ...\n", dbName)
 	// TODO: when there are more than 10K results, paginate
-	rows, err := conn.QueryContext(ctx, `SHOW TERSE SCHEMAS IN DATABASE IDENTIFIER(?) ->> SELECT "name" FROM S1`, dbName)
+	rows, err := conn.QueryContext(ctx, `SHOW TERSE SCHEMAS IN DATABASE IDENTIFIER(?) ->> SELECT "name" FROM S1`, quoteIdentifier(dbName))
 	if err != nil {
 		if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
 			return nil, ErrObjectNotExistOrAuthorized
