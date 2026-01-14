@@ -69,20 +69,25 @@ func newGrantToRole(privilege string, createObjType string, grantedOn string, na
 
 func QueryGrantsToRoleFiltered(ctx context.Context, conn *sql.DB, role string,
 		match map[GrantToRole]struct{}, notMatch map[GrantToRole]struct{}) iter.Seq2[GrantToRole, error] {
-	return queryGrantsToRole(ctx, conn, "", role, match, notMatch)
+	return queryGrantsToRole(ctx, conn, "", role, match, notMatch, 0)
 }
 
 func QueryGrantsToDBRoleFiltered(ctx context.Context, conn *sql.DB, db string, role string,
 		match map[GrantToRole]struct{}, notMatch map[GrantToRole]struct{}) iter.Seq2[GrantToRole, error] {
-	return queryGrantsToRole(ctx, conn, db, role, match, notMatch)
+	return queryGrantsToRole(ctx, conn, db, role, match, notMatch, 0)
 }
 
 func QueryGrantsToRole(ctx context.Context, conn *sql.DB, role string) iter.Seq2[GrantToRole, error] {
-	return queryGrantsToRole(ctx, conn, "", role, nil, nil)
+	return queryGrantsToRole(ctx, conn, "", role, nil, nil, 0)
 }
 
 func QueryGrantsToDBRole(ctx context.Context, conn *sql.DB, db string, role string) iter.Seq2[GrantToRole, error] {
-	return queryGrantsToRole(ctx, conn, db, role, nil, nil)
+	return queryGrantsToRole(ctx, conn, db, role, nil, nil, 0)
+}
+
+func QueryGrantsToRoleFilteredLimit(ctx context.Context, conn *sql.DB, role string,
+		match map[GrantToRole]struct{}, notMatch map[GrantToRole]struct{}, limit int) iter.Seq2[GrantToRole, error] {
+	return queryGrantsToRole(ctx, conn, "", role, match, notMatch, limit)
 }
 
 func buildSQLGrant(g GrantToRole) (string, int) {
@@ -137,7 +142,7 @@ func buildSLQMatch(match map[GrantToRole]struct{}, notMatch map[GrantToRole]stru
 	return strings.Join(clauses, "\nAND\n"), len(clauses)
 }
 
-func buildSQL(db string, role string, match map[GrantToRole]struct{}, notMatch map[GrantToRole]struct{}) (sql string, param string) {
+func buildSQL(db string, role string, match map[GrantToRole]struct{}, notMatch map[GrantToRole]struct{}, limit int) (sql string, param string) {
 	// fetch grants for DATABASE ROLE if needed, rather than ROLE
 	var dbClause string
 	param = quoteIdentifier(role)
@@ -169,15 +174,19 @@ func buildSQL(db string, role string, match map[GrantToRole]struct{}, notMatch m
   , "grant_option"	AS grant_option
   , "granted_by"	AS granted_by
 FROM $1%s`, dbClause, whereClause)
+	
+	if limit > 0 {
+		sql += fmt.Sprintf("\nLIMIT %d", limit)
+	}
 
 	return
 }
 
 func queryGrantsToRole(ctx context.Context, conn *sql.DB, db string, role string,
-		match map[GrantToRole]struct{}, notMatch map[GrantToRole]struct{}) iter.Seq2[GrantToRole, error] {
+		match map[GrantToRole]struct{}, notMatch map[GrantToRole]struct{}, limit int) iter.Seq2[GrantToRole, error] {
 	// Note that both db and string will be quoted before going to Snowflake, so
 	// if the names in Snowflake are upper case, present them here in upper case, too.
-	sql, param := buildSQL(db, role, match, notMatch)
+	sql, param := buildSQL(db, role, match, notMatch, limit)
 	return func(yield func(GrantToRole, error) bool) {
 		rows, err := conn.QueryContext(ctx, sql, param)
 		defer rows.Close()

@@ -31,7 +31,7 @@ func NewDatabaseRole(synCnf *syntax.Config, cnf *Config, productID string, dtap 
 	} else {
 		r.Name = strings.ToUpper(fmt.Sprintf("%s%s%s%s%s%s%s%v", synCnf.Prefix, productID, cnf.Infix, dtap, cnf.Infix, interfaceID, cnf.Infix, mode))
 	}
-	r.FQN = fmt.Sprintf(`"%s".%s`, r.Database, r.Name)
+	r.FQN = fmt.Sprintf(`%s.%s`, quoteIdentifier(r.Database), r.Name)
 	return r
 }
 
@@ -56,7 +56,7 @@ func NewDatabaseRoleFromString(synCnf *syntax.Config, cnf *Config, db string, ro
 func QueryDatabaseRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, db string) iter.Seq2[DatabaseRole, error]{
 	return func(yield func(DatabaseRole, error) bool) {
 		rows, err := conn.QueryContext(ctx, `SHOW DATABASE ROLES IN DATABASE IDENTIFIER(?)
-	->> SELECT "name" FROM $1 WHERE "owner" = ? `, db, strings.ToUpper(cnf.Role))
+	->> SELECT "name" FROM $1 WHERE "owner" = ? `, quoteIdentifier(db), strings.ToUpper(cnf.Role))
 		defer rows.Close()
 		if err != nil { 
 			if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
@@ -85,11 +85,35 @@ func QueryDatabaseRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config,
 }
 
 func GrantCreateDatabaseRoleToSelf(ctx context.Context, cnf *Config, conn *sql.DB, db string) error {
-	return runSQL(ctx, conn, `GRANT CREATE DATABASE ROLE ON DATABASE IDENTIFIER(?) TO ROLE (?)`, db, cnf.Role)
+	return runSQL(ctx, conn, `GRANT CREATE DATABASE ROLE ON DATABASE IDENTIFIER(?) TO ROLE (?)`, quoteIdentfier(db), cnf.Role)
 }
 
 func (r DatabaseRole) Create(ctx context.Context, cnf *Config, conn *sql.DB) error {
-	return runSQL(ctx, conn, `CREATE DATABASE ROLE IF NOT EXISTS IDENTIFIER(?)`, r.FQN)
+	return runSQL(ctx, cnf, conn, `CREATE DATABASE ROLE IF NOT EXISTS IDENTIFIER(?)`, r.FQN)
+}
+
+func (r DatabaseRole) hasUnmanagedPrivileges(ctx context.Context, cnf *Config, conn *sql.DB) (bool, error) {
+	for grant, err := range QueryGrantsToRoleFilteredLimit(ctx, conn, r.ID, nil, cnf.DatabaseRolePrivileges[r.Mode], 1) {
+		if err != nil { return true, err }
+		return true, nil
+	}
+	return false, nil
+}
+
+func (r DatabaseRole) Drop(ctx context.Context, cnf *Config, conn *sql.DB) error {
+	if has, err := r.hasUnmanagedPrivileges(ctx, cnf, conn); err != nil {
+		return err
+	} else if has {
+		log.Printf("Database role %s has privileges not managed by Grupr, skipping dropping\n", r.FQN)
+		return nil
+	}
+	err := runSQL(ctx, cnf, conn, `DROP DATABASE ROLE IF EXISTS IDENTIFIER(?)`, r.FQN)
+	if err != nil {
+		if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
+			// if the DB does not exist anymore, then neither would the database role, and our job is done
+			err = nil
+	}
+	return err
 }
 
 func (r DatabaseRole) String() string {

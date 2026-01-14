@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/rwberendsen/grupr/internal/syntax"
@@ -12,11 +13,11 @@ import (
 type ProductRole struct {
 	ProductID string
 	DTAP string
-	Mode bool
+	Mode Mode
 	ID string
 }
 
-func newProductRole(synCnf *syntax.Config, cnf *Config, productID string, dtap string, mode string) ProductRole {
+func newProductRole(synCnf *syntax.Config, cnf *Config, productID string, dtap string, mode Mode) ProductRole) {
 	return ProductRole{
 		ProductID: productID,
 		DTAP: dtap,
@@ -38,28 +39,37 @@ func newProductRoleFromString(synCnf *syntax.Config, cnf *Config, role string) (
 	return r, nil
 }
 
-func (r ProductRole) create(ctx context.Context, cnf *Config, conn *sql.DB) error {
-	sql1 := `CREATE ROLE IF NOT EXISTS IDENTIFIER(?)`
-	sql2 := `GRANT ROLE IDENTIFIER(?) TO ROLE SYSADMIN` // Snowflake best practice
-	param1 := r.String()
-	if cnf.DryRun {
-		printSQL(sql1, param1)
-		printSQL(sql2, param1)
-		return nil
-	}
-	if _, err := conn.QueryContext(ctx, sql1, param1); err != nil { return err }
-	if _, err := conn.QueryContext(ctx, sql2, param1); err != nil { return err }
+func (r ProductRole) Create(ctx context.Context, cnf *Config, conn *sql.DB) error {
+	if err := runSQL(ctx, cnf, conn, `CREATE ROLE IF NOT EXISTS IDENTIFIER(?)`, r.ID); err != nil { return err }
+	if err := runSQL(ctx, cnf, conn `GRANT ROLE IDENTIFIER(?) TO ROLE SYSADMIN`, r.ID); err != nil { return err }
 	return nil
 }
 
-func (r ProductRole) drop(ctx context.Context, cnf *Config, conn *sql.DB) error {
-	sql1 := `DROP ROLE IF EXISTS IDENTIFIER(?)`
-	param1 := r.String()
-	if cnf.DryRun {
-		printSQL(sql1, param1)
+func (r ProductRole) hasUnmanagedPrivileges(ctx context.Context, cnf *Config, conn *sql.DB) (bool, error) {
+	// TODO put the privileges in cnf
+	for grant, err := range QueryGrantsToRoleFilteredLimit(ctx, conn, r.ID, nil,
+		map[GrantToRole]struct{}{
+			GrantToRole{
+				Privilege: PrvUsage,
+				GrantedOn: ObjTpDatabaseRole,
+				GrantedBy: cnf.Role,
+			}: {},
+		},
+		1) {
+		if err != nil { return true, err }
+		return true, nil
+	}
+	return false, nil
+}
+
+func (r ProductRole) Drop(ctx context.Context, cnf *Config, conn *sql.DB) error {
+	if has, err := r.hasUnmanagedPrivileges(ctx, cnf, conn); err != nil {
+		return err
+	} else if has {
+		log.Printf("role %s has privileges not managed by Grupr, skipping dropping\n", r.ID)
 		return nil
 	}
-	if _, err := conn.QueryContext(ctx, sql1, param1); err != nil { return err }
+	if err := runSQL(ctx, cnf, conn, `DROP ROLE IF EXISTS IDENTIFIER(?)`, r.ID); err != nil { return err }
 	return nil
 }
 

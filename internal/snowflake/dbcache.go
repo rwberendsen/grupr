@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/rwberendsen/grupr/internal/syntax"
 )
 
 type dbCache struct {
@@ -16,6 +18,7 @@ type dbCache struct {
 	version int
 	schemas     map[string]*schemaCache // nil: never requested; empty: none found
 	schemaExists map[string]bool
+	dbRoles map[DatabaseRole]struct{}
 }
 
 func (c *dbCache) addSchema(k string) {
@@ -64,7 +67,18 @@ func (c *dbCache) refreshSchemas(ctx context.Context, conn *sql.DB, dbName strin
 		}
 	}
 	for k := range schemas {
-		c.addSchema(k)
+		if !c.hasSchema(k) {
+			c.addSchema(k)
+		}
+	}
+	return nil
+}
+
+func (c *dbCache) refreshDBRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, db string) error {
+	c.dbRoles = map[DatabaseRole]struct{}{} // overwrite if c.dbRoles already had a value
+	for r, err := range QueryDatabaseRoles(ctx, synCnf, cnf, conn, db() {
+		if err != nil { return err }
+		c.dbRoles[DatabaseRole] = struct{}{}
 	}
 	return nil
 }

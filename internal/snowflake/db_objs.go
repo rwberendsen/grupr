@@ -84,34 +84,7 @@ func (o *DBObjs) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, 
 		// products are running in separate threads. Therefore, we may have to abandon the global
 		// databaseRoles map. Or, make it part of the accountCache perhaps, so that when we
 		// refresh a product, the presence or absence of database roles is handled, too.
-		for g, err := range QueryGrantsToDBRoleFiltered(ctx, conn, db, dbRole.Name,
-				map[GrantToRole]struct{}{
-					GrantToRole{
-						Privilege: PrvUsage,
-						GrantedOn: ObjTpDatabase,
-					}: {},
-					GrantToRole{
-						Privilege: PrvUsage,
-						GrantedOn: ObjTpSchema,
-					}: {},
-					GrantToRole{
-						Privilege: PrvSelect,
-						GrantedOn: ObjTpTable,
-					}: {},
-					GrantToRole{
-						Privilege: PrvSelect,
-						GrantedOn: ObjTpView,
-					}: {},
-					GrantToRole{
-						Privilege: PrvReferences,
-						GrantedOn: ObjTpTable,
-					}: {},
-					GrantToRole{
-						Privilege: PrvReferences,
-						GrantedOn: ObjTpView,
-					}: {},
-				},
-				nil) {
+		for g, err := range QueryGrantsToDBRoleFiltered(ctx, conn, db, dbRole.Name, cnf.DatabaseRolePrivileges[ModeRead], nil) {
 			if err != nil { return err }
 			switch {
 			case g.Privilege == PrvUsage && g.GrantedOn == ObjTpDatabase && g.Database == db:

@@ -21,6 +21,7 @@ type Config struct {
 	MaxProductThreads int
 	MaxProductRefreshes int
 	Modes [1]Mode
+	DatabaseRolePrivileges map[Mode]map[GrantToRole]struct{}
 	DryRun bool
 }
 
@@ -31,7 +32,7 @@ func GetConfig(semCnf *semantics.Config) *Config, error {
 		MaxIdleConns: 3,	// MaxProductThreads - 1 (sometimes we use only one conn before quickly fanning out again)
 		MaxProductThreads: 4,
 		MaxProductRefreshes: 4, 
-		Modes: [1]Mode{Read},
+		Modes: [1]Mode{Read,},
 		DryRun: true
 	}
 
@@ -116,5 +117,33 @@ q		return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_U
 		} else {
 			cnf.MaxProductRefreshes = i
 		}
+	}
+
+	cnf.DatabaseRolePrivileges = map[Mode]map[GrantToRole]struct{}{}
+	cnf.DatabaseRolePrivileges[ModeRead] = map[GrantToRole]struct{}{
+		GrantToRole{
+			Privilege: PrvUsage,
+			GrantedOn: ObjTpDatabase,
+		}: {},
+		GrantToRole{
+			Privilege: PrvUsage,
+			GrantedOn: ObjTpSchema,
+		}: {},
+		GrantToRole{
+			Privilege: PrvSelect,
+			GrantedOn: ObjTpTable,
+		}: {},
+		GrantToRole{
+			Privilege: PrvSelect,
+			GrantedOn: ObjTpView,
+		}: {},
+		GrantToRole{
+			Privilege: PrvReferences,
+			GrantedOn: ObjTpTable,
+		}: {},
+		GrantToRole{
+			Privilege: PrvReferences,
+			GrantedOn: ObjTpView,
+		}: {},
 	}
 }

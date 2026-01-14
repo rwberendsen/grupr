@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
+	"github.com/rwberendsen/grupr/internal/syntax"
 	"github.com/snowflakedb/gosnowflake"
 )
 
@@ -31,9 +32,9 @@ func escapeString(s string) string {
 	return strings.ReplaceAll(s, "'", "\\'")
 }
 
-func (c *accountCache) match(ctx context.Context, conn *sql.DB, om semantics.ObjMatcher, o *matchedAccountObjs) error {
+func (c *accountCache) match(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, om semantics.ObjMatcher, o *matchedAccountObjs) error {
 	// will modify both c and o
-	err := c.matchDBs(ctx, om, o)
+	err := c.matchDBs(ctx, synCnf, cnf, om, o)
 	if err != nil { return err }
 	for db, dbObjs := range o.getDBs() {
 		err := c.matchSchemas(ctx, conn, db, om, dbObjs)
@@ -45,12 +46,12 @@ func (c *accountCache) match(ctx context.Context, conn *sql.DB, om semantics.Obj
 	}
 }
 
-func (c *accountCache) matchDBs(ctx context.Context, conn *sql.DB, om semantics.ObjMatcher, o *matchedAccountObjs) error {
+func (c *accountCache) matchDBs(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, om semantics.ObjMatcher, o *matchedAccountObjs) error {
 	c.mu.Lock() // block till all another writer or any active readers are done, get a write lock, now you are the only one modifying the tree
 	defer c.mu.Unlock()
 	if o.version == c.version {
 		// cache entry is stale
-		err := c.refreshDBs(ctx, conn)
+		err := c.refreshDBs(ctx, synCnf, cnf, conn)
 		if err != nil { return err }
 	}
 	o.version = c.version
@@ -124,24 +125,26 @@ func (c *accountCache) matchObjects(ctx context.Context, conn *sql.DB, db string
 	return false, nil
 }
 
-func (c *accountCache) refreshDBs(ctx context.Context, conn *sql.DB) error {
+func (c *accountCache) refreshDBs(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB) error {
 	// Do not directly call this function, meant to be called only via match and friends,
 	// which would have required appropriate write locks to mutexes
 	dbs, err := queryDBs(ctx, conn)
 	if err != nil { return err }
-	c.version += 1
 	for k, v := range c.getDBs() {
 		if _, ok := dbs[k]; !ok {
 			c.dropDB(k)
 		}
 	}
 	for k := range dbs {
-		c.addDB(k)
+		if !c.hasDB(k) {
+			if err := c.addDB(ctx, synCnf, cnf, conn, k); err != nil { return err }
+		}
 	}
+	c.version += 1
 	return nil
 }
 
-func (c *accountCache) addDB(k string) {
+func (c *accountCache) addDB(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, k string) error {
 	if c.dbs == nil {
 		c.dbs = map[string]*dbCache{}
 		c.dbExists = map[string]bool{}
@@ -149,7 +152,10 @@ func (c *accountCache) addDB(k string) {
 	if _, ok := c.dbs[k]; !ok {
 		c.dbs[k] = &dbCache{}
 	}
+	// After a DB has been dropped and recreated, DB roles may have been dropped
+	if err := c.dbs[k].refreshDBRoles(ctx, synCnf, cnf, conn, k); err != nil { return err }
 	c.dbExists[k] = true
+	return nil
 }
 
 func (c *accountCache) dropDB(k string) {

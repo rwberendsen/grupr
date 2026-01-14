@@ -16,7 +16,6 @@ type Grupin struct {
 	Products map[string]*Product
 	ProductRoles map[ProductRole]struct{}
 	createDBRoleGrants map[string]struct{}
-	DatabaseRoles map[string]map[DatabaseRole]struct{}
 	gSem semantics.Grupin
 	accountCache *accountCache
 	// TODO: where we use map[string]bool but the bool has no meaning, use struct{} instead: more clearly meaningless
@@ -42,7 +41,6 @@ func (g *Grupin) ManageAccess(ctx context.Context, synCnf *syntax.Config, cnf *C
 	//   objects may be missed out in a run.
 	if err := g.setProductRoles(ctx, synCnf, cnf, conn); err != nil { return err }
 	if err := g.setCreateDBRoleGrants(ctx, cnf, conn); err != nil { return err }
-	if err := g.setDatabaseRoles(ctx, conn); err != nil { return err }
 	if err := g.grant(ctx, cnf, conn); err != nil { return err }
 	if err := g.revoke(ctx, cnf, conn); err != nil { return err }
 	if err := g.dropProductRoles(ctx, synCnf, cnf, conn); err != nil { return err }
@@ -52,7 +50,7 @@ func (g *grupin) grant(ctx context.context, synCnf *syntax.Config, cnf *Config, 
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(cnf.MaxProductThreads)
 	for k, v := range g.Products {
-		eg.Go(func() error { return v.grant(ctx, synCnf, cnf, conn, g.ProductRoles, g.DatabaseRoles, g.CreateDBRoleGrants) })
+		eg.Go(func() error { return v.grant(ctx, synCnf, cnf, conn, g.ProductRoles, g.CreateDBRoleGrants) })
 	}
 	for _, p := range g.Products {
 		for iid, dtapMapping := range v.pSem.Consumes {
@@ -93,31 +91,17 @@ func (g *Grupin) setProductRoles(ctx context.Context, synCnf *syntax.Config, cnf
 func (g *Grupin) setCreateDBRoleGrants(ctx context.Context, cnf *Config, conn *sql.DB) error {
 	g.createDBRoleGrants = map[string]struct{}{}
 	for grant, err := range QueryGrantsToRoleFiltered(ctx, conn, cnf.Role,
-			map[Privilege]struct{}{PrvCreate: {},}
-			map[CreateObjType]struct{}{ObjTpDatabaseRole: {},}) {
+			map[GrantToRole]struct{}{
+				GrantToRole{
+					Privilege: PrvCreate,
+					CreateObjectType: ObjTpDatabaseRole,
+					GrantedOn: ObjTpDatabase,
+				}: {}
+			},
+			nil) {
 		if err != nil { return err }
-		g.createDBRoleGrants[grant.Name] = struct{}{}
+		g.createDBRoleGrants[grant.Database] = struct{}{}
 	}
-}
-
-func (g *Grupin) setDatabaseRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB) error {
-	g.DatabaseRoles = map[string]map[DatabaseRole]struct{}{}
-	eg, ctx := errgroup.WithContext(ctx)
-	eg.SetLimit(cnf.MaxProductThreads) // we are not handling products here, but still a sensible choice
-	for db := range g.accountCache.getDBs() {
-		g.DatabaseRoles[db] = map[DatabaseRole]struct{}{}
-		eg.Go(func() error { 
-			for r, err := range QueryDatabaseRoles(ctx, synCnf, cnf, conn, db) {
-				if err != nil {
-					if err != ErrObjectNotExistOrAuthorized { return err }
-					return nil // db may have been dropped concurrently, just ignore
-				}
-				g.DatabaseRoles[db][r] = struct{}{}
-			}
-		})
-	}
-	err := eg.Wait()
-	return err
 }
 
 func (g *Grupin) dropProductRoles(ctx context.Context, cnf *Config, conn *sql.DB) error {
@@ -127,16 +111,13 @@ func (g *Grupin) dropProductRoles(ctx context.Context, cnf *Config, conn *sql.DB
 				continue // no need to drop this role
 			}
 		}
-		if err := dropRole(ctx, cnf, conn, r.ID); err != nil { return err }
+		if err := r.Drop(ctx, cnf, conn, r.ID); err != nil { return err }
 	}
 }
 
 func (g *Grupin) dropDatabaseRoles(ctx context.Context, cnf *Config, conn *sql.DB) error {
-	// WIP: just over the YAML, and check whether the
-	//(database) roles we found can possibly be matched by the YAML; if not; check if
-	//roles are granted to any (non-system) role and if not then drop
-	for db, dbRoles := range g.DatabaseRoles {
-		for r := range dbRoles {
+	for db, dbCache := range g.accountCache.getDBs() {
+		for r := range dbCache.dbRoles {
 			if pSem, ok := g.Sem.Products[r.ProductID]; ok {
 				if pSem.DTAPs.HasDTAP(r.DTAP) {
 					if r.InterfaceID == "" {
@@ -150,29 +131,9 @@ func (g *Grupin) dropDatabaseRoles(ctx context.Context, cnf *Config, conn *sql.D
 					}
 				}
 			}
-			if err := dropDatabaseRole(ctx, conn, r.ID); err != nil { return err }
+			if err := r.Drop(ctx, conn); err != nil { return err }
 		}
 	}
-}
-
-func dropRole(ctx context.Context, cnf *Config, conn *sql.DB, role string) error {
-	// If a role has CREATE, OWNERSHIP (ON FUTURE) privileges, do not drop it, or cnf.Role could end up owning objects.
-	// Instead log a warning prompting administrators to GRANT OWNERSHIP to new owner and REVOKE any CREATE privileges.
-	grants := []grantToRole{}
-	for grant, err := range queryGrantsToRole(ctx, conn, role, false) {
-		if err != nil { return err }
-		// WIP: process role, e.g., if we find a CREATE or OWNERSHIP grant, no need to iterate further
-	}
-	return nil
-	// DROP ROLE IF EXISTS
-	// TODO: note that DROP ROLE might time out if many grants would need to be transferred, in which case we can safely retry; except
-	// in our case we don't want any transferring to happen.
-}
-
-func dropDatabaseRole(ctx context.Context, cnf *Config, conn *sql.DB, dbName, dbRole string) error {
-	// if the DB no longer exists, the role would not exist either anymore, we can ignore this error
-	// WIP
-	return nil
 }
 
 func (g Grupin) String() string {
