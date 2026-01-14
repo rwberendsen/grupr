@@ -10,6 +10,7 @@ type DBObjs struct {
 	MatchAllObjects 	bool
 	RevokeGrantsTo 		map[Mode]map[GrantToRecord]struct{}
 	GrantsTo		map[Mode]map[Privilege]struct{}
+	DBRole			DatabaseRole
 }
 
 func newDBObjs(db string, o *DBObjs, om semantics.ObjMatcher) *DBObjs {
@@ -62,6 +63,13 @@ func (o *DBObjs) setGrantTo(m Mode, p Privilege) {
 	o.GrantsTo[m][p] = struct{}{}
 }
 
+func (o *DBObjs) hasGrantTo(m Mode, p Privilege) {
+	if v, ok := o.GrantsTo[m] {
+		_, ok = v[p]
+		return ok
+	}
+}
+
 func (o *DBObjs) setRevokeGrantTo(m Mode, g GrantToRole) {
 	if o.RevokeGrantsTo == nil { o.RevokeGrantsTo = map[Mode]map[GrantToRole]struct{}{} }
 	if _, ok := o.RevokeGrantsTo[m]; !ok { o.RevokeGrantsTo[m] = map[GrantToRole]struct{}{} }
@@ -70,14 +78,15 @@ func (o *DBObjs) setRevokeGrantTo(m Mode, g GrantToRole) {
 
 func (o *DBObjs) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, pID string, dtap string, iID string,
 		db string, om semantics.ObjMatcher, createDBRoleGrants map[string]struct{}, databaseRoles map[DatabaseRole]struct{}) error {
-	dbRole := NewDatabaseRole(synCnf, conf, pID, dtap, iID, ModeRead, db)
-	if _, ok := databaseRoles[db][dbRole]; !ok {
+	o.DBRole = NewDatabaseRole(synCnf, conf, pID, dtap, iID, ModeRead, db)
+	if _, ok := databaseRoles[db][o.DBRole]; !ok {
 		if _, ok = createDBRoleGrants[db]; !ok {
 			if err := GrantCreateDatabaseRoleToSelf(ctx, cnf, conn, db); err != nil { return err }
 		}
-		if err := dbRole.Create(ctx, cnf, conn); err != nil { return err }
+		if err := o.DBRole.Create(ctx, cnf, conn); err != nil { return err }
 	} else {
-		for g, err := range QueryGrantsToDBRoleFiltered(ctx, conn, db, dbRole.Name, cnf.DatabaseRolePrivileges[ModeRead], nil) {
+		// TODO: FUTURE GRANTS (to be granted first (and revoked first, too, when it comes to revoking)
+		for g, err := range QueryGrantsToDBRoleFiltered(ctx, conn, db, o.DBRole.Name, cnf.DatabaseRolePrivileges[ModeRead], nil) {
 			if err != nil { return err }
 
 			if g.Database != db {
@@ -109,7 +118,25 @@ func (o *DBObjs) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, 
 			}
 		}
 	}
-	// and now we run over the objects in our DBObjs, and if the necessary privileges have not yet been granted, we grant them
-	return
-			// SHOW GRANTS TO / ON / OF database role, and store them in DBObjs
+	if err := o.doGrant(ctx, cnf, conn); err != nil { return err }
+	return nil
+	// TODO: SHOW GRANTS ON / OF database role, and store them in DBObjs / process them
+}
+
+func (o *DBObjs) doGrant(ctx context.Context, cnf *Config, conn *sql.DB) error {
+	if !o.hasGrantTo(ModeRead, PrvUsage) {
+		if err := GrantToRole{
+				Privilege: PrvUsage,
+				GrantedOn: ObjTpDatabase,
+				Database: o.DBRole.Database,
+		}.DoGrantToDBRole(ctx, cnf, conn, o.DBRole.Database, o.DBRole.Name); err != nil {
+			return err
+		}
+	}
+	for schema, schemaObjs := range o.Schemas {
+		if err := schemaObjs.doGrant(ctx, cnf, conn, o.DBRole.Database, schema, o.DBRole.Name); err != nil {
+			return err
+		}
+	}
+	return nil
 }

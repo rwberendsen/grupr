@@ -42,3 +42,29 @@ func (o *SchemaObjs) setGrantTo(m Mode, p Privilege) {
 	if _, ok := o.GrantsTo[m]; !ok { o.GrantsTo[m] = map[Privilege]struct{}{} }
 	o.GrantsTo[m][p] = struct{}{}
 }
+
+func (o *SchemaObjs) hasGrantTo(m Mode, p Privilege) {
+	if v, ok := o.GrantsTo[m] {
+		_, ok = v[p]
+		return ok
+	}
+}
+
+func (o *SchemaObjs) doGrant(ctx context.Context, cnf *Config, conn *sql.DB, db string, schema string, role string) error {
+	if !o.hasGrantTo(ModeRead, PrvUsage) {
+		if err := GrantToRole{
+				Privilege: PrvUsage,
+				GrantedOn: ObjTpSchema,
+				Database: db,
+				Schema: schema,
+		}.DoGrantToDBRole(ctx, cnf, conn, db, role); err != nil {
+			return err
+		}
+	}
+	for obj, objAttr := range o.Objects {
+		if err := objAttr.doGrant(ctx, cnf, conn, db, schema, obj, role); err != nil {
+			return err
+		}
+	}
+	return nil
+}

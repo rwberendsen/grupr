@@ -222,3 +222,12 @@ func queryGrantsToRole(ctx context.Context, conn *sql.DB, db string, role string
 		}
 	}
 }
+
+func DoGrantToDBRole(ctx context.Context, cnf *Config, conn *sql.DB, db string, role string) error {
+	// WIP
+}
+
+func DoGrantToRole(ctx context.Context, cnf *Config, conn *sql.DB, role string) error {
+	// WIP
+}
+
