@@ -65,7 +65,7 @@ func (o *DBObjs) setRevokeGrantTo(m Mode, g GrantToRole) {
 }
 
 func (o *DBObjs) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, pID string, dtap string, iID string,
-		db string, createDBRoleGrants map[string]struct{}, databaseRoles map[string]map[DatabaseRole]struct{}) {
+		db string, oms semantics.ObjMatchers, createDBRoleGrants map[string]struct{}, databaseRoles map[DatabaseRole]struct{}) {
 	dbRole := NewDatabaseRole(synCnf, conf, pID, dtap, iID, ModeRead, db)
 	if _, ok := databaseRoles[db][dbRole]; !ok {
 		if _, ok = createDBRoleGrants[db]; !ok {
@@ -73,17 +73,6 @@ func (o *DBObjs) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, 
 		}
 		if err := dbRole.Create(ctx, cnf, conn); err != nil { return err }
 	} else {
-		// TODO: if the database was dropped concurrently, then so was the database role
-		// Then grant here may return err == ErrObjectNotExistOrAuthorized
-		// Then we could refresh the product, once we reach back to the product level
-		// Then, if the database was re-created concurrently, we would come back here eventually,
-		// for the same database. And then, according to our records in databaseRoles, the database
-		// role should still exist (but in reality it does not). That would cause a loop, where 
-		// the product would be refreshed again and again until refreshes are exhausted.
-		// So, when we refresh a product, we should also refresh databaseRoles. But that is weird,
-		// products are running in separate threads. Therefore, we may have to abandon the global
-		// databaseRoles map. Or, make it part of the accountCache perhaps, so that when we
-		// refresh a product, the presence or absence of database roles is handled, too.
 		for g, err := range QueryGrantsToDBRoleFiltered(ctx, conn, db, dbRole.Name, cnf.DatabaseRolePrivileges[ModeRead], nil) {
 			if err != nil { return err }
 			switch {
@@ -95,11 +84,15 @@ func (o *DBObjs) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, 
 					&& g.Database == db && o.hasSchema(g.Schema) && o.Schemas[g.Schema].hasObject(g.Object, g.GrantedOn):
 				o.Schemas[g.Schema].Objects[ObjKey{Name: g.Object, ObjectType: g.GrantedOn}].setGrantTo(ModeRead, g.Privilege)
 			default:
+				// store grant for revoking later; but only if object on which grant was given is not matched by YAML object matcher
+				// for this interface; in the case that FUTURE grants are active, it could be that we have a grant for an object
+				// we do not have in accountObjects, but that nonetheless is correct, i.e., the object was created after we populated
+				// accountObjects
 				o.setRevokeGrantTo(ModeRead, g)
 			}
 		}
-		// and now we run over the objects in our DBObjs, and if the necessary privileges have not yet been granted, we grant them
 	}
+	// and now we run over the objects in our DBObjs, and if the necessary privileges have not yet been granted, we grant them
 	return
 			// SHOW GRANTS TO / ON / OF database role, and store them in DBObjs
 			// grants on objects should be stored on the respective accountobjects

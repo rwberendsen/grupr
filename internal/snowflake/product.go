@@ -75,12 +75,12 @@ func (p *Product) createRoles(ctx context.Context, synCnf *syntax.Config, cnf *C
 }
 
 func (p *Product) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{},
-		createDBRoleGrants map[string]struct{}, databaseRoles map[string]map[DatabaseRole]struct{}) error {
+		createDBRoleGrants map[string]struct{}, c *accountCache) error {
 	if err := p.createRoles(ctx, synCnf, cnf, conn, productRoles); err != nil { return err }
-	// if during granting we get ErrObjectNotExistOrAuthorized, we should refresh the product and try again
-	if err := p.Interface.grant(ctx, cnf, conn, createDBRoleGrants, databaseRoles); err != nil { return err }
+	// TODO: if during granting we get ErrObjectNotExistOrAuthorized, we should refresh the product and try again
+	if err := p.Interface.grant(ctx, synCnf, cnf, conn, createDBRoleGrants, p.pSem.DTAPs, p.pSem.ID, "", p.pSem.ObjectMatchers, c); err != nil { return err }
 	for iid, i := range p.Interfaces {
-		if err := i.grant(ctx, cnf, conn, createDBRoleGrants, databaseRoles); err != nil { return err }
+		if err := i.grant(ctx, synCnf, cnf, conn, createDBRoleGrants, p.DTAPs, p.pSem.ID, iid, p.pSem.Interfaces[iid].ObjectMatchers, c); err != nil { return err }
 	}
 	return nil
 }

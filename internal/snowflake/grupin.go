@@ -50,7 +50,7 @@ func (g *grupin) grant(ctx context.context, synCnf *syntax.Config, cnf *Config, 
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(cnf.MaxProductThreads)
 	for k, v := range g.Products {
-		eg.Go(func() error { return v.grant(ctx, synCnf, cnf, conn, g.ProductRoles, g.CreateDBRoleGrants) })
+		eg.Go(func() error { return v.grant(ctx, synCnf, cnf, conn, g.ProductRoles, g.createDBRoleGrants, g.accountCache) })
 	}
 	for _, p := range g.Products {
 		for iid, dtapMapping := range v.pSem.Consumes {
