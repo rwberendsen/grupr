@@ -116,10 +116,10 @@ func (c *accountCache) matchObjects(ctx context.Context, conn *sql.DB, db string
 		if err != nil { return err }
 	}
 	o.version = c.dbs[db].schemas[schema].version
-	o.objects = map[ObjKey]struct{}{}
-	for k := range c.dbs[db].schemas[schema].objects {
-		if !om.DisjointFromObject(db.Name, schema, k.Name) {
-			o.objects[k] = struct{}{}
+	o.objects = map[string]ObjAttr{}
+	for k, v := range c.dbs[db].schemas[schema].objects {
+		if !om.DisjointFromObject(db.Name, schema, k) {
+			o.objects[k] = v
 		}
 	}
 	return false, nil
