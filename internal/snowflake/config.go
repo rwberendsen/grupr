@@ -19,6 +19,7 @@ type Config struct {
 	MaxOpenConns int
 	MaxIdleConns int
 	MaxProductThreads int
+	StmtBatchSize int
 	MaxProductRefreshes int
 	Modes [1]Mode
 	DatabaseRolePrivileges map[Mode]map[GrantToRole]struct{}
@@ -31,6 +32,7 @@ func GetConfig(semCnf *semantics.Config) *Config, error {
 		MaxOpenConns: 0, 	// unlimited
 		MaxIdleConns: 3,	// MaxProductThreads - 1 (sometimes we use only one conn before quickly fanning out again)
 		MaxProductThreads: 4,
+		StmtBatchSize: 100,
 		MaxProductRefreshes: 4, 
 		Modes: [1]Mode{Read,},
 		DryRun: true
@@ -108,6 +110,14 @@ q		return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_U
 				return nil, fmt.Errorf("GRUPR_SNOWFLAKE_MAX_PRODUCT_THREADS should be >= GRUPR_SNOWFLAKE_MAX_OPEN_CONNECTIONS")
 			}
 			cnf.MaxProductThreads = i
+		}
+	}
+
+	if stmtBatchSize, ok := os.LookupEnv("GRUPR_SNOWFLAKE_STMT_BATCH_SIZE"); ok {
+		if i, err := strconv.Atoi(stmtBatchSize); err != nil {
+			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_STMT_BATCH_SIZE: %w", err)
+		} else {
+			cnf.StmtBatchSize = i
 		}
 	}
 	

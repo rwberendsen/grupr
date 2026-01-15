@@ -12,7 +12,7 @@ func runSQL(ctx context.Context, cnf *Config, conn *sql.DB, sql string, params .
 		printSQL(sql, params...)
 		return nil
 	}
-	if _, err := conn.QueryContext(ctx, sql, params...); err != nil { return err }
+	if _, err := conn.ExecContext(ctx, sql, params...); err != nil { return err }
 	return nil
 }
 
