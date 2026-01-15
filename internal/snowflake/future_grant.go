@@ -10,7 +10,9 @@ import (
 	"strings"
 )
 
-type GrantToRole struct {
+// Note that whenever we'll want to do a FUTURE GRANT, 
+// we'll do an GRANT ON ALL immediately after
+type FutureGrant struct {
 	Privilege 		Privilege
 	CreateObjectType	ObjType // "": not applicable (privilege != prvCreate)
 	GrantedOn 		ObjType
@@ -29,7 +31,7 @@ type GrantToRole struct {
 	IsFuture		bool    // When GrantedIn != ObjTpOther, IsFuture distinguishes between FUTURE / ALL
 }
 
-func (g GrantToRole) buildSQLGrant() string {
+func (g Grant) buildSQLGrant() string {
 	if g.Privilege == PrvCreate {
 		panic("Granting CREATE not implemented yet")
 	}
@@ -110,9 +112,9 @@ func (g GrantToRole) buildSQLGrant() string {
 	return fmt.Sprintf(`GRANT %s %s %s %s`, g.Privilege, onClause, inClause, toClause)
 }
 
-func newGrantToRole(privilege string, createObjType string, grantedOn string, name string, grantedTo ObjType,
-		grantedToDatabase string, grantedToRole string, grantOption bool, grantedBy string) (GrantToRole, error) {
-	g := GrantToRole{
+func newGrant(privilege string, createObjType string, grantedOn string, name string, grantedTo ObjType,
+		grantedToDatabase string, grantedToRole string, grantOption bool, grantedBy string) (Grant, error) {
+	g := Grant{
 		Privilege: ParsePrivilege(privilege),
 		CreateObjectType: ParseObjType(createObjType),
 		GrantedOn: PparseObjType(grantedOn),
@@ -157,29 +159,29 @@ func newGrantToRole(privilege string, createObjType string, grantedOn string, na
 }
 
 func QueryGrantsToRoleFiltered(ctx context.Context, conn *sql.DB, role string,
-		match map[GrantToRole]struct{}, notMatch map[GrantToRole]struct{}) iter.Seq2[GrantToRole, error] {
+		match map[Grant]struct{}, notMatch map[Grant]struct{}) iter.Seq2[Grant, error] {
 	return queryGrantsToRole(ctx, conn, "", role, match, notMatch, 0)
 }
 
 func QueryGrantsToDBRoleFiltered(ctx context.Context, conn *sql.DB, db string, role string,
-		match map[GrantToRole]struct{}, notMatch map[GrantToRole]struct{}) iter.Seq2[GrantToRole, error] {
+		match map[Grant]struct{}, notMatch map[Grant]struct{}) iter.Seq2[Grant, error] {
 	return queryGrantsToRole(ctx, conn, db, role, match, notMatch, 0)
 }
 
-func QueryGrantsToRole(ctx context.Context, conn *sql.DB, role string) iter.Seq2[GrantToRole, error] {
+func QueryGrantsToRole(ctx context.Context, conn *sql.DB, role string) iter.Seq2[Grant, error] {
 	return queryGrantsToRole(ctx, conn, "", role, nil, nil, 0)
 }
 
-func QueryGrantsToDBRole(ctx context.Context, conn *sql.DB, db string, role string) iter.Seq2[GrantToRole, error] {
+func QueryGrantsToDBRole(ctx context.Context, conn *sql.DB, db string, role string) iter.Seq2[Grant, error] {
 	return queryGrantsToRole(ctx, conn, db, role, nil, nil, 0)
 }
 
 func QueryGrantsToRoleFilteredLimit(ctx context.Context, conn *sql.DB, role string,
-		match map[GrantToRole]struct{}, notMatch map[GrantToRole]struct{}, limit int) iter.Seq2[GrantToRole, error] {
+		match map[Grant]struct{}, notMatch map[Grant]struct{}, limit int) iter.Seq2[Grant, error] {
 	return queryGrantsToRole(ctx, conn, "", role, match, notMatch, limit)
 }
 
-func (g GrantToRole) buildSQLFilter(g GrantToRole) (string, int) {
+func (g Grant) buildSQLFilter(g Grant) (string, int) {
 	// zero values
 	var privilege Privilege
 	var createObjectType ObjType
@@ -198,7 +200,7 @@ func (g GrantToRole) buildSQLFilter(g GrantToRole) (string, int) {
 	return strings.Join(clauses, " AND "), len(clauses)
 }
 
-func buildSQLGrants(grants map[GrantToRole]struct{}) (string, int) {
+func buildSQLGrants(grants map[Grant]struct{}) (string, int) {
 	clauses = []string{}
 	for g := range grants {
 		s, l := buildSQLFilter(g)
@@ -209,7 +211,7 @@ func buildSQLGrants(grants map[GrantToRole]struct{}) (string, int) {
 	return strings.Join(clauses, " OR\n"), len(clauses)
 }
 
-func buildSLQMatch(match map[GrantToRole]struct{}, notMatch map[GrantToRole]struct{}) (string, int) {
+func buildSLQMatch(match map[Grant]struct{}, notMatch map[Grant]struct{}) (string, int) {
 	clauses := []string{}
 	if match != nil {
 		s, l := buildSQLGrants(match)
@@ -231,7 +233,7 @@ func buildSLQMatch(match map[GrantToRole]struct{}, notMatch map[GrantToRole]stru
 	return strings.Join(clauses, "\nAND\n"), len(clauses)
 }
 
-func buildSQLQueryGrants(db string, role string, match map[GrantToRole]struct{}, notMatch map[GrantToRole]struct{}, limit int) string {
+func buildSQLQueryGrants(db string, role string, match map[Grant]struct{}, notMatch map[Grant]struct{}, limit int) string {
 	// fetch grants for DATABASE ROLE if needed, rather than ROLE
 	var dbClause string
 	granteeName := quoteIdentifier(role)
@@ -272,7 +274,7 @@ FROM $1%s`, dbClause, granteeName, whereClause)
 }
 
 func queryGrantsToRole(ctx context.Context, conn *sql.DB, db string, role string,
-		match map[GrantToRole]struct{}, notMatch map[GrantToRole]struct{}, limit int) iter.Seq2[GrantToRole, error] {
+		match map[Grant]struct{}, notMatch map[Grant]struct{}, limit int) iter.Seq2[Grant, error] {
 	// Note that both db and string will be quoted before going to Snowflake, so
 	// if the names in Snowflake are upper case, present them here in upper case, too.
 	grantedTo := ObjTpRole
@@ -280,14 +282,14 @@ func queryGrantsToRole(ctx context.Context, conn *sql.DB, db string, role string
 		grantedTo = ObjTpDatabaseRole
 	}
 	sql := buildSQLQueryGrants(db, role, match, notMatch, limit)
-	return func(yield func(GrantToRole, error) bool) {
+	return func(yield func(Grant, error) bool) {
 		rows, err := conn.QueryContext(ctx, sql, param)
 		defer rows.Close()
 		if err != nil { 
 			if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
 				err = ErrObjectNotExistOrAuthorized
 			}
-			yield(GrantToRole{}, err)
+			yield(Grant{}, err)
 			return
 		}
 		for rows.Next() {
@@ -298,26 +300,26 @@ func queryGrantsToRole(ctx context.Context, conn *sql.DB, db string, role string
 			var grantOption bool
 			var grantedBy string
 			if err = rows.Scan(&privilege, &createObjectType, &grantedOn, &name, &grantOption, &grantedBy); err != nil {
-				yield(GrantToRole{}, err)
+				yield(Grant{}, err)
 				return
 			}
-			g, err := newGrantToRole(privilege, createObjectType, grantedOn, name, grantedTo, db, role, grantOption, grantedBy)
+			g, err := newGrant(privilege, createObjectType, grantedOn, name, grantedTo, db, role, grantOption, grantedBy)
 			if err != nil {
-				yield(GrantToRole{}, err}
+				yield(Grant{}, err}
 			}
 			if !yield(g, nil)
 				return
 			}
 		}
 		if err = rows.Err(); err != nil {
-			yield(GrantToRole{}, err)
+			yield(Grant{}, err)
 			return
 		}
 	}
 }
 
 
-func DoGrants(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq2[GrantToRole, error]) error {
+func DoGrants(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq2[Grant, error]) error {
 	buf := [cnf.StmtBatchSize]string{}
 	i := 0
 	for g, err := range grants {

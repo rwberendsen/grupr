@@ -86,6 +86,8 @@ func (o *DBObjs) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, 
 		if err := o.DBRole.Create(ctx, cnf, conn); err != nil { return err }
 	} else {
 		// TODO: FUTURE GRANTS (to be granted first (and revoked first, too, when it comes to revoking)
+		// 	Together with FUTURE grants, we can always execute an complementary ALL grant as well, immediately after.
+		// TODO: if o.MatchAllObjects, then no need to query grants, we'll just GRANT ALL anyway!?
 		for g, err := range QueryGrantsToDBRoleFiltered(ctx, conn, db, o.DBRole.Name, cnf.DatabaseRolePrivileges[ModeRead], nil) {
 			if err != nil { return err }
 
