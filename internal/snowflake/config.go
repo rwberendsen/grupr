@@ -18,9 +18,9 @@ type Config struct {
 	ObjectPrefix string // for objects created by Grupr in Snowflake
 	MaxOpenConns int
 	MaxIdleConns int
-	MaxProductThreads int
+	MaxProductDTAPThreads int
 	StmtBatchSize int
-	MaxProductRefreshes int
+	MaxProductDTAPRefreshes int
 	Modes [1]Mode
 	DatabaseRolePrivileges map[Mode]map[GrantToRole]struct{}
 	DryRun bool
@@ -30,10 +30,10 @@ func GetConfig(semCnf *semantics.Config) *Config, error {
 	cnf := &Config{
 		UseSQLOpen: false,
 		MaxOpenConns: 0, 	// unlimited
-		MaxIdleConns: 3,	// MaxProductThreads - 1 (sometimes we use only one conn before quickly fanning out again)
-		MaxProductThreads: 4,
+		MaxIdleConns: 3,	// MaxProductDTAPThreads - 1 (sometimes we use only one conn before quickly fanning out again)
+		MaxProductDTAPThreads: 4,
 		StmtBatchSize: 100,
-		MaxProductRefreshes: 4, 
+		MaxProductDTAPRefreshes: 4, 
 		Modes: [1]Mode{Read,},
 		DryRun: true
 	}
@@ -102,14 +102,14 @@ q		return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_U
 		}
 	}
 
-	if maxProductThreads, ok := os.LookupEnv("GRUPR_SNOWFLAKE_MAX_PRODUCT_THREADS"); ok {
+	if maxProductThreads, ok := os.LookupEnv("GRUPR_SNOWFLAKE_MAX_PRODUCT_DTAP_THREADS"); ok {
 		if i, err := strconv.Atoi(maxProductThreads); err != nil {
-			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_MAX_PRODUCT_THREADS: %w", err)
+			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_MAX_PRODUCT_DTAP_THREADS: %w", err)
 		} else {
 			if i < cnf.MaxOpenConnections {
-				return nil, fmt.Errorf("GRUPR_SNOWFLAKE_MAX_PRODUCT_THREADS should be >= GRUPR_SNOWFLAKE_MAX_OPEN_CONNECTIONS")
+				return nil, fmt.Errorf("GRUPR_SNOWFLAKE_MAX_PRODUCT_DTAP_THREADS should be >= GRUPR_SNOWFLAKE_MAX_OPEN_CONNECTIONS")
 			}
-			cnf.MaxProductThreads = i
+			cnf.MaxProductDTAPThreads = i
 		}
 	}
 
@@ -121,11 +121,11 @@ q		return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_U
 		}
 	}
 	
-	if maxProductRefreshes, ok := os.LookupEnv("GRUPR_SNOWFLAKE_MAX_PRODUCT_REFRESHES"); ok {
+	if maxProductRefreshes, ok := os.LookupEnv("GRUPR_SNOWFLAKE_MAX_PRODUCT_DTAP_REFRESHES"); ok {
 		if i, err := strconv.Atoi(maxProductRefreshes); err != nil {
-			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_MAX_PRODUCT_REFRESHES: %w", err)
+			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_MAX_PRODUCT_DTAP_REFRESHES: %w", err)
 		} else {
-			cnf.MaxProductRefreshes = i
+			cnf.MaxProductDTAPRefreshes = i
 		}
 	}
 

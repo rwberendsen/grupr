@@ -8,17 +8,41 @@ import (
 )
 
 type Interface struct {
+	ObjectMatchers semantics.ObjMatchers
 	AccountObjects map[semantics.ObjExpr]*AccountObjs
 }
 
-func newInterface(m map[semantics.ObjExpr]*AccountObjects, oms semantics.ObjMatchers) *Interface {
+func NewInterface(dtap string, oms semantics.ObjMatchers) Interface {
+	i := &Interface{
+		ObjectMatchers: semantics.ObjMatchers{},
+		AccountObjects: map[semantics.ObjExpr]*AccountObjs{},
+	}	
+	// Just take what you need from own DTAP
+	for e, om := range oms {
+		if e.DTAP == dtap {
+			i.ObjectMatchers[e] = om
+		}
+	}
+	return i
+}
+
+func newInterfaceFromMatched(m map[semantics.ObjExpr]*matchedAccountObjects, oms semantics.ObjMatchers) *Interface {
 	i := &Interface{AccountObjects: map[semantics.ObjExpr]*AccountObjs{},}
+	for e, om := range oms {
+		tmpAccountObjs = newAccountObjsFromMatched(m[e])
+		i.AccountObjects[e] = newAccountObjects(tmpAccountObjs, om)
+	}
+	return i
+}
+
+func (i Interface) refresh(m map[semantics.ObjExpr]*AccountObjects, oms semantics.ObjMatchers) Interface {
 	for e, om := range oms {
 		i.AccountObjects[e] = newAccountObjects(m[om.SubsetOf], om)
 	}
 	return i
 }
 
+// WIP
 func newInterfaceFromMatched(m map[semantics.ObjExpr]*matchedAccountObjects, oms semantics.ObjMatchers) *Interface {
 	i := &Interface{AccountObjects: map[semantics.ObjExpr]*AccountObjs{},}
 	for e, om := range oms {

@@ -80,6 +80,11 @@ func main() {
 	snowflakeNewGrupin, err := snowflake.NewGrupin(ctx, snowCnf, conn, newGrupin)
 	if err != nil { log.Fatalf("making Snowflake grupin: %v", err) }
 
+	// use it now to manage access
+	if err := snowflakeGrupin.ManageAccess(ctx, synCnf, snowCnf, conn); err != nil {
+		log.Fatalf("ManageAccess: %v", err)
+	}
+
 	// TODO: think about it, do we first build our snowflake grupin, which until now just contains matched objects and that's it; and then we start looping over that one
 	// to work out what database roles to create, and what privileges to grant to each of them? Or, do we already when building the grupin also work out and store what
 	// (database) roles and what granted privileges already exist in each of them? (as well as between them, with consume relations, much like in semantics.Grupin?)
