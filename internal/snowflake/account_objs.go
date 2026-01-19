@@ -7,7 +7,7 @@ import (
 
 // Couple of simple data structures to hold matched objects in account
 type AccountObjs struct {
-	DBs map[string]*DBObjs
+	DBs map[string]DBObjs
 }
 
 func newAccountObjs(o *AccountObjs, om semantics.ObjMatcher) *AccountObjs {
@@ -26,6 +26,20 @@ func newAccountObjsFromMatched(m *matchedAccountObjs) *AccountObjs {
 		r.DBs[k] = newDBObjsFromMatched(v)
 	}
 	return r
+}
+
+func (lhs AccountObjs) add(rhs AccountObjs) AccountObjs {
+	for dbL, dbObjL := range lhs.DBs {
+		if dbObjR, ok := rhs.DBs[dbL]; ok {
+			lhs[dbl] = dbObjL.add(dbObjR)
+		}
+	}
+	for dbR, dbObjR := range rhs.DBs {
+		if _, ok := lhs.DBs[dbR]; !ok {
+			lhs[dbR] = dbObjR
+		}
+	}
+	return lhs
 }
 
 func (o AccountObjs) TableCount() int {

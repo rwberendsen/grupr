@@ -5,7 +5,7 @@ import (
 )
 
 type DBObjs struct {
-	Schemas  map[string]*SchemaObjs
+	Schemas  map[string]SchemaObjs
 	MatchAllSchemas 	bool
 	MatchAllObjects 	bool
 	RevokeGrantsTo 		map[Mode]map[GrantToRecord]struct{}
@@ -13,9 +13,9 @@ type DBObjs struct {
 	DBRole			DatabaseRole
 }
 
-func newDBObjs(db string, o *DBObjs, om semantics.ObjMatcher) *DBObjs {
-	r := &DBObjs{Schemas: map[string]*SchemaObjs{},}
-	r.setMatchAllSchemas(db, om)
+func newDBObjs(db string, o DBObjs, om semantics.ObjMatcher) DBObjs {
+	r := DBObjs{Schemas: map[string]SchemaObjs{},}
+	r = r.setMatchAllSchemas(db, om)
 	r.setMatchAllObjects(db, om)
 	for schema, schemaObjs := range o.Schemas {
 		if !om.DisjointFromSchema(db.Name, schema) {
@@ -25,8 +25,8 @@ func newDBObjs(db string, o *DBObjs, om semantics.ObjMatcher) *DBObjs {
 	return r
 }
 
-func newDBObjsFromMatched(m *matchedDBObjs) *DBObjs {
-	o := &DBObjs{Schemas: map[string]*SchemaObjs{},}
+func newDBObjsFromMatched(m *matchedDBObjs) DBObjs {
+	o := DBObjs{Schemas: map[string]SchemaObjs{},}
 	for k, v := range m.getSchemas() {
 		o.Schemas[k] = newSchemaObjsFromMatched(v)
 	}
@@ -41,59 +41,67 @@ func (o *DBObjs) hasObject(s string, obj string) bool {
 	return o.hasSchema(s) && o.Schemas[s].hasObject(obj)
 }
 
-func (o *DBObjs) setMatchAllSchemas(db string, om semantics.ObjMatcher) {
-	if !om.Include[semantics.Schema].MatchAll() { return }
+func (o DBObjs) setMatchAllSchemas(db string, om semantics.ObjMatcher) DBObjs {
+	if !om.Include[semantics.Schema].MatchAll() { return o }
 	o.MatchAllSchemas = true
 	for excludeExpr := range om.Exclude {
 		if excludeExpr.MatchesAllObjectsInAnySchemaInDB(db.Name) {
 			o.MatchAllSchemas = false
 		}
 	}
+	return o
 }
 
-func (o *DBObjs) setMatchAllObjects(db string, om semantics.ObjMatcher) {
+func (o DBObjs) setMatchAllObjects(db string, om semantics.ObjMatcher) DBObjs {
 	if om.SupersetOf(db.Name) {
 		o.MatchAllObjects = true
 	}
+	return o
 }
 
-func (o *DBObjs) setGrantTo(m Mode, p Privilege) {
+func (lhs DBObjs) add(rhs DBObjs) DBObjs {
+	// WIP
+}
+
+func (o DBObjs) setGrantTo(m Mode, p Privilege) DBObjs {
 	if o.GrantsTo == nil { o.GrantsTo = map[Mode]map[Privilege]struct{}{} }
 	if _, ok := o.GrantsTo[m]; !ok { o.GrantsTo[m] = map[Privilege]struct{}{} }
 	o.GrantsTo[m][p] = struct{}{}
+	return o
 }
 
-func (o *DBObjs) hasGrantTo(m Mode, p Privilege) {
+func (o DBObjs) hasGrantTo(m Mode, p Privilege) {
 	if v, ok := o.GrantsTo[m] {
 		_, ok = v[p]
 		return ok
 	}
 }
 
-func (o *DBObjs) setRevokeGrantTo(m Mode, g GrantToRole) {
+func (o DBObjs) setRevokeGrantTo(m Mode, g GrantToRole) DBObjs {
 	if o.RevokeGrantsTo == nil { o.RevokeGrantsTo = map[Mode]map[GrantToRole]struct{}{} }
 	if _, ok := o.RevokeGrantsTo[m]; !ok { o.RevokeGrantsTo[m] = map[GrantToRole]struct{}{} }
 	o.RevokeGrantsTo[m][g] = struct{}{}
+	return o
 }
 
-func (o *DBObjs) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, pID string, dtap string, iID string,
-		db string, om semantics.ObjMatcher, createDBRoleGrants map[string]struct{}, databaseRoles map[DatabaseRole]struct{}) error {
+func (o DBObjs) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, pID string, dtap string, iID string,
+		db string, om semantics.ObjMatcher, createDBRoleGrants map[string]struct{}, databaseRoles map[DatabaseRole]struct{}) (DBObjs, error) {
 	o.DBRole = NewDatabaseRole(synCnf, conf, pID, dtap, iID, ModeRead, db)
 	if _, ok := databaseRoles[db][o.DBRole]; !ok {
 		if _, ok = createDBRoleGrants[db]; !ok {
-			if err := GrantCreateDatabaseRoleToSelf(ctx, cnf, conn, db); err != nil { return err }
+			if err := GrantCreateDatabaseRoleToSelf(ctx, cnf, conn, db); err != nil { return o, err }
 		}
-		if err := o.DBRole.Create(ctx, cnf, conn); err != nil { return err }
+		if err := o.DBRole.Create(ctx, cnf, conn); err != nil { return o, err }
 	} else {
 		// TODO: FUTURE GRANTS (to be granted first (and revoked first, too, when it comes to revoking)
 		// 	Together with FUTURE grants, we can always execute an complementary ALL grant as well, immediately after.
 		// TODO: if o.MatchAllObjects, then no need to query grants, we'll just GRANT ALL anyway!?
 		for g, err := range QueryGrantsToDBRoleFiltered(ctx, conn, db, o.DBRole.Name, cnf.DatabaseRolePrivileges[ModeRead], nil) {
-			if err != nil { return err }
+			if err != nil { return o, err }
 
 			if g.Database != db {
 				// This grant should not be granted to this particular database role
-				o.setRevokeGrantTo(ModeRead, g)
+				o = o.setRevokeGrantTo(ModeRead, g)
 				continue
 			}
 
@@ -120,8 +128,8 @@ func (o *DBObjs) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, 
 			}
 		}
 	}
-	if err := o.doGrant(ctx, cnf, conn); err != nil { return err }
-	return nil
+	if err := o.doGrant(ctx, cnf, conn); err != nil { return o, err }
+	return o, nil
 	// TODO: SHOW GRANTS ON / OF database role, and store them in DBObjs / process them
 }
 

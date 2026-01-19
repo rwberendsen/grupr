@@ -2,6 +2,7 @@ package snowflake
 
 import (
 	"context"
+	"maps"
 
 	"github.com/rwberendsen/grupr/internal/syntax"
 	"github.com/rwberendsen/grupr/internal/semantics"
@@ -9,7 +10,13 @@ import (
 
 type Interface struct {
 	ObjectMatchers semantics.ObjMatchers
-	AccountObjects map[semantics.ObjExpr]*AccountObjs
+	AccountObjects map[semantics.ObjExpr]AccountObjs
+
+	// set during calculating objects
+	tableCountsByUserGroup map[string]int
+	viewCountsByUserGroup map[string]int
+
+	aggAccountObjects AccountObjs
 }
 
 func NewInterface(dtap string, oms semantics.ObjMatchers) Interface {
@@ -42,24 +49,15 @@ func (i Interface) refresh(m map[semantics.ObjExpr]*AccountObjects, oms semantic
 	return i
 }
 
-// WIP
-func newInterfaceFromMatched(m map[semantics.ObjExpr]*matchedAccountObjects, oms semantics.ObjMatchers) *Interface {
-	i := &Interface{AccountObjects: map[semantics.ObjExpr]*AccountObjs{},}
-	for e, om := range oms {
-		tmpAccountObjs = newAccountObjsFromMatched(m[e])
-		i.AccountObjects[e] = newAccountObjects(tmpAccountObjs, om)
-	}
-	return i
-}
+func (i Interface) setAggAccountObjects
 
 func (i Interface) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, createDBRoleGrants map[string]struct{},
 		dtaps semantics.DTAPSpec, pID string, iID string, oms semantics.ObjMatchers, c *accountCache) error {
-	for e, accObjs := range i.AccountObjects {
-		for db, dbObjs := range accObjs.DBs {
-			if !c.hasDB(db) {
-				return ErrObjectNotExistOrAuthorized // db may have been dropped concurrently
-			}
-			dbObjs.grant(ctx, synCnf, cnf, conn, pID, oms[e].DTAP, iID, db, createDBRoleGrants, c.dbs[db].dbRoles)
+	agg := AggAccountObjs(maps.Values(i.AccountObjects))
+	for db, dbObjs := range agg.DBs {
+		if !c.hasDB(db) {
+			return ErrObjectNotExistOrAuthorized // db may have been dropped concurrently
 		}
+		dbObjs.grant(ctx, synCnf, cnf, conn, pID, oms[e].DTAP, iID, db, createDBRoleGrants, c.dbs[db].dbRoles)
 	}
 }

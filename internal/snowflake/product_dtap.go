@@ -53,24 +53,21 @@ func NewProductDTAP(pID string, dtap string, isProd bool, pSem semantics.Product
 }
 
 func (pd *ProductDTAP) refresh(ctx context.Context, cnf *Config, conn *sql.DB, c *accountCache) error {
-	err := pd.refreshRecur(ctx, cnf, conn, c)
-	if err != nil { return err }
+	if err := pd.refresh_(ctx, cnf, conn, c); err != nil { return err }
 	pd.calcObjects()
 }
 
-func (pd *ProductDTAP) refreshRecur(ctx context.Context, cnf *Config, conn *sql.DB, c *accountCache) error {
-	pd.refreshCount += 1
-	if pd.refreshCount > cnf.MaxProductRefreshCount {
-		return fmt.Errorf("Max product refresh count reached")
-	}
-	util.SleepContext(ctx, 1 << pd.refreshCount - 1) // exponential backoff
-	for err := pd.refreshObjExprs(ctx, conn, c); err != nil {
-		if err != ErrObjectNotExistOrAuthorized {
+func (pd *ProductDTAP) refresh_(ctx context.Context, cnf *Config, conn *sql.DB, c *accountCache) error {
+	for {
+		pd.refreshCount += 1
+		if pd.refreshCount > cnf.MaxProductRefreshCount {
+			return fmt.Errorf("Max product refresh count reached")
+		}
+		util.SleepContext(ctx, 1 << pd.refreshCount - 1) // exponential backoff
+		if err := pd.refreshObjExprs(ctx, conn, c); err != ErrObjectNotExistOrAuthorized {
 			return err
 		}
-		err = pd.refreshRecur(ctx, cnf, conn, c) 
 	}
-	return nil
 }
 
 func (pd *ProductDTAP) refreshObjExprs(ctx context.Context, conn *sql.DB, c *accountCache) error {
@@ -102,16 +99,26 @@ func (p *ProductDTAP) createRoles(ctx context.Context, synCnf *syntax.Config, cn
 	}
 }
 
-func (p *ProductDTAP) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{},
+func (pd *ProductDTAP) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{},
 		createDBRoleGrants map[string]struct{}, c *accountCache) error {
-	if err := p.createRoles(ctx, synCnf, cnf, conn, productRoles); err != nil { return err }
-	// TODO: if during granting we get ErrObjectNotExistOrAuthorized, we should refresh the product and try again
-	if err := p.Interface.grant(ctx, synCnf, cnf, conn, createDBRoleGrants, p.pSem.DTAPs, p.pSem.ID, "", p.pSem.ObjectMatchers, c); err != nil { return err }
-	for iid, i := range p.Interfaces {
-		if err := i.grant(ctx, synCnf, cnf, conn, createDBRoleGrants, p.DTAPs, p.pSem.ID, iid, p.pSem.Interfaces[iid].ObjectMatchers, c); err != nil { return err }
+	for { 
+		if err := pd.grant_(ctx, synCnf, cnf, conn, productRoles, createDBRoleGrants, c); err != ErrObjectNotExistOrAuthorized {
+			return err
+		}
+	}
+}
+
+func (pd *ProductDTAP) grant_(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{},
+		createDBRoleGrants map[string]struct{}, c *accountCache) error {
+	if err := pd.refresh(ctx, cnf, conn, c); err != nil { return err }
+	if err := pd.createRoles(ctx, synCnf, cnf, conn, productRoles); err != nil { return err }
+	if err := pd.Interface.grant(ctx, synCnf, cnf, conn, createDBRoleGrants, pd.pSem.DTAPs, pd.pSem.ID, "", pd.pSem.ObjectMatchers, c); err != nil { return err }
+	for iid, i := range pd.Interfaces {
+		if err := i.grant(ctx, synCnf, cnf, conn, createDBRoleGrants, pd.DTAPs, pd.pSem.ID, iid, pd.pSem.Interfaces[iid].ObjectMatchers, c); err != nil { return err }
 	}
 	return nil
 }
+	
 
 func (p *ProductDTAP) revoke(ctx context.Context, cnf *Config, conn *sql.DB) error {
 	// if during granting we get ErrObjectNotExistOrAuthorized, we should refresh the product and then first grant
