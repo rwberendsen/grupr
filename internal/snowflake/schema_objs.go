@@ -3,10 +3,9 @@ package snowflake
 type SchemaObjs struct {
 	Objects map[string]ObjAttr
 	MatchAllObjects bool
-	GrantsTo map[Mode]map[Privilege]struct{}
 }
 
-func newSchemaObjs(db string, schema string, o *SchemaObjs, om semantics.ObjMatcher) SchemaObjs {
+func newSchemaObjs(db string, schema string, o SchemaObjs, om semantics.ObjMatcher) SchemaObjs {
 	r := SchemaObjs{Objects: map[string]ObjAttr{},}
 	r = r.setMatchAllObjects(db, om)
 	for k, v := range o.Objects {
@@ -24,7 +23,7 @@ func newSchemaObjsFromMatched(m *matchedSchemaObjs) SchemaObjs {
 	r := SchemaObjs{
 		Objects: m.objects,
 	}
-	m.objects = nil // no need to retain all objects in memory, only schema version will do
+	m.objects = nil // no need to retain; note that we create an AccountObjs from a matchedAccountObjs only once.
 	return r
 }
 

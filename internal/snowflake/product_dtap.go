@@ -41,20 +41,17 @@ func NewProductDTAP(pID string, dtap string, isProd bool, pSem semantics.Product
 		}
 	}
 
-	
-
-	// WIP
-	p := &Product{pSem: pSem}
-	p.matchedAccountObjects = map[semantics.ObjExpr]*AccountObjs{}
-	for k := range pSem.ObjectMatchers {
+	pd.matchedAccountObjects = map[semantics.ObjExpr]*matchedAccountObjs{}
+	for k := range pd.Interface.ObjectMatchers {
 		p.matchedAccountObjects[k] = &matchedAccountObjects{}
 	}
-	return p
+	
+	return pd
 }
 
 func (pd *ProductDTAP) refresh(ctx context.Context, cnf *Config, conn *sql.DB, c *accountCache) error {
 	if err := pd.refresh_(ctx, cnf, conn, c); err != nil { return err }
-	pd.calcObjects()
+	pd.recalcObjects()
 }
 
 func (pd *ProductDTAP) refresh_(ctx context.Context, cnf *Config, conn *sql.DB, c *accountCache) error {
@@ -71,19 +68,18 @@ func (pd *ProductDTAP) refresh_(ctx context.Context, cnf *Config, conn *sql.DB, 
 }
 
 func (pd *ProductDTAP) refreshObjExprs(ctx context.Context, conn *sql.DB, c *accountCache) error {
-	for e, om := range p.pSem.ObjectMatchers {
-		if err := c.match(ctx, conn, om, p.matchedAccountObjects[e]); err != nil {
+	for e, om := range p.ObjectMatchers {
+		if err := c.match(ctx, conn, om, pd.matchedAccountObjects[e]); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (p *ProductDTAP) calcObjects() {
-	p.Interface = *newInterfaceFromMatched(p.MatchedAccountObjects, p.pSem.ObjectMatchers)
-	p.Interfaces = map[string]*Interface{}
-	for k, v := range p.pSem.Interfaces {
-		p.Interfaces[k] = newInterface(p.AccountObjects, v.ObjectMatchers)
+func (pd *ProductDTAP) recalcObjects() {
+	pd.Interface.recalcObjectsFromMatched(pd.matchedAccountObjects)
+	for _, v := range pd.Interfaces {
+		v.recalcObjects(pd.accountObjects)
 	}
 }
 

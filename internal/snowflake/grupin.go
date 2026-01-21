@@ -95,9 +95,6 @@ func (g *Grupin) SetObjectsNonProd(ctx context.Context, cnf *Context, conn *sql.
 
 func (g *Grupin) ManageAccessProd(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB) error {
 	if g.hasProdAccessManaged { return nil }
-	if !g.hasProdObjects {
-		return fmt.Errrof("need to have prod objects")
-	}
 	// first process grants, then revokes, to minimize downtime
 	// first process write rights, then read rights, otherwise COPY GRANTS on GRANT OWNERSHIP statements
 	//   may copy unnecessarily many grants
@@ -114,8 +111,8 @@ func (g *Grupin) ManageAccessProd(ctx context.Context, synCnf *syntax.Config, cn
 
 func (g *Grupin) ManageAccessNonProd(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB) error {
 	if g.hasNonProdAccessManaged { return nil }
-	if !g.hasProdAccesssManaged || !g.hasNonProdObjects {
-		return fmt.Errrof("need to have prod access managed and non prod objects")
+	if !g.hasProdAccesssManaged {
+		return fmt.Errrof("need to have prod access managed first")
 	}
 	// first process grants, then revokes, to minimize downtime
 	// first process write rights, then read rights, otherwise COPY GRANTS on GRANT OWNERSHIP statements
