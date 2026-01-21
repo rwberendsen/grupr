@@ -38,12 +38,10 @@ func (lhs AccountObjs) add(rhs AccountObjs) AccountObjs {
 	return lhs
 }
 
-func (o AccountObjs) TableCount() int {
+func (o AccountObjs) countByObjType(t ObjType) int {
 	r := 0
 	for _, db := range o.DBs {
-		for _, schema := range db.Schemas {
-			r += len(schema.Tables)
-		}
+		r += db.countByObjType(t)
 	}
 	return r
 }

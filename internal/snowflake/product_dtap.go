@@ -27,6 +27,7 @@ func NewProductDTAP(pID string, dtap string, isProd bool, pSem semantics.Product
 		Interface: NewInterface(dtap, pSem.ObjectMatchers),
 		Interfaces: map[string]Interface{},
 		Consumes: map[syntac.InterfaceID]string{},
+		pd.matchedAccountObjects:  map[semantics.ObjExpr]*matchedAccountObjs{}
 	}
 
 	for id, iSem := range pSem.Interfaces {
@@ -35,13 +36,13 @@ func NewProductDTAP(pID string, dtap string, isProd bool, pSem semantics.Product
 
 	for iid, dtapMapping := range pSem.Consumes {
 		if pd.IsProd {
+			// WIP
 			pd.Consumes[iid] = ""
 		} else {
 			pd.Consumes[iid] = dtapMapping[pd.DTAP]
 		}
 	}
 
-	pd.matchedAccountObjects = map[semantics.ObjExpr]*matchedAccountObjs{}
 	for k := range pd.Interface.ObjectMatchers {
 		p.matchedAccountObjects[k] = &matchedAccountObjects{}
 	}
@@ -80,19 +81,23 @@ func (pd *ProductDTAP) recalcObjects() {
 	pd.Interface.recalcObjectsFromMatched(pd.matchedAccountObjects)
 	for _, v := range pd.Interfaces {
 		v.recalcObjects(pd.accountObjects)
+		v.agggregate() // this will free memory held by AccountObjs by ObjExpr
 	}
+	pd.Interface.agggregate() // we needed to hold on to AccountObjs by ObjExpr until we derived all interface objects
 }
 
-func (p *ProductDTAP) createRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config,
+func (pd *ProductDTAP) createRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config,
 			      conn *sql.DB, productRoles map[ProductRole]struct{}) error {
-	for dtap := range p.pSem.DTAPs.All() {
-		for mode := range cnf.Modes {
-			productRole := newProductRole(synCnf, cnf, p.pSem.ID, dtap, mode)
-			if _, ok := productRoles[productRole]; !ok {
-				productRole.create(ctx, cnf, conn)	
-			}
+	if pd.hasProductRoles { return nil }
+	for mode := range cnf.Modes {
+		productRole := newProductRole(synCnf, cnf, pd.ProductID, pd.DTAP, mode)
+		if _, ok := productRoles[productRole]; !ok {
+			if err := productRole.create(ctx, cnf, conn); err != nil { return err }
 		}
 	}
+	pd.hasProductRoles = true
+	return nil
+	
 }
 
 func (pd *ProductDTAP) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{},
@@ -108,11 +113,25 @@ func (pd *ProductDTAP) grant_(ctx context.Context, synCnf *syntax.Config, cnf *C
 		createDBRoleGrants map[string]struct{}, c *accountCache) error {
 	if err := pd.refresh(ctx, cnf, conn, c); err != nil { return err }
 	if err := pd.createRoles(ctx, synCnf, cnf, conn, productRoles); err != nil { return err }
-	if err := pd.Interface.grant(ctx, synCnf, cnf, conn, createDBRoleGrants, pd.pSem.DTAPs, pd.pSem.ID, "", pd.pSem.ObjectMatchers, c); err != nil { return err }
+	if err := pd.Interface.grant(ctx, synCnf, cnf, conn, createDBRoleGrants, pd.ProductID, pd.DTAP, "", c); err != nil { return err }
 	for iid, i := range pd.Interfaces {
-		if err := i.grant(ctx, synCnf, cnf, conn, createDBRoleGrants, pd.DTAPs, pd.pSem.ID, iid, pd.pSem.Interfaces[iid].ObjectMatchers, c); err != nil { return err }
+		if err := i.grant(ctx, synCnf, cnf, conn, createDBRoleGrants, pd.ProductID, pd.DTAP, iid, c); err != nil { return err }
 	}
+	if err := DoGrants(ctx, cnf, conn, pd.getTodoGrants()); err != nil { return err }
 	return nil
+}
+
+func (pd *ProductDTAP) getToDoGrants() iter.Seq[Grant] {
+	return func(yield func(Grant) bool) {
+		if !pd.Interface.pushToDoGrants(yield) {
+			return
+		}
+		for _, i := range pd.Interfaces {
+			if !i.pushToDoGrants(yield) {
+				return
+			}
+		}
+	}
 }
 	
 
@@ -124,9 +143,4 @@ func (p *ProductDTAP) revoke(ctx context.Context, cnf *Config, conn *sql.DB) err
 		if err := i.revoke(ctx, cnf, conn, databaseRoles); err != nil { return err }
 	}
 	return nil
-}
-
-func (pSnow *ProductDTAP) tableCount() int {
-	// todo for basic stats, that one also needs some rewriting
-	return 0
 }

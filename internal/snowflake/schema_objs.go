@@ -39,50 +39,26 @@ func (o SchemaObjs) hasObject(k string) bool {
 	return ok
 }
 
+func (o SchemaObjs) countByObjType(t ObjType) int {
+	r := 0
+	for _, v := range o.Objects {
+		if o.ObjectType == t {
+			r += 1
+		}
+	}
+	return r
+}
+
 func (lhs SchemaObjs) add(rhs SchemaObjs) SchemaObjs {
 	// Note that when we add together SchemaObjs, we do so within an interface,
 	// where all ObjExpr are known to be disjoint from each other.
 	// Therefore we do not have to worry about different ObjAttr for the same key
 	if lhs.Objects == nil {
-		lhs.Objects = map[string]ObjAttr{}
+		return rhs
 	}
 	for k, v := range rhs.Objects {
 		lhs.Objects[k] = v
 	}
 	lhs.MatchAllObjects = lhs.MatchAllObjects || rhs.MatchAllObjects
 	return lhs
-}
-
-func (o SchemaObjs) setGrantTo(m Mode, p Privilege) SchemaObjs {
-	if o.GrantsTo == nil { o.GrantsTo = map[Mode]map[Privilege]struct{}{} }
-	if _, ok := o.GrantsTo[m]; !ok { o.GrantsTo[m] = map[Privilege]struct{}{} }
-	o.GrantsTo[m][p] = struct{}{}
-	return o
-}
-
-func (o SchemaObjs) hasGrantTo(m Mode, p Privilege) {
-	if v, ok := o.GrantsTo[m] {
-		_, ok = v[p]
-		return ok
-	}
-}
-
-func (o SchemaObjs) doGrant(ctx context.Context, cnf *Config, conn *sql.DB, db string, schema string, role string) error {
-	// WIP
-	if !o.hasGrantTo(ModeRead, PrvUsage) {
-		if err := GrantToRole{
-				Privilege: PrvUsage,
-				GrantedOn: ObjTpSchema,
-				Database: db,
-				Schema: schema,
-		}.DoGrantToDBRole(ctx, cnf, conn, db, role); err != nil {
-			return err
-		}
-	}
-	for obj, objAttr := range o.Objects {
-		if err := objAttr.doGrant(ctx, cnf, conn, db, schema, obj, role); err != nil {
-			return err
-		}
-	}
-	return nil
 }

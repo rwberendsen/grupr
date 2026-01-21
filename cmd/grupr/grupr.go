@@ -45,6 +45,7 @@ func main() {
 		log.Fatalf("get new grupin: %v", err)
 	}
 
+	/* TODO: consider implementing GrupinDiff
 	if *oldFlag != "" {
 		oldGrupin, err := util.GetGrupinFromPath(*oldFlag)
 		if err != nil {
@@ -59,6 +60,7 @@ func main() {
 		// expanding the object (exclude) expressions to sets of matching tables.
 		snowflake.NewGrupinDiff(grupinDiff)
 	}
+	*/
 
 	// Set up catching signals and context before we do network requests
 	sigs := make(chan signal.Signal, 1)

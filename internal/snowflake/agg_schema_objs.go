@@ -3,7 +3,9 @@ package snowflake
 type AggSchemaObjs struct {
 	Objects map[string]AggObjAttr
 	MatchAllObjects bool
-	GrantsTo map[Mode]map[Privilege]struct{}
+
+	// set while AggDBObjs.grant() is executing
+	isUsageGrantedToRead bool
 }
 
 func newSchemaObjs(db string, schema string, o *SchemaObjs, om semantics.ObjMatcher) SchemaObjs {
@@ -11,10 +13,7 @@ func newSchemaObjs(db string, schema string, o *SchemaObjs, om semantics.ObjMatc
 	r = r.setMatchAllObjects(db, om)
 	for k, v := range o.Objects {
 		if !om.DisjointFromObject(db.Name, schema, k) {
-			// Note how we create a new ObjAttr here; 
-			// similar to how we create new SchemaObjs and DBObjs;
-			// we do not want to share GrantsTo between them.
-			r.Objects[k] = ObjAttr{ObjectType: v.ObjectType, Owner: v.Owner,}
+			r.Objects[k] = AggObjAttr{ObjectType: v.ObjectType, Owner: v.Owner,}
 		}
 	}
 	return r
@@ -22,7 +21,10 @@ func newSchemaObjs(db string, schema string, o *SchemaObjs, om semantics.ObjMatc
 
 func newSchemaObjsFromMatched(m *matchedSchemaObjs) SchemaObjs {
 	r := SchemaObjs{
-		Objects: m.objects,
+		Objects: map[string]AggObjAttr,
+	}
+	for k, v := range m.objects {
+		r.Objects[k] = AggObjAttr{ObjectType: m.ObjectType, Owner: m.Owner,}
 	}
 	m.objects = nil // no need to retain all objects in memory, only schema version will do
 	return r
@@ -55,35 +57,33 @@ func (lhs SchemaObjs) add(rhs SchemaObjs) SchemaObjs {
 }
 
 func (o SchemaObjs) setGrantTo(m Mode, p Privilege) SchemaObjs {
-	if o.GrantsTo == nil { o.GrantsTo = map[Mode]map[Privilege]struct{}{} }
-	if _, ok := o.GrantsTo[m]; !ok { o.GrantsTo[m] = map[Privilege]struct{}{} }
-	o.GrantsTo[m][p] = struct{}{}
+	if m != ModeRead || p != PrvUsage { panic("not implemented") }
+	o.isUsageGrantedToRead = true
 	return o
 }
 
 func (o SchemaObjs) hasGrantTo(m Mode, p Privilege) {
-	if v, ok := o.GrantsTo[m] {
-		_, ok = v[p]
-		return ok
-	}
+	return m == ModeRead && p == PrvUsage && o.isUsageGranted { return true }
 }
 
-func (o SchemaObjs) doGrant(ctx context.Context, cnf *Config, conn *sql.DB, db string, schema string, role string) error {
-	// WIP
+func (o SchemaObjs) pushToDoGrants(yield func(Grant) bool, dbRole DatabaseRole, schema string) bool {
 	if !o.hasGrantTo(ModeRead, PrvUsage) {
-		if err := GrantToRole{
-				Privilege: PrvUsage,
-				GrantedOn: ObjTpSchema,
-				Database: db,
-				Schema: schema,
-		}.DoGrantToDBRole(ctx, cnf, conn, db, role); err != nil {
-			return err
+		if !yield(Grant{
+			Privilege: PrvUsage,
+			GrantedOn: ObjTpSchema,
+			Database: dbRole.Database,
+			Schema: schema,
+			GrantedTo: ObjTpDatabaseRole,
+			GrantedToDatabase: dbRole.Database,
+			GrantedToRole: dbRole.Name,
+		}) {
+			return false
 		}
 	}
 	for obj, objAttr := range o.Objects {
-		if err := objAttr.doGrant(ctx, cnf, conn, db, schema, obj, role); err != nil {
-			return err
+		if !objAttr.pushToDoGrants(yield, dbRole, schema, obj) {
+			return false
 		}
 	}
-	return nil
+	return true
 }

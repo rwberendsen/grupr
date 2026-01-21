@@ -48,6 +48,14 @@ func (o DBObjs) setMatchAllObjects(db string, om semantics.ObjMatcher) DBObjs {
 	return o
 }
 
+func (o DBObjs) countByObjType(t ObjType) int {
+	r := 0
+	for _, schema := range o.Schemas {
+		r += schema.countByObjType(t)
+	}
+	return r
+}
+
 func (lhs DBObjs) add(rhs DBObjs) DBObjs {
 	if lhs.Schemas == nil {
 		return rhs

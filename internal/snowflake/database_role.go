@@ -35,7 +35,7 @@ func NewDatabaseRole(synCnf *syntax.Config, cnf *Config, productID string, dtap 
 	return r
 }
 
-func NewDatabaseRoleFromString(synCnf *syntax.Config, cnf *Config, db string, role string) (DatabaseRole, error) {
+func newDatabaseRoleFromString(synCnf *syntax.Config, cnf *Config, db string, role string) (DatabaseRole, error) {
 	r := DatabaseRole{Name: role, Database: db,}
 	if !role.HasPrefix(cnf.Prefix) { return r, fmt.Errorf("role does not start with Grupr prefix: '%s'", r.Name) }
 	role = strings.TrimPrefix(role, cnf.Prefix)

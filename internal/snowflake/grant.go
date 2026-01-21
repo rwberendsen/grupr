@@ -268,12 +268,20 @@ func queryGrantsToRole(ctx context.Context, conn *sql.DB, db string, role string
 	}
 }
 
-
-func DoGrants(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq2[Grant, error]) error {
-	buf := [cnf.StmtBatchSize]string{}
+func DoGrants(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[Grant]) error {
+	// Runs grant statements in batches
+	buf := make([]string, cnf.StmtBatchSize)
 	i := 0
-	for g, err := range grants {
-		if err != nil { return err }
-		buf[i] := g.buildSQL()
+	for g := range grants {
+		if i == cnf.StmtBatchSize {
+			if err := runMultipleSQL(ctx, conn, slices.Join(buf, ";"), i); err != nil { return err }
+			i = 0
+		}
+		buf[i] := g.buildSQLGrant()
+		i++
 	}
+	if i > 0 {
+		if err := runMultipleSQL(ctx, conn, slices.Join(buf[0:i], ";"), i); err != nil { return err }
+	}
+	return nil
 }
