@@ -116,7 +116,8 @@ func (c *accountCache) matchObjects(ctx context.Context, conn *sql.DB, db string
 		if err != nil { return err }
 	}
 	o.version = c.dbs[db].schemas[schema].version
-	o.objects = map[string]ObjAttr{}
+	// Next, we overwrite whatever objects o may have had; but note that we would have set it to nil to save memory; see schema_objs.go
+	o.objects = map[string]ObjAttr{} 
 	for k, v := range c.dbs[db].schemas[schema].objects {
 		if !om.DisjointFromObject(db.Name, schema, k) {
 			o.objects[k] = v

@@ -10,19 +10,19 @@ import (
 
 type Interface struct {
 	ObjectMatchers semantics.ObjMatchers
-	AccountObjects map[semantics.ObjExpr]AccountObjs
+	accountObjects map[semantics.ObjExpr]AccountObjs
 
 	// set during calculating objects
 	tableCountsByUserGroup map[string]int
 	viewCountsByUserGroup map[string]int
 
-	aggAccountObjects AccountObjs
+	aggAccountObjects AggAccountObjs
 }
 
 func NewInterface(dtap string, oms semantics.ObjMatchers) Interface {
 	i := &Interface{
 		ObjectMatchers: semantics.ObjMatchers{},
-		AccountObjects: map[semantics.ObjExpr]*AccountObjs{},
+		accountObjects: map[semantics.ObjExpr]AccountObjs{},
 	}	
 	// Just take what you need from own DTAP
 	for e, om := range oms {
@@ -34,26 +34,29 @@ func NewInterface(dtap string, oms semantics.ObjMatchers) Interface {
 }
 
 func newInterfaceFromMatched(m map[semantics.ObjExpr]*matchedAccountObjects, oms semantics.ObjMatchers) *Interface {
-	i := &Interface{AccountObjects: map[semantics.ObjExpr]*AccountObjs{},}
+	i := &Interface{accountObjects: map[semantics.ObjExpr]*AccountObjs{},}
 	for e, om := range oms {
 		tmpAccountObjs = newAccountObjsFromMatched(m[e])
-		i.AccountObjects[e] = newAccountObjects(tmpAccountObjs, om)
+		i.accountObjects[e] = newAccountObjects(tmpAccountObjs, om)
 	}
 	return i
 }
 
-func (i Interface) refresh(m map[semantics.ObjExpr]*AccountObjects, oms semantics.ObjMatchers) Interface {
+func (i Interface) refresh(m map[semantics.ObjExpr]*accountObjects, oms semantics.ObjMatchers) Interface {
 	for e, om := range oms {
-		i.AccountObjects[e] = newAccountObjects(m[om.SubsetOf], om)
+		i.accountObjects[e] = newAccountObjects(m[om.SubsetOf], om)
 	}
 	return i
 }
 
-func (i Interface) setAggAccountObjects
+func (i Interface) setAggAccountObjects() {
+	i.aggAccountObjects = newAggAccountObjs(maps.Values(i.accountObjects))
+}
 
 func (i Interface) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, createDBRoleGrants map[string]struct{},
 		dtaps semantics.DTAPSpec, pID string, iID string, oms semantics.ObjMatchers, c *accountCache) error {
-	agg := AggAccountObjs(maps.Values(i.AccountObjects))
+	i.aggAccountObjects = newAggAccountObjs(maps.Values(i.accountObjects))
+	i.accountObjects = nil // no need to retain separate accountObjects per ObjExpr in memory anymore
 	for db, dbObjs := range agg.DBs {
 		if !c.hasDB(db) {
 			return ErrObjectNotExistOrAuthorized // db may have been dropped concurrently

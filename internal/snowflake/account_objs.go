@@ -29,15 +29,11 @@ func newAccountObjsFromMatched(m *matchedAccountObjs) *AccountObjs {
 }
 
 func (lhs AccountObjs) add(rhs AccountObjs) AccountObjs {
-	for dbL, dbObjL := range lhs.DBs {
-		if dbObjR, ok := rhs.DBs[dbL]; ok {
-			lhs[dbl] = dbObjL.add(dbObjR)
-		}
+	if lhs.DBs == nil { // not an expected scenario, but does not hurt
+		lhs.DBs = map[string]DBObjs{}
 	}
-	for dbR, dbObjR := range rhs.DBs {
-		if _, ok := lhs.DBs[dbR]; !ok {
-			lhs[dbR] = dbObjR
-		}
+	for k, v := range rhs.DBs {
+		lhs.DBs[k] = lhs.DBs[k].add(v)
 	}
 	return lhs
 }

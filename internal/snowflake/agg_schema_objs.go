@@ -1,7 +1,7 @@
 package snowflake
 
-type SchemaObjs struct {
-	Objects map[string]ObjAttr
+type AggSchemaObjs struct {
+	Objects map[string]AggObjAttr
 	MatchAllObjects bool
 	GrantsTo map[Mode]map[Privilege]struct{}
 }
