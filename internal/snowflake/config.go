@@ -22,7 +22,7 @@ type Config struct {
 	StmtBatchSize int
 	MaxProductDTAPRefreshes int
 	Modes [1]Mode
-	DatabaseRolePrivileges map[Mode]map[GrantToRole]struct{}
+	DatabaseRolePrivileges map[Mode]map[Grant]struct{}
 	DryRun bool
 }
 
@@ -129,29 +129,29 @@ q		return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_U
 		}
 	}
 
-	cnf.DatabaseRolePrivileges = map[Mode]map[GrantToRole]struct{}{}
-	cnf.DatabaseRolePrivileges[ModeRead] = map[GrantToRole]struct{}{
-		GrantToRole{
+	cnf.DatabaseRolePrivileges = map[Mode]map[Grant]struct{}{}
+	cnf.DatabaseRolePrivileges[ModeRead] = map[Grant]struct{}{
+		Grant{
 			Privilege: PrvUsage,
 			GrantedOn: ObjTpDatabase,
 		}: {},
-		GrantToRole{
+		Grant{
 			Privilege: PrvUsage,
 			GrantedOn: ObjTpSchema,
 		}: {},
-		GrantToRole{
+		Grant{
 			Privilege: PrvSelect,
 			GrantedOn: ObjTpTable,
 		}: {},
-		GrantToRole{
+		Grant{
 			Privilege: PrvSelect,
 			GrantedOn: ObjTpView,
 		}: {},
-		GrantToRole{
+		Grant{
 			Privilege: PrvReferences,
 			GrantedOn: ObjTpTable,
 		}: {},
-		GrantToRole{
+		Grant{
 			Privilege: PrvReferences,
 			GrantedOn: ObjTpView,
 		}: {},

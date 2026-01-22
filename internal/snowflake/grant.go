@@ -67,7 +67,7 @@ func newGrant(privilege string, createObjType string, grantedOn string, name str
 	g := Grant{
 		Privilege: ParsePrivilege(privilege),
 		CreateObjectType: ParseObjType(createObjType),
-		GrantedOn: PparseObjType(grantedOn),
+		GrantedOn: ParseObjType(grantedOn),
 		GrantedTo: grantedTo,
 		GrantedToDatabase: grantedToDatabase,
 		GrantedToRole: grantedToRole,
@@ -104,6 +104,8 @@ func newGrant(privilege string, createObjType string, grantedOn string, name str
 		g.Database = rec[0]
 		g.Schema = rec[1]
 		g.Object = rec[2]
+	default:
+		return g, fmt.Errorf("unsupported granted_on object type for grant")
 	}
 	return g, nil
 }
