@@ -54,7 +54,7 @@ func (g Grant) buildSQLGrant() string {
 		onClause = fmt.Sprintf(`ON %v %s`, g.GrantedOn, quoteIdentifier(g.Database))
 	case ObjTpSchema:
 		onClause = fmt.Sprintf(`ON %v %s.%s`, g.GrantedOn, quoteIdentifier(g.Database), quoteIdentifier(g.Schema))
-	case ObjTpTable || ObjTypeView:
+	case ObjTpTable, ObjTypeView:
 		onClause = fmt.Sprintf(`ON %v %s.%s.%s`, g.GrantedOn, quoteIdentifier(g.Database), quoteIdentifier(g.Schema), quoteIdentifier(g.Object))
 	default:
 		panic("Not implemented")
@@ -276,14 +276,14 @@ func DoGrants(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[Gr
 	i := 0
 	for g := range grants {
 		if i == cnf.StmtBatchSize {
-			if err := runMultipleSQL(ctx, conn, slices.Join(buf, ";"), i); err != nil { return err }
+			if err := runMultipleSQL(ctx, cnf, conn, slices.Join(buf, ";"), i); err != nil { return err }
 			i = 0
 		}
 		buf[i] := g.buildSQLGrant()
 		i++
 	}
 	if i > 0 {
-		if err := runMultipleSQL(ctx, conn, slices.Join(buf[0:i], ";"), i); err != nil { return err }
+		if err := runMultipleSQL(ctx, cnf, conn, slices.Join(buf[0:i], ";"), i); err != nil { return err }
 	}
 	return nil
 }

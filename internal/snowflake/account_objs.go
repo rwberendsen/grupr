@@ -29,6 +29,7 @@ func newAccountObjsFromMatched(m *matchedAccountObjs) AccountObjs {
 }
 
 func (lhs AccountObjs) add(rhs AccountObjs) AccountObjs {
+	// NB: this method will alter referenced maps
 	if lhs.DBs == nil {
 		return rhs
 	}
@@ -42,16 +43,6 @@ func (o AccountObjs) countByObjType(t ObjType) int {
 	r := 0
 	for _, db := range o.DBs {
 		r += db.countByObjType(t)
-	}
-	return r
-}
-
-func (o AccountObjs) ViewCount() int {
-	r := 0
-	for _, db := range o.DBs {
-		for _, schema := range db.Schemas {
-			r += len(schema.Views)
-		}
 	}
 	return r
 }

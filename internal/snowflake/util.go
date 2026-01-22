@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+
+	"github.com/snowflakedb/gosnowflake"
 )
 
 func runSQL(ctx context.Context, cnf *Config, conn *sql.DB, sql string, params ...any) error {
@@ -12,7 +14,27 @@ func runSQL(ctx context.Context, cnf *Config, conn *sql.DB, sql string, params .
 		printSQL(sql, params...)
 		return nil
 	}
-	if _, err := conn.ExecContext(ctx, sql, params...); err != nil { return err }
+	if _, err := conn.ExecContext(ctx, sql, params...); err != nil {
+		if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
+			err = ErrObjectNotExistOrAuthorized
+		}
+		return err
+	}
+	return nil
+}
+
+func runMultipleSQL(ctx context.Context, cnf *Config, conn *sql.DB, sql string, n int) error {
+	if cnf.DryRun {
+		fmt.Println(sql)
+		return nil
+	}
+	ctx = gosnowflake.WithMultiStatement(ctx, n)
+	if _, err := conn.ExecContext(ctx, sql); err != nil {
+		if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
+			err = ErrObjectNotExistOrAuthorized
+		}
+		return err
+	}
 	return nil
 }
 

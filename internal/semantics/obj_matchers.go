@@ -120,3 +120,17 @@ func (lhs ObjMatchers) setSubsetOf(rhs ObjMatchers) ObjMatchers {
 	return ret	
 }
 
+func (oms ObjMatchers) DisjointFromSchema(db string, schema string) bool {
+	for _, om := range oms {
+		if !om.DisjointFromSchema(db, schema) { return false }
+	}
+	return true
+}
+
+func (oms ObjMatchers) DisjointFromObject(db string, schema string, object string) bool {
+	for _, om := range oms {
+		if !om.DisjointFromObject(db, schema, object) { return false }
+	}
+	return true
+}
+

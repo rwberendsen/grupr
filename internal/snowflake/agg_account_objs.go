@@ -10,9 +10,9 @@ type AggAccountObjs struct {
 	DBs map[string]AggDBObjs
 }
 
-func newAggAccountObjs(agg AccountObjs) AggAccountObjs {
-	r := AggAccountObjs{DBs: map[string]AggDBObjs{},}
-	for db, dbObjs := range agg {
+func newAggAccountObjs(o AccountObjs) AggAccountObjs {
+	r := AggAccountObjs{DBs: make(map[string]AggDBObjs{}, len(o.DBs)),}
+	for db, dbObjs := range o.DBs {
 		r.DBs[db] = newAggDBObjs(dbObjs)	
 	}
 	return r

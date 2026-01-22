@@ -10,10 +10,7 @@ func newSchemaObjs(db string, schema string, o SchemaObjs, om semantics.ObjMatch
 	r = r.setMatchAllObjects(db, om)
 	for k, v := range o.Objects {
 		if !om.DisjointFromObject(db.Name, schema, k) {
-			// Note how we create a new ObjAttr here; 
-			// similar to how we create new SchemaObjs and DBObjs;
-			// we do not want to share GrantsTo between them.
-			r.Objects[k] = ObjAttr{ObjectType: v.ObjectType, Owner: v.Owner,}
+			r.Objects[k] = v
 		}
 	}
 	return r
@@ -50,6 +47,7 @@ func (o SchemaObjs) countByObjType(t ObjType) int {
 }
 
 func (lhs SchemaObjs) add(rhs SchemaObjs) SchemaObjs {
+	// NB: this method will alter referenced maps
 	// Note that when we add together SchemaObjs, we do so within an interface,
 	// where all ObjExpr are known to be disjoint from each other.
 	// Therefore we do not have to worry about different ObjAttr for the same key

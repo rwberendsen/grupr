@@ -57,6 +57,7 @@ func (o DBObjs) countByObjType(t ObjType) int {
 }
 
 func (lhs DBObjs) add(rhs DBObjs) DBObjs {
+	// NB this method will alter referenced maps
 	if lhs.Schemas == nil {
 		return rhs
 	}

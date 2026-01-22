@@ -50,7 +50,7 @@ func (g FutureGrant) buildSQLGrant() string {
 		}
 		inClause += fmt.Sprintf(`%v %s`, g.GrantedIn, quoteIdentifier(g.Database))
 	}
-	case ObjTpTable || ObjTpView: 
+	case ObjTpTable, ObjTpView: 
 		if g.Privilege != PrvSelect && g.Privilege != PrvReferences {
 			panic("Not implemented yet")
 		}
@@ -270,10 +270,19 @@ func queryFutureGrantsToRole(ctx context.Context, conn *sql.DB, db string, role 
 
 
 func DoFutureGrants(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq2[FutureGrant, error]) error {
-	buf := [cnf.StmtBatchSize]string{}
+	// Runs grant statements in batches
+	buf := make([]string, cnf.StmtBatchSize)
 	i := 0
-	for g, err := range grants {
-		if err != nil { return err }
-		buf[i] := g.buildSQL()
+	for g := range grants {
+		if i == cnf.StmtBatchSize {
+			if err := runMultipleSQL(ctx, cnf, conn, slices.Join(buf, ";"), i); err != nil { return err }
+			i = 0
+		}
+		buf[i] := g.buildSQLGrant()
+		i++
 	}
+	if i > 0 {
+		if err := runMultipleSQL(ctx, cnf, conn, slices.Join(buf[0:i], ";"), i); err != nil { return err }
+	}
+	return nil
 }

@@ -86,7 +86,7 @@ func (pd *ProductDTAP) recalcObjects() {
 	pd.Interface.agggregate() // we needed to hold on to AccountObjs by ObjExpr until we derived all interface objects
 }
 
-func (pd *ProductDTAP) createRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config,
+func (pd *ProductDTAP) createProductRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config,
 			      conn *sql.DB, productRoles map[ProductRole]struct{}) error {
 	if pd.hasProductRoles { return nil }
 	for mode := range cnf.Modes {
@@ -112,13 +112,36 @@ func (pd *ProductDTAP) grant(ctx context.Context, synCnf *syntax.Config, cnf *Co
 func (pd *ProductDTAP) grant_(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{},
 		createDBRoleGrants map[string]struct{}, c *accountCache) error {
 	if err := pd.refresh(ctx, cnf, conn, c); err != nil { return err }
-	if err := pd.createRoles(ctx, synCnf, cnf, conn, productRoles); err != nil { return err }
-	if err := pd.Interface.grant(ctx, synCnf, cnf, conn, createDBRoleGrants, pd.ProductID, pd.DTAP, "", c); err != nil { return err }
+	if err := pd.createProductRoles(ctx, synCnf, cnf, conn, productRoles); err != nil { return err }
+
+	// Future grants go first, so that as quickly as possible newly created objects will have correct privileges granted
+	if err := pd.Interface.setFutureGrants(ctx, synCnf, cnf, conn, createDBRoleGrants, pd.ProductID, pd.DTAP, "", c); err != nil { return err }
 	for iid, i := range pd.Interfaces {
-		if err := i.grant(ctx, synCnf, cnf, conn, createDBRoleGrants, pd.ProductID, pd.DTAP, iid, c); err != nil { return err }
+		if err := i.setFutureGrants(ctx, synCnf, cnf, conn, createDBRoleGrants, pd.ProductID, pd.DTAP, iid, c); err != nil { return err }
+	}
+	if err := DoFutureGrants(ctx, cnf, conn, pd.getTodoFutureGrants()); err != nil { return err }
+
+	// Now, regular grants
+	if err := pd.Interface.setGrants(ctx, synCnf, cnf, conn, c); err != nil { return err }
+	for iid, i := range pd.Interfaces {
+		if err := i.setGrants(ctx, synCnf, cnf, conn, c); err != nil { return err }
 	}
 	if err := DoGrants(ctx, cnf, conn, pd.getTodoGrants()); err != nil { return err }
+
 	return nil
+}
+
+func (pd *ProductDTAP) getToDoFutureGrants() iter.Seq[FutureGrant] {
+	return func(yield func(FutureGrant) bool) {
+		if !pd.Interface.pushToDoFutureGrants(yield) {
+			return
+		}
+		for _, i := range pd.Interfaces {
+			if !i.pushToDoFutureGrants(yield) {
+				return
+			}
+		}
+	}
 }
 
 func (pd *ProductDTAP) getToDoGrants() iter.Seq[Grant] {
