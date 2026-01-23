@@ -16,7 +16,13 @@ type AggDBObjs struct {
 	revokeGrantsToRead			map[Grant]struct{}
 	isUsageGrantedToRead			bool
 	isUsageGrantedToFutureSchemas		bool
-	isPrivilegeGrantedToFutureObject	[2][2]bool // [ObjectType][Privilege]
+
+	// Small lookup table, first index rows, second index columns
+	//   		0: PrvSelect	1: PrvRefernces
+	// 0: ObjTable
+	// 1: ObjView
+	//
+	isPrivilegeGrantedToFutureObject	[2][2]bool 
 }
 
 func newAggDBObjs(o DBObjs) AggDBObjs {
@@ -39,15 +45,31 @@ func (o AggDBObjs) hasObject(s string, obj string) bool {
 	return o.hasSchema(s) && o.Schemas[s].hasObject(obj)
 }
 
-func (o AggDBObjs) setFutureGrantTo(m Mode, grantedOn ObjType, p privilege) AggDBObjs {
-	fObjTp := func (ot ObjType) int {
-		if ot == ObjTpTable { return 0 }
+// Specifically for AggDBObjs.isPrivilegeGrantedToFutureObject
+func (_ AggDBObjs) getObjTypeIdx(ot ObjType) int {
+	switch ot {
+	case ObjTpTable:
+		return 0
+	case ObjView:
 		return 1
+	default:
+		panic("object type not implemented")
 	}
-	fPrv := func (p Privilege) int {
-		if p == PrvSelect { return 0 }
+}
+
+// Specifically for AggDBObjs.isPrivilegeGrantedToFutureObject
+func (_ AggDBObjs) getPrivilegeIdx(ot ObjType) int {
+	switch ot {
+	case PrvSelect:
+		return 0
+	case PrvReferences:
 		return 1
+	default:
+		panic("object type not implemented")
 	}
+}
+
+func (o AggDBObjs) setFutureGrantTo(_ Mode, grantedOn ObjType, p privilege) AggDBObjs {
 	switch grantedOn {
 	case ObjTpSchema:
 		switch p {
@@ -59,25 +81,12 @@ func (o AggDBObjs) setFutureGrantTo(m Mode, grantedOn ObjType, p privilege) AggD
 	case ObjTpTable, ObjTpView:
 		switch p {
 		case PrvSelect, PrvReferences:
-			o.isPrivilegeGrantedToFutureObject[fObjTp(grantedOn)][fPrv(privilege)] = true
-		default:
-			panic("unsupported privilege on table or view")
-		}
-	default:
-		panic("unsupported granted_on object type")
+			o.isPrivilegeGrantedToFutureObject[o.getObjTypeIdx(grantedOn)][o.getPrivilegeIdx(p)] = true
 	}
 	return o
 }
 
 func (o AggDBObjs) hasFutureGrantTo(m Mode, grantedOn ObjType, p Privilege) bool {
-	fObjTp := func (ot ObjType) int {
-		if ot == ObjTpTable { return 0 }
-		return 1
-	}
-	fPrv := func (p Privilege) int {
-		if p == PrvSelect { return 0 }
-		return 1
-	}
 	switch grantedOn {
 	case ObjTpSchema:
 		switch p {
@@ -87,7 +96,7 @@ func (o AggDBObjs) hasFutureGrantTo(m Mode, grantedOn ObjType, p Privilege) bool
 	case ObjTpTable, ObjTpView:
 		switch p {
 		case PrvSelect, PrvReferences:
-			return o.isPrivilegeGrantedToFutureObject[fObjTp(grantedOn)][fPrv(privilege)]
+			return o.isPrivilegeGrantedToFutureObject[o.getObjTypeIdx(grantedOn)][o.getPrivilegeIdx(p)]
 		}
 	}
 	return false
@@ -155,26 +164,21 @@ func (o AggDBObjs) setFutureGrants(ctx context.Context, synCnf *syntax.Config, c
 					panic("unsupported granted_on object type in future grant")
 				}
 			case ObjTpSchema:
-				switch g.GrantedOn {
-				case ObjTpTable, ObjTpView:
-					if o.hasSchema(g.Schema) {
-						if o.Schemas[g.Schema].MatchAllObjects {
-							o.Schemas[g.Schema] = o.Schemas[g.Schema].setFutureGrantTo(ModeRead, g.GrantedOn, g.Privilege)
-						} else {
-							o = o.setRevokeFutureGrantTo(ModeRead, g)
-						}
+				if o.hasSchema(g.Schema) {
+					if o.Schemas[g.Schema].MatchAllObjects {
+						o.Schemas[g.Schema] = o.Schemas[g.Schema].setFutureGrantTo(ModeRead, g.GrantedOn, g.Privilege)
 					} else {
-						// TODO: A rare oddity. A schema was added after we loaded account objects,
-						// and future grants were granted in it to our database role, no less.
-						// We could now check if indeed in that schema our expressions would
-						// match all or not, e.g., my_db.my_schema.*, or my_db.my*.* would be
-						// expressions that match all objects in my_db.my_schema; if there is
-						// any such om in oms, we could decide the leave the future grant alive
-						// But for now, we'll add it to our grants to revoke 
 						o = o.setRevokeFutureGrantTo(ModeRead, g)
 					}
-				default:
-					panic("unsupported granted_on object type in future grant")
+				} else {
+					// TODO: A rare oddity. A schema was added after we loaded account objects,
+					// and future grants were granted in it to our database role, no less.
+					// We could now check if indeed in that schema our expressions would
+					// match all or not, e.g., my_db.my_schema.*, or my_db.my*.* would be
+					// expressions that match all objects in my_db.my_schema; if there is
+					// any such om in oms, we could decide the leave the future grant alive
+					// But for now, we'll add it to our grants to revoke 
+					o = o.setRevokeFutureGrantTo(ModeRead, g)
 				}
 			default:
 				panic("unsupported granted_in object type in future grant")

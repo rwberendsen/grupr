@@ -104,6 +104,7 @@ func (g *Grupin) ManageAccessProd(ctx context.Context, synCnf *syntax.Config, cn
 	if err := g.setCreateDBRoleGrants(ctx, cnf, conn); err != nil { return err }
 	if err := g.grantProd(ctx, cnf, conn); err != nil { return err }
 	if err := g.revokeProd(ctx, cnf, conn); err != nil { return err }
+	if err := g.dropDatabaseRoles(ctx, synCnf, cnf, conn); err != nil { return err }
 	if err := g.dropProductRoles(ctx, synCnf, cnf, conn); err != nil { return err }
 	g.hasProdAccessManaged = true
 	return nil
@@ -222,7 +223,7 @@ func (g *Grupin) dropProductRoles(ctx context.Context, cnf *Config, conn *sql.DB
 				continue // no need to drop this role
 			}
 		}
-		if err := r.Drop(ctx, cnf, conn, r.ID); err != nil { return err }
+		if err := r.Drop(ctx, cnf, conn); err != nil { return err }
 	}
 }
 
@@ -232,17 +233,17 @@ func (g *Grupin) dropDatabaseRoles(ctx context.Context, cnf *Config, conn *sql.D
 			if pSem, ok := g.Sem.Products[r.ProductID]; ok {
 				if pSem.DTAPs.HasDTAP(r.DTAP) {
 					if r.InterfaceID == "" {
-						if pSem.ObjectMatchers.MatchObjectsInDB(db.Name) {
+						if !pSem.ObjectMatchers.DisjointFromDB(db) {
 							continue // this role is still needed
 						}
 					} else if iSem, ok := pSem.Interfaces[r.InterfaceID]; ok {
-						if iSem.ObjectMatchers.MatchObjectsInDB(db.Name) {
+						if !iSem.ObjectMatchers.DisjointFromDB(db) {
 							continue // this role is still needed
 						}
 					}
 				}
 			}
-			if err := r.Drop(ctx, conn); err != nil { return err }
+			if err := r.Drop(ctx, cnf, conn); err != nil { return err }
 		}
 	}
 }

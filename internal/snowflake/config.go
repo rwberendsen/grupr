@@ -15,7 +15,7 @@ type Config struct {
 	Schema string
 	UseSQLOpen bool
 	RSAKeyPath string
-	ObjectPrefix string // for objects created by Grupr in Snowflake
+	ObjectPrefix string // for objects (roles) created by Grupr in Snowflake
 	MaxOpenConns int
 	MaxIdleConns int
 	MaxProductDTAPThreads int

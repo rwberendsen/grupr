@@ -11,19 +11,24 @@ import (
 )
 
 type Grant struct {
-	Privileges 		map[PrivilegeComplete]struct{}
-	GrantedOn 		ObjType
-	Database		string
-	Schema			string
-	Object			string
-	// Note how Role is not the grantee, but the object on which a privilege is granted;
-	// it can be the name of a database role, if GrantedOn == ObjTpDatabaseRole
-	Role			string 
-	GrantedTo		ObjType
-	GrantedToDatabase	string
-	GrantedToRole		string
-	GrantOption		bool // TODO: if we re-grant the same grant with a different grant option, does it get overwritten? Could be a way to correct such mishaps
-	GrantedBy		string
+	Privileges 			map[PrivilegeComplete]struct{}
+	GrantedOn 			ObjType
+	Database			string
+	Schema				string
+	Object				string
+	GrantedRole			string 
+	// How we chose to define roles that are managed by Grupr; since we may use this field in a filter as well, we use a pointer
+	// TODO: consider using an alternative grant filter type especially for this purpose
+	GrantedRoleStartsWithPrefix	*bool 
+	GrantedTo			ObjType
+	GrantedToDatabase		string
+	GrantedToRole			string
+	// How we chose to define roles that are managed by Grupr; since we may use this field in a filter as well, we use a pointer
+	// TODO: consider using an alternative grant filter type especially for this purpose
+	GrantedToRoleStartsWithPrefix	*bool
+	GrantOption			bool // TODO: if we re-grant the same grant with a different grant option, does it get overwritten? Could be a way to correct such mishaps
+	GrantedBy			string
+	// TODO: consider using struct packing to align better and have more compact memory layout
 }
 
 func (g Grant) buildSQLGrant() string {
@@ -46,7 +51,7 @@ func (g Grant) buildSQLGrant() string {
 	}
 	
 	// GRANT <privileges> ... TO ROLE
-	privilegeClause := strings.Join(g.Privileges.Keys(), `, `)
+	privilegeClause := strings.Join(maps.Keys(g.Privileges), `, `)
 	
 	var onClause string
 	switch g.GrantedOn {
@@ -62,15 +67,16 @@ func (g Grant) buildSQLGrant() string {
 	return fmt.Sprintf(`GRANT %s %s %s`, privilegeClause, onClause, toClause)
 }
 
-func newGrant(privilege string, createObjType string, grantedOn string, name string, grantedTo ObjType,
-		grantedToDatabase string, grantedToRole string, grantOption bool, grantedBy string) (Grant, error) {
+func newGrant(privilege string, createObjType string, grantedOn string, name string, grantedRoleStartsWithPrefix bool, grantedTo ObjType,
+		grantedToDatabase string, grantedToRole string, grantedToRoleStartsWithPrefix bool, grantOption bool, grantedBy string) (Grant, error) {
 	g := Grant{
-		Privilege: ParsePrivilege(privilege),
-		CreateObjectType: ParseObjType(createObjType),
+		Privileges: map[PrivilegeComplete]struct{}{ParsePrivilegeComplete(privilege, createObjType): {}},
+		GrantedRoleStartsWithPrefix: grantedRoleStartsWithPrefix,
 		GrantedOn: ParseObjType(grantedOn),
 		GrantedTo: grantedTo,
 		GrantedToDatabase: grantedToDatabase,
 		GrantedToRole: grantedToRole,
+		GrantedToRoleStartsWithPrefix: grantedToRoleStartsWithPrefix,
 		GrantOption: grantOption,
 		GrantedBy: grantedBy,
 	}
@@ -94,9 +100,9 @@ func newGrant(privilege string, createObjType string, grantedOn string, name str
 		g.Database = rec[0]
 	case ObjTpDatabaseRole:
 		g.Database = rec[0]
-		g.Role = rec[1]
+		g.GrantedRole = rec[1]
 	case ObjTpRole:
-		g.Role = rec[0]
+		g.GrantedRole = rec[0]
 	case ObjTpSchema:
 		g.Database = rec[0]
 		g.Schema = rec[1]
@@ -110,49 +116,47 @@ func newGrant(privilege string, createObjType string, grantedOn string, name str
 	return g, nil
 }
 
-func QueryGrantsToRoleFiltered(ctx context.Context, conn *sql.DB, role string,
-		match map[Grant]struct{}, notMatch map[Grant]struct{}) iter.Seq2[Grant, error] {
-	return queryGrantsToRole(ctx, conn, "", role, match, notMatch, 0)
+func QueryGrantsToRoleFiltered(ctx context.Context, cnf *Config, conn *sql.DB, role string,
+		grantedToRoleStartsWithPrefix bool, match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}) iter.Seq2[Grant, error] {
+	return queryGrantsToRole(ctx, cnf, conn, "", role, grantedToRoleStartsWithPrefix, match, notMatch, 0)
 }
 
-func QueryGrantsToDBRoleFiltered(ctx context.Context, conn *sql.DB, db string, role string,
-		match map[Grant]struct{}, notMatch map[Grant]struct{}) iter.Seq2[Grant, error] {
-	return queryGrantsToRole(ctx, conn, db, role, match, notMatch, 0)
+func QueryGrantsToDBRoleFiltered(ctx context.Context, cnf *Config, conn *sql.DB, db string, role string,
+		grantedToRoleStartsWithPrefix bool, match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}) iter.Seq2[Grant, error] {
+	return queryGrantsToRole(ctx, cnf, conn, db, role, grantedToRoleStartsWithPrefix, match, notMatch, 0)
 }
 
-func QueryGrantsToRole(ctx context.Context, conn *sql.DB, role string) iter.Seq2[Grant, error] {
-	return queryGrantsToRole(ctx, conn, "", role, nil, nil, 0)
+func QueryGrantsToRole(ctx context.Context, cnf *Config, conn *sql.DB, role string, grantedToRoleStartsWithPrefix bool) iter.Seq2[Grant, error] {
+	return queryGrantsToRole(ctx, cnf, conn, "", role, grantedToRoleStartsWithPrefix, nil, nil, 0)
 }
 
-func QueryGrantsToDBRole(ctx context.Context, conn *sql.DB, db string, role string) iter.Seq2[Grant, error] {
-	return queryGrantsToRole(ctx, conn, db, role, nil, nil, 0)
+func QueryGrantsToDBRole(ctx context.Context, cnf *Config, conn *sql.DB, db string, role string, grantedToRoleStartsWithPrefix bool) iter.Seq2[Grant, error] {
+	return queryGrantsToRole(ctx, cnf, conn, db, role, grantedToRoleStartsWithPrefix, nil, nil, 0)
 }
 
-func QueryGrantsToRoleFilteredLimit(ctx context.Context, conn *sql.DB, role string,
-		match map[Grant]struct{}, notMatch map[Grant]struct{}, limit int) iter.Seq2[Grant, error] {
-	return queryGrantsToRole(ctx, conn, "", role, match, notMatch, limit)
+func QueryGrantsToRoleFilteredLimit(ctx context.Context, cnf *Config, conn *sql.DB, role string,
+		grantedToRoleStartsWithPrefix, match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}, limit int) iter.Seq2[Grant, error] {
+	return queryGrantsToRole(ctx, cnf, conn, "", role, grantedToRoleStartsWithPrefix, match, notMatch, limit)
 }
 
-func (g Grant) buildSQLFilter(g Grant) (string, int) {
-	// zero values
-	var privilege Privilege
-	var createObjectType ObjType
-	var grantedOn ObjType
-
+func (g Grant) buildSQLFilter(g GrantTemplate) (string, int) {
 	clauses := []string{}
-	if g.Privilege != privilege {
+	if g.Privilege != PrvOther {
 		clauses = append(clauses, fmt.Sprintf("privilege = '%v'", g.Privilege))	
-		if g.Privilege == PrvCreate && g.CreateObjectType != createObjectType {
+		if g.Privilege == PrvCreate && g.CreateObjectType != ObjTpOther {
 			clauses = append(clauses, fmt.Sprintf("create_object_type = '%v'", g.CreateObjectType))
 		}
 	}
-	if g.GrantedOn != grantedOn {
+	if g.GrantedOn != ObjTpOther {
 		clauses = append(clauses, fmt.Sprintf("granted_on = '%v'", g.GrantedOn))
+	}
+	if (g.GrantedOn == ObjTpRole || g.GrantedOn == ObjTpDatabaseRole) && g.GrantedRoleStartsWithPrefix != nil {
+		clauses = append(clauses, fmt.Sprintf("granted_role_starts_with_prefix = '%s'", boolToString(*g.GrantedRoleStartsWithPrefix)))
 	}
 	return strings.Join(clauses, " AND "), len(clauses)
 }
 
-func buildSQLGrants(grants map[Grant]struct{}) (string, int) {
+func buildSQLGrants(grants map[GrantTemplate]struct{}) (string, int) {
 	clauses = []string{}
 	for g := range grants {
 		s, l := buildSQLFilter(g)
@@ -163,7 +167,7 @@ func buildSQLGrants(grants map[Grant]struct{}) (string, int) {
 	return strings.Join(clauses, " OR\n"), len(clauses)
 }
 
-func buildSLQMatch(match map[Grant]struct{}, notMatch map[Grant]struct{}) (string, int) {
+func buildSLQMatch(match map[GrantTemplate]struct{}, notMatch map[Grant]struct{}) (string, int) {
 	clauses := []string{}
 	if match != nil {
 		s, l := buildSQLGrants(match)
@@ -185,7 +189,7 @@ func buildSLQMatch(match map[Grant]struct{}, notMatch map[Grant]struct{}) (strin
 	return strings.Join(clauses, "\nAND\n"), len(clauses)
 }
 
-func buildSQLQueryGrants(db string, role string, match map[Grant]struct{}, notMatch map[Grant]struct{}, limit int) string {
+func buildSQLQueryGrants(db string, role string, match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}, limit int) string {
 	// fetch grants for DATABASE ROLE if needed, rather than ROLE
 	var dbClause string
 	granteeName := quoteIdentifier(role)
@@ -214,6 +218,7 @@ func buildSQLQueryGrants(db string, role string, match map[Grant]struct{}, notMa
     END AS create_object_type
   , "granted_on"	AS granted_on
   , "name"		AS name
+  , WIP XXX TODO AS granted_role_starts_with_prefix"
   , "grant_option"	AS grant_option
   , "granted_by"	AS granted_by
 FROM $1%s`, dbClause, granteeName, whereClause)
@@ -225,8 +230,8 @@ FROM $1%s`, dbClause, granteeName, whereClause)
 	return
 }
 
-func queryGrantsToRole(ctx context.Context, conn *sql.DB, db string, role string,
-		match map[Grant]struct{}, notMatch map[Grant]struct{}, limit int) iter.Seq2[Grant, error] {
+func queryGrantsToRole(ctx context.Context, cnf *Config, conn *sql.DB, db string, role string,
+		grantedToRoleStartsWithPrefix, match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}, limit int) iter.Seq2[Grant, error] {
 	// Note that both db and string will be quoted before going to Snowflake, so
 	// if the names in Snowflake are upper case, present them here in upper case, too.
 	grantedTo := ObjTpRole
@@ -247,15 +252,17 @@ func queryGrantsToRole(ctx context.Context, conn *sql.DB, db string, role string
 		for rows.Next() {
 			var privilege string
 			var createObjectType string
+			var grantedRoleStartsWithPrefix bool
 			var grantedOn string
 			var name string
 			var grantOption bool
 			var grantedBy string
-			if err = rows.Scan(&privilege, &createObjectType, &grantedOn, &name, &grantOption, &grantedBy); err != nil {
+			if err = rows.Scan(&privilege, &createObjectType, &grantedRoleStartsWithPrefix, &grantedOn, &name, &grantOption, &grantedBy); err != nil {
 				yield(Grant{}, err)
 				return
 			}
-			g, err := newGrant(privilege, createObjectType, grantedOn, name, grantedTo, db, role, grantOption, grantedBy)
+			// NB: the caller decides which role to query, and therefore knows if the role starts with the prefix from Cnf
+			g, err := newGrant(privilege, createObjectType, grantedRoleStartsWithPrefix, grantedOn, name, grantedTo, db, role, grantedToRoleStartsWithPrefix, grantOption, grantedBy)
 			if err != nil {
 				yield(Grant{}, err}
 			}

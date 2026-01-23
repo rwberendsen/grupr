@@ -48,8 +48,8 @@ func (r ProductRole) Create(ctx context.Context, cnf *Config, conn *sql.DB) erro
 func (r ProductRole) hasUnmanagedPrivileges(ctx context.Context, cnf *Config, conn *sql.DB) (bool, error) {
 	// TODO put the privileges in cnf
 	for grant, err := range QueryGrantsToRoleFilteredLimit(ctx, conn, r.ID, nil,
-		map[GrantToRole]struct{}{
-			GrantToRole{
+		map[Grant]struct{}{
+			Grant{
 				Privilege: PrvUsage,
 				GrantedOn: ObjTpDatabaseRole,
 				GrantedBy: cnf.Role,
@@ -66,11 +66,10 @@ func (r ProductRole) Drop(ctx context.Context, cnf *Config, conn *sql.DB) error 
 	if has, err := r.hasUnmanagedPrivileges(ctx, cnf, conn); err != nil {
 		return err
 	} else if has {
-		log.Printf("role %s has privileges not managed by Grupr, skipping dropping\n", r.ID)
+		log.Printf("role %v has privileges not managed by Grupr, skipping dropping\n", r)
 		return nil
 	}
-	if err := runSQL(ctx, cnf, conn, `DROP ROLE IF EXISTS IDENTIFIER(?)`, r.ID); err != nil { return err }
-	return nil
+	return runSQL(ctx, cnf, conn, `DROP ROLE IF EXISTS IDENTIFIER(?)`, r.ID)
 }
 
 func (r ProductRole) String() string {

@@ -93,6 +93,7 @@ func (g Grupin) allConsumedOk() error {
 				return &PolicyError{fmt.Sprintf("product '%s' not allowed to consume own interface '%s'", iid.ProductID, iid.ID)}
 			}
 			if p.Classification < g.Products[iid.ProductID].Interfaces[iid.ID].Classification {
+				// TODO: consider removing this policy rule, possibly too strict
 				return &PolicyError{fmt.Sprintf("product '%s' consumes interface with higher classification", p.ID)}
 			}
 			// Check specified DTAP mappings
@@ -111,6 +112,8 @@ func (g Grupin) allConsumedOk() error {
 					}
 				}
 			}
+			// TODO: also add this product to a mapping ConsumedBy maintained on the interface, for easy reverse lookup
+			// TODO: add a HideDTAPs set property to InterfaceMetadata, and union it between product and interface, and respect it here in validation
 		}
 		for id, im := range p.Interfaces {
 			if im.ForProduct != nil {
