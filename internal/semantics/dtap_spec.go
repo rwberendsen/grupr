@@ -50,6 +50,10 @@ func (spec DTAPSpec) HasDTAP(dtap string) bool {
 	return ok
 }
 
+func (spec DTAPSpec) IsProd(dtap string) bool {
+	return spec.Prod != nil && dtap == *spec.Prod
+}
+
 func (spec DTAPSpec) All() iter.Seq[string] {
 	return func(yield func(string)) {
 		if spec.Prod != nil {

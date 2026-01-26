@@ -48,9 +48,6 @@ func NewGrupin(ctx context.Context, cnf *Config, conn *sql.DB, g semantics.Grupi
 			r.NonProd[pID][dtap] = NewProductDTAP(pID, dtap, pSem)
 		}
 	}
-
-	// WIP populate ConsumedBy
-
 }
 
 func (g *Grupin) SetObjectsProd(ctx context.Context, cnf *Context, conn *sql.DB) error {
@@ -128,7 +125,6 @@ func (g *Grupin) ManageAccessNonProd(ctx context.Context, synCnf *syntax.Config,
 	return nil
 }
 
-
 func (g *grupin) grantProd(ctx context.context, synCnf *syntax.Config, cnf *Config, conn *sql.db) error {
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(cnf.MaxProductDTAPThreads)
@@ -138,6 +134,13 @@ func (g *grupin) grantProd(ctx context.context, synCnf *syntax.Config, cnf *Conf
 	for _, pd := range g.Prod {
 		for iid := range pd.Consumes {
 			// grant relevant database roles to product read role
+			// WIP
+			// basic idea would be we check that product role is assigned right grupr database roles, grant them if not, and revoke any wrongfully granted
+			// but then also we iterate (later?) over all database roles, and check that they are granted to the right grupr product roles, grant them if not, and revoke any wrongfully granted.
+			// that second loop may be superfluous: if the database roles are granted to wrong grupr roles that should still exist, then the first loop would have taken care of that.
+			// if the product roles should not exist anymore, we will drop those later, and that would revoke those grants already.
+			// but perhaps we insist that grupr managed database roles should not be granted to any other role, not even non-grupr managed, and then in the second loop we might revoke that.
+			// but we might also say that if people want to use grupr managed database role, and grant them to other roles, maybe grupr doesn't have to interfere with that.
 		}
 	}
 }

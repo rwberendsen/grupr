@@ -52,15 +52,11 @@ func newProduct(cnf *Config, pSyn syntax.Product, classes map[string]syntax.Clas
 			}
 		}
 		for k, _ := range cs.DTAPMapping {
-			if _, ok := pSem.DTAPs.NonProd[k]; !ok {
-				return pSem, fmt.Errorf("Unknown non-production DTAP specified in consumption spec dtap mapping")
+			if !pSem.DTAPs.HasDTAP(k) {
+				return pSem, fmt.Errorf("Unknown DTAP specified in consumption spec dtap mapping")
 			}
 		}
-		if cs.DTAPMapping == nil {
-			pSem.Consumes[cs.InterfaceID] = map[string]string{} // default means one-to-one
-		} else {
-			pSem.Consumes[cs.InterfaceID] = cs.DTAPMapping
-		}
+		pSem.Consumes[cs.InterfaceID] = cs.DTAPMapping
 	}
 	return pSem, nil
 }

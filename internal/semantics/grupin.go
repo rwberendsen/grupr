@@ -80,10 +80,12 @@ func NewGrupin(cnf *Config, gSyn syntax.Grupin) (Grupin, error) {
 func (g Grupin) allConsumedOk() error {
 	for _, p := range g.Products {
 		for iid, dtapMapping := range p.Consumes {
-			if _, ok := g.Products[iid.ProductID]; !ok {
+			pSource, ok := g.Products[iid.ProductID]
+			if !ok {
 				return &SetLogicError{fmt.Sprintf("product '%s': consumed interface '%s': product not found", p.ID, iid)}
 			}
-			if _, ok := g.Products[iid.ProductID].Interfaces[iid.ID]; !ok {
+			isSource, ok := pSource.Interfaces[iid.ID]
+			if !ok {
 				return &SetLogicError{
 					fmt.Sprintf("product '%s': consumed interface '%s': interface not found", p.ID, iid),
 				}
@@ -92,7 +94,7 @@ func (g Grupin) allConsumedOk() error {
 			if iid.ProductID == p.ID {
 				return &PolicyError{fmt.Sprintf("product '%s' not allowed to consume own interface '%s'", iid.ProductID, iid.ID)}
 			}
-			if p.Classification < g.Products[iid.ProductID].Interfaces[iid.ID].Classification {
+			if p.Classification < iSource.Classification {
 				// TODO: consider removing this policy rule, possibly too strict
 				// It might be useful to keep it, if e.g., you are using masking or hashing directives in the YAML,
 				// then when you define those, you lower the classification of the interface accordingly; 
@@ -103,35 +105,27 @@ func (g Grupin) allConsumedOk() error {
 				// unmasked and unhashed data.
 				return &PolicyError{fmt.Sprintf("product '%s' consumes interface with higher classification", p.ID)}
 			}
-			// Check specified DTAP mappings first
-			for dtapSelf, dtapSource := range dtapMapping {
-				if !g.Products[iid.ProductID].DTAPs.HasDTAP(dtapSource)
-					return &SetLogicError{fmt.Sprintf("product '%s': consumed interface '%s': dtap '%s': dtap not found", p.ID, iid, dtapSource)}
+			// If a dtap mapping is specified, it means 
+			// - product only wants to consume source interface in specified dtaps
+			// - designated source dtaps have to exist (though they are allowed to be hidden)
+			// If no dtap mapping is specified, it is interpreted as if all DTAPs want to consume from a source DTAP with the same name.
+			if dtapMapping == nil {
+				dtapMapping = map[string]string{}
+				for d := range p.DTAPs.All() {
+					dtapMapping[d] = d
 				}
-				g.Products[iid.ProductID].Interfaces[iid.ID].ConsumedBy[dtapSource][ProductDTAPID{ProductID: p.ID, DTAP: dtapSelf,}] = struct{}{}
-			}
-			// For non production DTAPs not specified in dtapMapping, check that a non-prod DTAP with the same name exists in the consumed product;
-			// It should not be a prod DTAP in the consumed product; because in a one to one mapping we would expect not just the names but also
-			// the nature of the DTAPs to be the same; 
-			for dtapSelf := range p.DTAPs.NonProd {
-				if _, ok := dtapMapping[dtapSelf]; !ok {
-					if _, ok := g.Products[iid.ProductID].DTAPs.NonProd[dtapSelf]; !ok {
-						return &SetLogicError{fmt.Sprintf("product '%s': consumed interface '%s': dtap '%s': dtap not found", p.ID, iid, dtapSelf)}
-					}
-					g.Products[iid.ProductID].Interfaces[iid.ID].ConsumedBy[dtapSelf][ProductDTAPID{ProductID: p.ID, DTAP: dtapSelf,}] = struct{}{}
-				}
-				// we already processed this just above
 			}
 
-			// Finally, add the prod DTAP to ConsumedBy as well, if both self and source interface have a prod dtap
-			// So, apparently, we assume for all non prod dtaps that self has that a valid dtap, interface combination from source must be consumed.
-			// But, if seld has a prod dtap, but source does not, then it's okay.
-			if p.DTAPS.Prod != nil {
-				if g.Products[iid.ProductID].DTAPs.Prod != nil {
-					g.Products[iid.ProductID].Interfaces[iid.InterfaceID].ConsumedBy[g.Products[iid].DTAPs.Prod][ProductDTAPID{ProductID: p.ID, DTAP: p.DTAPs.Prod,}] = struct{}{}
-				} 
+			// Check specified DTAP mappings first
+			for dtapSelf, dtapSource := range dtapMapping {
+				if !pSource.DTAPs.HasDTAP(dtapSource) {
+					return &SetLogicError{fmt.Sprintf("product '%s': consumed interface '%s': dtap '%s': dtap not found", p.ID, iid, dtapSource)}
+				}
+				if p.DTAPs.IsProd(dtapSelf) && !pSource.DTAPs.IsProd(dtapSource) {
+					return &PolicyError{fmt.Sprintf("product '%s': consumed interface '%s': prod dtap not allowed to consume interface from non-prod dtap", p.ID, iid)}
+				}
+				iSource.ConsumedBy[dtapSource][ProductDTAPID{ProductID: p.ID, DTAP: dtapSelf,}] = struct{}{}
 			}
-			// TODO: add a HideDTAPs set property to InterfaceMetadata, and union it between product and interface, and respect it here in validation
 		}
 		for id, im := range p.Interfaces {
 			if im.ForProduct != nil {
