@@ -43,13 +43,6 @@ func quoteIdentifier(s string) string {
 	return `"` + s + `"`
 }
 
-func boolToSQL(b bool) string {
-	if b {
-		return "TRUE"
-	}
-	return "FALSE"
-}
-
 func printSQL(sql string, params ...any) {
 	fmt.Print(sql, "; ")
 	for param := range params {

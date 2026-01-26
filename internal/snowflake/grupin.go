@@ -203,8 +203,8 @@ func (g *Grupin) setProductRoles(ctx context.Context, synCnf *syntax.Config, cnf
 func (g *Grupin) setCreateDBRoleGrants(ctx context.Context, cnf *Config, conn *sql.DB) error {
 	g.createDBRoleGrants = map[string]struct{}{}
 	for grant, err := range QueryGrantsToRoleFiltered(ctx, conn, cnf.Role,
-			map[GrantToRole]struct{}{
-				GrantToRole{
+			map[GrantTemplate]struct{}{
+				GrantTemplate{
 					Privilege: PrvCreate,
 					CreateObjectType: ObjTpDatabaseRole,
 					GrantedOn: ObjTpDatabase,

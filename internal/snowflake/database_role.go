@@ -108,10 +108,9 @@ func (r DatabaseRole) Drop(ctx context.Context, cnf *Config, conn *sql.DB) error
 		return nil
 	}
 	err := runSQL(ctx, cnf, conn, `DROP DATABASE ROLE IF EXISTS IDENTIFIER(?)`, r.FQN)
-	if err != nil {
-		if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
-			// if the DB does not exist anymore, then neither would the database role, and our job is done
-			err = nil
+	if err == ErrObjectNotExistOrAuthorized {
+		// if the DB does not exist anymore, then neither would the database role, and our job is done
+		err = nil
 	}
 	return err
 }

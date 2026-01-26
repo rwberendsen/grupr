@@ -17,15 +17,11 @@ type Grant struct {
 	Schema				string
 	Object				string
 	GrantedRole			string 
-	// How we chose to define roles that are managed by Grupr; since we may use this field in a filter as well, we use a pointer
-	// TODO: consider using an alternative grant filter type especially for this purpose
-	GrantedRoleStartsWithPrefix	*bool 
+	GrantedRoleStartsWithPrefix	bool 
 	GrantedTo			ObjType
 	GrantedToDatabase		string
 	GrantedToRole			string
-	// How we chose to define roles that are managed by Grupr; since we may use this field in a filter as well, we use a pointer
-	// TODO: consider using an alternative grant filter type especially for this purpose
-	GrantedToRoleStartsWithPrefix	*bool
+	GrantedToRoleStartsWithPrefix	bool
 	GrantOption			bool // TODO: if we re-grant the same grant with a different grant option, does it get overwritten? Could be a way to correct such mishaps
 	GrantedBy			string
 	// TODO: consider using struct packing to align better and have more compact memory layout
@@ -71,8 +67,8 @@ func newGrant(privilege string, createObjType string, grantedOn string, name str
 		grantedToDatabase string, grantedToRole string, grantedToRoleStartsWithPrefix bool, grantOption bool, grantedBy string) (Grant, error) {
 	g := Grant{
 		Privileges: map[PrivilegeComplete]struct{}{ParsePrivilegeComplete(privilege, createObjType): {}},
-		GrantedRoleStartsWithPrefix: grantedRoleStartsWithPrefix,
 		GrantedOn: ParseObjType(grantedOn),
+		GrantedRoleStartsWithPrefix: grantedRoleStartsWithPrefix,
 		GrantedTo: grantedTo,
 		GrantedToDatabase: grantedToDatabase,
 		GrantedToRole: grantedToRole,
@@ -151,7 +147,7 @@ func (g Grant) buildSQLFilter(g GrantTemplate) (string, int) {
 		clauses = append(clauses, fmt.Sprintf("granted_on = '%v'", g.GrantedOn))
 	}
 	if (g.GrantedOn == ObjTpRole || g.GrantedOn == ObjTpDatabaseRole) && g.GrantedRoleStartsWithPrefix != nil {
-		clauses = append(clauses, fmt.Sprintf("granted_role_starts_with_prefix = '%s'", boolToString(*g.GrantedRoleStartsWithPrefix)))
+		clauses = append(clauses, "granted_role_starts_with_prefix")
 	}
 	return strings.Join(clauses, " AND "), len(clauses)
 }
@@ -167,7 +163,7 @@ func buildSQLGrants(grants map[GrantTemplate]struct{}) (string, int) {
 	return strings.Join(clauses, " OR\n"), len(clauses)
 }
 
-func buildSLQMatch(match map[GrantTemplate]struct{}, notMatch map[Grant]struct{}) (string, int) {
+func buildSLQMatch(match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}) (string, int) {
 	clauses := []string{}
 	if match != nil {
 		s, l := buildSQLGrants(match)
@@ -189,7 +185,7 @@ func buildSLQMatch(match map[GrantTemplate]struct{}, notMatch map[Grant]struct{}
 	return strings.Join(clauses, "\nAND\n"), len(clauses)
 }
 
-func buildSQLQueryGrants(db string, role string, match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}, limit int) string {
+func buildSQLQueryGrants(db string, role string, match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}, grantedRolePrefix string, limit int) string {
 	// fetch grants for DATABASE ROLE if needed, rather than ROLE
 	var dbClause string
 	granteeName := quoteIdentifier(role)
@@ -209,19 +205,25 @@ func buildSQLQueryGrants(db string, role string, match map[GrantTemplate]struct{
 	sql := fmt.Sprintf(`SHOW GRANTS TO %sROLE IDENTIFIER('%s')
 ->> SELECT
   , CASE
-    WHEN STARTSWITH("privilege", 'CREATE ') THEN 'CREATE'
+    WHEN STARTSWITH("privilege", 'CREATE ')
+    THEN 'CREATE'
     ELSE "privilege"
     END AS privilege
   , CASE
-    WHEN STARTSWITH("privilege", 'CREATE ') THEN SUBSTR("privilege", 8)
+    WHEN STARTSWITH("privilege", 'CREATE ')
+    THEN SUBSTR("privilege", 8)
     ELSE NULL
     END AS create_object_type
   , "granted_on"	AS granted_on
   , "name"		AS name
-  , WIP XXX TODO AS granted_role_starts_with_prefix"
+  , CASE
+    WHEN granted_on IN ('ROLE', 'DATABASE_ROLE')
+    THEN STARTSWITH(name, '%s')
+    ELSE NULL
+    END AS granted_role_starts_with_prefix
   , "grant_option"	AS grant_option
   , "granted_by"	AS granted_by
-FROM $1%s`, dbClause, granteeName, whereClause)
+FROM $1%s`, dbClause, granteeName, grantedRolePrefix, whereClause)
 	
 	if limit > 0 {
 		sql += fmt.Sprintf("\nLIMIT %d", limit)
@@ -238,7 +240,7 @@ func queryGrantsToRole(ctx context.Context, cnf *Config, conn *sql.DB, db string
 	if db != "" {
 		grantedTo = ObjTpDatabaseRole
 	}
-	sql := buildSQLQueryGrants(db, role, match, notMatch, limit)
+	sql := buildSQLQueryGrants(db, role, match, notMatch, cnf.ObjectPrefix, limit)
 	return func(yield func(Grant, error) bool) {
 		rows, err := conn.QueryContext(ctx, sql, param)
 		defer rows.Close()
@@ -252,17 +254,17 @@ func queryGrantsToRole(ctx context.Context, cnf *Config, conn *sql.DB, db string
 		for rows.Next() {
 			var privilege string
 			var createObjectType string
-			var grantedRoleStartsWithPrefix bool
 			var grantedOn string
 			var name string
+			var grantedRoleStartsWithPrefix bool
 			var grantOption bool
 			var grantedBy string
-			if err = rows.Scan(&privilege, &createObjectType, &grantedRoleStartsWithPrefix, &grantedOn, &name, &grantOption, &grantedBy); err != nil {
+			if err = rows.Scan(&privilege, &createObjectType, &grantedOn, &name, &grantedRoleStartsWithPrefix, &grantOption, &grantedBy); err != nil {
 				yield(Grant{}, err)
 				return
 			}
 			// NB: the caller decides which role to query, and therefore knows if the role starts with the prefix from Cnf
-			g, err := newGrant(privilege, createObjectType, grantedRoleStartsWithPrefix, grantedOn, name, grantedTo, db, role, grantedToRoleStartsWithPrefix, grantOption, grantedBy)
+			g, err := newGrant(privilege, createObjectType, grantedOn, name, grantedRoleStartsWithPrefix, grantedTo, db, role, grantedToRoleStartsWithPrefix, grantOption, grantedBy)
 			if err != nil {
 				yield(Grant{}, err}
 			}

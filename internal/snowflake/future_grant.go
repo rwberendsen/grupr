@@ -112,12 +112,12 @@ func newFutureGrant(privilege string, createObjType string, grantedOn string, na
 }
 
 func QueryFutureGrantsToRoleFiltered(ctx context.Context, conn *sql.DB, role string,
-		match map[Grant]struct{}, notMatch map[Grant]struct{}) iter.Seq2[FutureGrant, error] {
+		match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}) iter.Seq2[FutureGrant, error] {
 	return queryFutureGrantsToRole(ctx, conn, "", role, match, notMatch, 0)
 }
 
 func QueryFutureGrantsToDBRoleFiltered(ctx context.Context, conn *sql.DB, db string, role string,
-		match map[Grant]struct{}, notMatch map[Grant]struct{}) iter.Seq2[FutureGrant, error] {
+		match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}) iter.Seq2[FutureGrant, error] {
 	return queryFutureGrantsToRole(ctx, conn, db, role, match, notMatch, 0)
 }
 
@@ -130,11 +130,11 @@ func QueryFutureGrantsToDBRole(ctx context.Context, conn *sql.DB, db string, rol
 }
 
 func QueryFutureGrantsToRoleFilteredLimit(ctx context.Context, conn *sql.DB, role string,
-		match map[Grant]struct{}, notMatch map[Grant]struct{}, limit int) iter.Seq2[FutureGrant, error] {
+		match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}, limit int) iter.Seq2[FutureGrant, error] {
 	return queryFutureGrantsToRole(ctx, conn, "", role, match, notMatch, limit)
 }
 
-func (g FutureGrant) buildSQLFilter(g Grant) (string, int) {
+func (g FutureGrant) buildSQLFilter(g GrantTemplate) (string, int) {
 	// zero values
 	var privilege Privilege
 	var createObjectType ObjType
@@ -153,7 +153,7 @@ func (g FutureGrant) buildSQLFilter(g Grant) (string, int) {
 	return strings.Join(clauses, " AND "), len(clauses)
 }
 
-func buildSQLGrants(grants map[Grant]struct{}) (string, int) {
+func buildSQLGrants(grants map[GrantTemplate]struct{}) (string, int) {
 	clauses = []string{} for g := range grants {
 		s, l := buildSQLFilter(g)
 		if l > 0 {
@@ -163,7 +163,7 @@ func buildSQLGrants(grants map[Grant]struct{}) (string, int) {
 	return strings.Join(clauses, " OR\n"), len(clauses)
 }
 
-func buildSLQMatch(match map[Grant]struct{}, notMatch map[Grant]struct{}) (string, int) {
+func buildSLQMatch(match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}) (string, int) {
 	clauses := []string{}
 	if match != nil {
 		s, l := buildSQLGrants(match)
@@ -185,7 +185,7 @@ func buildSLQMatch(match map[Grant]struct{}, notMatch map[Grant]struct{}) (strin
 	return strings.Join(clauses, "\nAND\n"), len(clauses)
 }
 
-func buildSQLQueryFutureGrants(db string, role string, match map[Grant]struct{}, notMatch map[Grant]struct{}, limit int) string {
+func buildSQLQueryFutureGrants(db string, role string, match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}, limit int) string {
 	// fetch grants for DATABASE ROLE if needed, rather than ROLE
 	var dbClause string
 	granteeName := quoteIdentifier(role)
@@ -225,7 +225,7 @@ FROM $1%s`, dbClause, granteeName, whereClause)
 }
 
 func queryFutureGrantsToRole(ctx context.Context, conn *sql.DB, db string, role string,
-		match map[Grant]struct{}, notMatch map[Grant]struct{}, limit int) iter.Seq2[FutureGrant, error] {
+		match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}, limit int) iter.Seq2[FutureGrant, error] {
 	// Note that both db and string will be quoted before going to Snowflake, so
 	// if the names in Snowflake are upper case, present them here in upper case, too.
 	grantedTo := ObjTpRole
