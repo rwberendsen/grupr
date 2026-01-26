@@ -8,8 +8,7 @@ import (
 )
 
 type ProductDTAP struct {
-	ProductID string
-	DTAP string
+	ProductDTAPID
 	IsProd bool
 	Interface
 	Interfaces map[string]Interface
@@ -21,8 +20,7 @@ type ProductDTAP struct {
 
 func NewProductDTAP(pID string, dtap string, isProd bool, pSem semantics.Product) *ProductDTAP {
 	pd := &ProductDTAP{
-		ProductID: pID,
-		DTAP: dtap,
+		ProductDTAPID: ProductDTAPID{ProductID: pID, DTAP: dtap,},
 		IsProd: isProd,
 		Interface: NewInterface(dtap, pSem.ObjectMatchers),
 		Interfaces: map[string]Interface{},
@@ -31,7 +29,7 @@ func NewProductDTAP(pID string, dtap string, isProd bool, pSem semantics.Product
 	}
 
 	for id, iSem := range pSem.Interfaces {
-		pd.Interfaces[id] = NewInterface(dtap, iSem.ObjectMatchers)		
+		pd.Interfaces[id] = NewInterface(dtap, iSem)		
 	}
 
 	for iid, dtapMapping := range pSem.Consumes {

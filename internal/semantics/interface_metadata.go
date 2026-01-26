@@ -14,7 +14,7 @@ type InterfaceMetadata struct {
 	UserGroups       	syntax.Rendering
 	MaskColumns      	ColMatcher
 	HashColumns      	ColMatcher
-	ConsumedBy		map[string]struct{} // will be populated by Grupin.allConsumedOK
+	ConsumedBy		map[string]map[ProductDTAPID]struct{} // will be populated by Grupin.allConsumedOK
 	ExposeDTAPs      	map[string]bool // TODO: convert this to HideDTAPs, to be unioned between product and interface
 	ForProduct       	*string
 }
@@ -22,7 +22,7 @@ type InterfaceMetadata struct {
 func newInterfaceMetadata(cnf *Config, imSyn syntax.InterfaceMetadata, classes map[string]syntax.Class, globalUserGroups map[string]bool,
 	userGroupMappings map[string]UserGroupMapping, dtaps syntax.Rendering, parent *InterfaceMetadata) (InterfaceMetadata, error) {
 	imSem := InterfaceMetadata{
-		ConsumedBy: map[string]struct{}{},
+		ConsumedBy: map[string]map[ProductDTAPID]struct{}{},
 	}
 	if err := imSem.setClassification(imSyn, parent, classes); err != nil {
 		return imSem, err
@@ -30,6 +30,7 @@ func newInterfaceMetadata(cnf *Config, imSyn syntax.InterfaceMetadata, classes m
 	if err := imSem.setUserGroups(imSyn, parent, globalUserGroups, userGroupMappings); err != nil {
 		return imSem, err
 	}
+	// TODO: replace with HideDTAPs
 	if err := imSem.setExposeDTAPs(imSyn, parent, dtaps); err != nil {
 		return imSem, err
 	}
@@ -44,6 +45,12 @@ func newInterfaceMetadata(cnf *Config, imSyn syntax.InterfaceMetadata, classes m
 	}
 	if err := imSem.setForProduct(imSyn, parent, dtaps); err != nil {
 		return imSem, err
+	}
+	if parent != nil {
+		// TODO: take into account hidden DTAPs
+		for d := range dtaps {
+			imSem.ConsumedBy[d] = map[ProductDTAPID]struct{}{} // will be further populated by Grupin.allConsumedOK
+		}	
 	}
 	return imSem, nil
 }

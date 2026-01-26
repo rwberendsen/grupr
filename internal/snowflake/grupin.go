@@ -49,6 +49,8 @@ func NewGrupin(ctx context.Context, cnf *Config, conn *sql.DB, g semantics.Grupi
 		}
 	}
 
+	// WIP populate ConsumedBy
+
 }
 
 func (g *Grupin) SetObjectsProd(ctx context.Context, cnf *Context, conn *sql.DB) error {

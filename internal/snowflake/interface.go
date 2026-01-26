@@ -10,6 +10,7 @@ import (
 
 type Interface struct {
 	ObjectMatchers semantics.ObjMatchers
+	ConsumedBy map[semantics.ProductDTAPID]struct{}
 
 	// Granular accountObjects by ObjExpr; will be discarded after aggregate() is called
 	accountObjects map[semantics.ObjExpr]AccountObjs
@@ -22,16 +23,23 @@ type Interface struct {
 	aggAccountObjects AggAccountObjs
 }
 
-func NewInterface(dtap string, oms semantics.ObjMatchers) *Interface {
+func NewInterface(dtap string, iSem semantics.InterfaceMetadata) *Interface {
 	i := &Interface{
 		ObjectMatchers: semantics.ObjMatchers{},
+		ConsumedBy: map[semantics.ProductDTAPID]struct{}{},
 	}	
 	// Just take what you need from own DTAP
-	for e, om := range oms {
+	for e, om := range iSem.ObjectMatchers {
 		if e.DTAP == dtap {
 			i.ObjectMatchers[e] = om
 		}
 	}
+	for dtapSem, pdID := range iSem.ConsumedBy {
+		if dtapSem == dtap {
+			i.ConsumedBy[pdID] = struct{}{}
+		}
+	}
+
 	return i
 }
 
