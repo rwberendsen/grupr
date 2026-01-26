@@ -41,9 +41,9 @@ func (g Grant) buildSQLGrant() string {
 	// GRANT ROLE ... / GRANT DATABASE ROLE ...
 	switch g.GrantedOn {
 	case ObjTpRole:
-		return fmt.Sprintf(`GRANT ROLE %s %s`, quoteIdentifier(g.Role), toClause)
+		return fmt.Sprintf(`GRANT ROLE %s %s`, quoteIdentifier(g.GrantedRole), toClause)
 	case ObjTpDatabaseRole:
-		return fmt.Sprintf(`GRANT DATABASE ROLE %s.%s %s`, quoteIdentifier(g.Database), quoteIdentifier(g.Role), toClause)
+		return fmt.Sprintf(`GRANT DATABASE ROLE %s.%s %s`, quoteIdentifier(g.Database), quoteIdentifier(g.GrantedRole), toClause)
 	}
 	
 	// GRANT <privileges> ... TO ROLE

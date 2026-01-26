@@ -12,10 +12,13 @@ type ProductDTAP struct {
 	IsProd bool
 	Interface
 	Interfaces map[string]Interface
-	Consumes map[syntax.InterfaceID]string // dtap
+	Consumes map[syntax.InterfaceID]string // value is source dtap
+	ReadRole ProductRole
 
 	refreshCount int // how many times has this ProductDTAP been refreshed: populated with Snowflake objects
 	matchedAccountObjects map[semantics.ObjExpr]*matchedAccountObjs
+	hasProductRoles bool
+	revokeGrantsToRead map[Grant]struct{}
 }
 
 func NewProductDTAP(pID string, dtap string, isProd bool, pSem semantics.Product) *ProductDTAP {
@@ -25,7 +28,8 @@ func NewProductDTAP(pID string, dtap string, isProd bool, pSem semantics.Product
 		Interface: NewInterface(dtap, pSem.ObjectMatchers),
 		Interfaces: map[string]Interface{},
 		Consumes: map[syntac.InterfaceID]string{},
-		pd.matchedAccountObjects:  map[semantics.ObjExpr]*matchedAccountObjs{}
+		matchedAccountObjects: map[semantics.ObjExpr]*matchedAccountObjs{},
+		revokeGrantsToRead: map[Grant]struct{}{},
 	}
 
 	for id, iSem := range pSem.Interfaces {
@@ -87,11 +91,9 @@ func (pd *ProductDTAP) recalcObjects() {
 func (pd *ProductDTAP) createProductRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config,
 			      conn *sql.DB, productRoles map[ProductRole]struct{}) error {
 	if pd.hasProductRoles { return nil }
-	for mode := range cnf.Modes {
-		productRole := newProductRole(synCnf, cnf, pd.ProductID, pd.DTAP, mode)
-		if _, ok := productRoles[productRole]; !ok {
-			if err := productRole.create(ctx, cnf, conn); err != nil { return err }
-		}
+	pd.ReadRole = newProductRole(synCnf, cnf, pd.ProductID, pd.DTAP, ModeRead)
+	if _, ok := productRoles[productRole]; !ok {
+		if err := productRole.create(ctx, cnf, conn); err != nil { return err }
 	}
 	pd.hasProductRoles = true
 	return nil

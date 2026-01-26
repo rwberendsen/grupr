@@ -16,6 +16,7 @@ type AggDBObjs struct {
 	revokeGrantsToRead			map[Grant]struct{}
 	isUsageGrantedToRead			bool
 	isUsageGrantedToFutureSchemas		bool
+	isDBRoleGrantedToProductRead		bool
 
 	// Small lookup table, first index rows, second index columns
 	//   		0: PrvSelect	1: PrvRefernces
@@ -191,7 +192,7 @@ func (o AggDBObjs) setFutureGrants(ctx context.Context, synCnf *syntax.Config, c
 func (o AggDBObjs) setGrants(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, db string, oms semantics.ObjMatchers) (AggDBObjs, error) {
 	o.revokeGrantsToRead = map[Grant]struct{}{}
 	if !o.isDBRoleNew {
-		for g, err := range QueryGrantsToDBRoleFiltered(ctx, conn, db, o.dBRole.Name, cnf.DatabaseRolePrivileges[ModeRead], nil) {
+		for g, err := range QueryGrantsToDBRoleFiltered(ctx, cnf, conn, db, o.dBRole.Name, cnf.DatabaseRolePrivileges[ModeRead], nil) {
 			if err != nil { return o, err }
 
 			if g.Database != db {

@@ -126,12 +126,73 @@ func (g *Grupin) ManageAccessNonProd(ctx context.Context, synCnf *syntax.Config,
 }
 
 func (g *grupin) grantProd(ctx context.context, synCnf *syntax.Config, cnf *Config, conn *sql.db) error {
+	// the bulk of the grants are granting objects to roles, we do it concurrently per product-dtap
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(cnf.MaxProductDTAPThreads)
 	for _, pd := range g.Prod {
 		eg.Go(func() error { return pd.grant(ctx, synCnf, cnf, conn, g.productRoles, g.createDBRoleGrants, g.accountCache) })
 	}
+	err := eg.Wait()
+	if err != nil { return err }
+
+	// Loop over all products again and arrange relations between them, i.e., granting of database roles to product roles
 	for _, pd := range g.Prod {
+		// loop over all granted grupr-managed database roles, and:
+		// - store which ones we already have been granted.
+		// - store which ones we should later revoke (when we have done a first granting loop over all products)
+		grantedRoleStartsWithPrefix = true
+		for grant, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, pd.ReadRole.ID, true,
+				map[GrantTemplate]struct{}{
+					GrantTemplate{
+						Privilege: PrvUsage,
+						GrantedOn: ObjTpDatabaseRole,
+						GrantedRoleStartsWithPrefix: &grantedRoleStartsWithPrefix,
+					}: {}
+				}, nil) {
+			if err != nil { return err }
+			dbRole, err := newDatabaseRoleFromString(synCnf, cnf, grant.Database, grant.GrantedRole)
+			if err != nil { return err }
+
+			// we have our own interfaces, and we consume certain interfaces; those interfaces have the database roles we need
+			if dbRole.ProductID == pd.ProductID {
+				// this product only needs one set of its own database roles: the product-level interface
+				if dbRole.InterfaceID != "" {
+					pd.revokeGrantsToRead[grant] = struct{}{}
+					continue
+				}
+				if dbObjs, ok pd.Interface.aggAccountObjects.DBs[grant.Database]; ok {
+					dbObjs.isDBRoleGrantedToProductRead = true
+				} else if pd.Interface.ObjectMatchers.DisjointFromDB(grant.Database) {
+					pd.revokeGrantsToRead[grant] = struct{}{}
+				}
+				continue
+			}
+
+			// dbRole.ProductID != pd.ProductID
+			if dbRole.InterfaceID == "" {
+				// we have no business with the product level interface of another product
+				pd.revokeGrantsToRead[grant] = struct{}{}
+				continue
+			}
+			sourceDTAP, ok := pd.Consumes[syntax.InterfaceID{ID: dbRole.InterfaceID, ProductID: dbRole.ProductID,}]
+			if !ok {
+				// we do not consume that interface from that product
+				pd.revokeGrantsToRead[grant] = struct{}{}
+				continue
+			}
+			if sourceDTAP != dbRole.DTAP {
+				// we do consume that interface from that product, but not that dtap though
+				pd.revokeGrantsToRead[grant] = struct{}{}
+				continue
+			}
+			// sourceDTAP == dbRole.DTAP
+
+			// WIP: now we need a way to store this information, that this grant is already there,
+			// in g.Products[ProductDTAP{ProductID:dbRole.ProductID, DTAP: dbRole.DTAP,}].Interfaces[dbRole.InterfaceID].aggAccountObjects.DBs[dbRole.Database].ConsumedBy[pd.ProductDTAP]
+		}
+
+
+		// loop over pd.Consumes, and grant any database role that we have not yet granted to the product role
 		for iid := range pd.Consumes {
 			// grant relevant database roles to product read role
 			// WIP
@@ -141,6 +202,7 @@ func (g *grupin) grantProd(ctx context.context, synCnf *syntax.Config, cnf *Conf
 			// if the product roles should not exist anymore, we will drop those later, and that would revoke those grants already.
 			// but perhaps we insist that grupr managed database roles should not be granted to any other role, not even non-grupr managed, and then in the second loop we might revoke that.
 			// but we might also say that if people want to use grupr managed database role, and grant them to other roles, maybe grupr doesn't have to interfere with that.
+			// if we go for that approach, then we also need to check before we drop a database role, that it is not granted to any role grupr does not manage.
 		}
 	}
 }
@@ -153,6 +215,8 @@ func (g *grupin) grantNonProd(ctx context.context, synCnf *syntax.Config, cnf *C
 			eg.Go(func() error { return pd.grant(ctx, synCnf, cnf, conn, g.productRoles, g.createDBRoleGrants, g.accountCache) })
 		}
 	}
+	err := eg.Wait()
+	if err != nil { return err }
 	for pID, dtaps := range g.NonProd {
 		for _, pd := range dtaps {
 			for iid, dtap := range pd.Consumes {
