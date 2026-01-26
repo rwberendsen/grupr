@@ -8,19 +8,22 @@ import (
 )
 
 type InterfaceMetadata struct {
-	ObjectMatchers   ObjMatchers
-	Classification   Classification
-	GlobalUserGroups map[string]bool
-	UserGroups       syntax.Rendering
-	MaskColumns      ColMatcher
-	HashColumns      ColMatcher
-	ExposeDTAPs      map[string]bool
-	ForProduct       *string
+	ObjectMatchers   	ObjMatchers
+	Classification   	Classification
+	GlobalUserGroups 	map[string]bool
+	UserGroups       	syntax.Rendering
+	MaskColumns      	ColMatcher
+	HashColumns      	ColMatcher
+	ConsumedBy		map[string]struct{} // will be populated by Grupin.allConsumedOK
+	ExposeDTAPs      	map[string]bool // TODO: convert this to HideDTAPs, to be unioned between product and interface
+	ForProduct       	*string
 }
 
 func newInterfaceMetadata(cnf *Config, imSyn syntax.InterfaceMetadata, classes map[string]syntax.Class, globalUserGroups map[string]bool,
 	userGroupMappings map[string]UserGroupMapping, dtaps syntax.Rendering, parent *InterfaceMetadata) (InterfaceMetadata, error) {
-	imSem := InterfaceMetadata{}
+	imSem := InterfaceMetadata{
+		ConsumedBy: map[string]struct{}{},
+	}
 	if err := imSem.setClassification(imSyn, parent, classes); err != nil {
 		return imSem, err
 	}

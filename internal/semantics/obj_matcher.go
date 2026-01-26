@@ -65,7 +65,6 @@ func (lhs ObjMatcher) subsetOf(rhs ObjMatcher) bool {
 func (lhs ObjMatcher) validateExprAgainst(rhs ObjMatcher) error {
 	// Caller must ensure lhs is subset of rhs
 	if lhs.ObjExprAttr != rhs.ObjExprAttr { return fmt.Errorf("mismatch in ObjExprAttr") }
-	// TODO: we need context here: if we want to support people to on an interface for a single usergroup not use a usergroup template, where they would on a product. But do we need to support that, really?
 }
 
 func (lhs ObjMatcher) DisjointFromDB(db string) bool {

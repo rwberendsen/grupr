@@ -94,6 +94,13 @@ func (g Grupin) allConsumedOk() error {
 			}
 			if p.Classification < g.Products[iid.ProductID].Interfaces[iid.ID].Classification {
 				// TODO: consider removing this policy rule, possibly too strict
+				// It might be useful to keep it, if e.g., you are using masking or hashing directives in the YAML,
+				// then when you define those, you lower the classification of the interface accordingly; 
+				// you can have a separate interface for the same tables where you do not use such directives, and
+				// where you keep the higher classification. 
+				// and then you implement some mechanism by which you make sure if a consumer consumes the
+				// interface with masking or hashing directives, that the consumer indeed does not consume the
+				// unmasked and unhashed data.
 				return &PolicyError{fmt.Sprintf("product '%s' consumes interface with higher classification", p.ID)}
 			}
 			// Check specified DTAP mappings
@@ -112,8 +119,11 @@ func (g Grupin) allConsumedOk() error {
 					}
 				}
 			}
-			// TODO: also add this product to a mapping ConsumedBy maintained on the interface, for easy reverse lookup
 			// TODO: add a HideDTAPs set property to InterfaceMetadata, and union it between product and interface, and respect it here in validation
+
+			// add this product to a mapping ConsumedBy maintained on the interface, for easy reverse lookup
+			g.Products[iid.ProductId].Interfaces[iid.ID].ConsumedBy[p.ID] = struct{}{}
+			
 		}
 		for id, im := range p.Interfaces {
 			if im.ForProduct != nil {
