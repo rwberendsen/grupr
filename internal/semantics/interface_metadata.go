@@ -21,9 +21,7 @@ type InterfaceMetadata struct {
 
 func newInterfaceMetadata(cnf *Config, imSyn syntax.InterfaceMetadata, classes map[string]syntax.Class, globalUserGroups map[string]bool,
 	userGroupMappings map[string]UserGroupMapping, dtaps syntax.Rendering, parent *InterfaceMetadata) (InterfaceMetadata, error) {
-	imSem := InterfaceMetadata{
-		ConsumedBy: map[string]map[ProductDTAPID]struct{}{},
-	}
+	imSem := InterfaceMetadata{}
 	if err := imSem.setClassification(imSyn, parent, classes); err != nil {
 		return imSem, err
 	}
@@ -47,6 +45,7 @@ func newInterfaceMetadata(cnf *Config, imSyn syntax.InterfaceMetadata, classes m
 		return imSem, err
 	}
 	if parent != nil {
+		ConsumedBy = map[string]map[ProductDTAPID]struct{}{}
 		// TODO: take into account hidden DTAPs
 		for d := range dtaps {
 			imSem.ConsumedBy[d] = map[ProductDTAPID]struct{}{} // will be further populated by Grupin.allConsumedOK

@@ -17,6 +17,8 @@ type AggDBObjs struct {
 	isUsageGrantedToRead			bool
 	isUsageGrantedToFutureSchemas		bool
 	isDBRoleGrantedToProductRead		bool
+	// has the database role corresponding to this AggDBObjs been granted to the consuming ProductDTAPs already?
+	consumedByGranted			map[semantics.ProductDTAPID]bool
 
 	// Small lookup table, first index rows, second index columns
 	//   		0: PrvSelect	1: PrvRefernces
@@ -226,6 +228,14 @@ func (o AggDBObjs) setGrants(ctx context.Context, synCnf *syntax.Config, cnf *Co
 			}
 		}
 	}
+}
+
+func (o AggDBObjs) setConsumedByGranted(pdID semantics.ProductDTAPID) AggDBObjs {
+	if o.consumedByGranted == nil {
+		o.consumedByGranted = map[semantics.ProductDTAPID]bool{}
+	}
+	o.consumedByGranted[pdID] = true
+	return o
 }
 
 func (o AggDBObjs) pushToDoFutureGrants(yield func(FutureGrant) bool) bool {

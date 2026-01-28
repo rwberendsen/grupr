@@ -51,12 +51,24 @@ func newProduct(cnf *Config, pSyn syntax.Product, classes map[string]syntax.Clas
 				fmt.Sprintf("product '%s' not allowed to consume own interface '%s'", cs.ProductID, cs.ID),
 			}
 		}
-		for k, _ := range cs.DTAPMapping {
-			if !pSem.DTAPs.HasDTAP(k) {
-				return pSem, fmt.Errorf("Unknown DTAP specified in consumption spec dtap mapping")
+		// If a dtap mapping is specified, it means 
+		// - product only wants to consume source interface in specified dtaps
+		// - designated source dtaps have to exist (though they are allowed to be hidden)
+		// If no dtap mapping is specified, it is interpreted as if all DTAPs want to consume from a source DTAP with the same name.
+		if cs.DTAPMapping != nil {
+			for k, _ := range cs.DTAPMapping {
+				if !pSem.DTAPs.HasDTAP(k) {
+					return pSem, fmt.Errorf("Unknown DTAP specified in consumption spec dtap mapping")
+				}
+			}
+			pSem.Consumes[cs.InterfaceID] = cs.DTAPMapping
+		} else {
+			// Default DTAP Mapping is expecting a dtap with the same name in consumed product
+			pSem.Consumes[cs.InterfaceID] = map[string]string{}
+			for dtap := range pSem.DTAPs.All() {
+				pSem.Consumes[cs.InterfaceID][dtap] = dtap
 			}
 		}
-		pSem.Consumes[cs.InterfaceID] = cs.DTAPMapping
 	}
 	return pSem, nil
 }

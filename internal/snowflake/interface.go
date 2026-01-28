@@ -26,7 +26,6 @@ type Interface struct {
 func NewInterface(dtap string, iSem semantics.InterfaceMetadata) *Interface {
 	i := &Interface{
 		ObjectMatchers: semantics.ObjMatchers{},
-		ConsumedBy: map[semantics.ProductDTAPID]struct{}{},
 	}	
 	// Just take what you need from own DTAP
 	for e, om := range iSem.ObjectMatchers {
@@ -34,12 +33,15 @@ func NewInterface(dtap string, iSem semantics.InterfaceMetadata) *Interface {
 			i.ObjectMatchers[e] = om
 		}
 	}
-	for dtapSem, pdID := range iSem.ConsumedBy {
-		if dtapSem == dtap {
-			i.ConsumedBy[pdID] = struct{}{}
+	if iSem.ConsumedBy != nil {
+		// this is an interface (not a product-level one)
+		i.ConsumedBy = map[semantics.ProductDTAPID]struct{}{}
+		for dtapSem, pdID := range iSem.ConsumedBy {
+			if dtapSem == dtap {
+				i.ConsumedBy[pdID] = struct{}{}
+			}
 		}
 	}
-
 	return i
 }
 

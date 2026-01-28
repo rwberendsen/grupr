@@ -105,18 +105,8 @@ func (g Grupin) allConsumedOk() error {
 				// unmasked and unhashed data.
 				return &PolicyError{fmt.Sprintf("product '%s' consumes interface with higher classification", p.ID)}
 			}
-			// If a dtap mapping is specified, it means 
-			// - product only wants to consume source interface in specified dtaps
-			// - designated source dtaps have to exist (though they are allowed to be hidden)
-			// If no dtap mapping is specified, it is interpreted as if all DTAPs want to consume from a source DTAP with the same name.
-			if dtapMapping == nil {
-				dtapMapping = map[string]string{}
-				for d := range p.DTAPs.All() {
-					dtapMapping[d] = d
-				}
-			}
 
-			// Check specified DTAP mappings first
+			// Check DTAP mapping
 			for dtapSelf, dtapSource := range dtapMapping {
 				if !pSource.DTAPs.HasDTAP(dtapSource) {
 					return &SetLogicError{fmt.Sprintf("product '%s': consumed interface '%s': dtap '%s': dtap not found", p.ID, iid, dtapSource)}
@@ -124,6 +114,8 @@ func (g Grupin) allConsumedOk() error {
 				if p.DTAPs.IsProd(dtapSelf) && !pSource.DTAPs.IsProd(dtapSource) {
 					return &PolicyError{fmt.Sprintf("product '%s': consumed interface '%s': prod dtap not allowed to consume interface from non-prod dtap", p.ID, iid)}
 				}
+				// Even though iSource is a copy, all copies reference the same map, initialized upon creation by NewInterface
+				// So we can reach into that map here and add an element to it
 				iSource.ConsumedBy[dtapSource][ProductDTAPID{ProductID: p.ID, DTAP: dtapSelf,}] = struct{}{}
 			}
 		}
