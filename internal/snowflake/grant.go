@@ -303,3 +303,11 @@ func DoGrantsSkipErrors(ctx context.Context, cnf *Config, conn *sql.DB, grants i
 	}
 	return nil
 }
+
+func DoRevokesSkipErrors(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[Grant]) error {
+	// WIP WIP WIP
+	for g := range grants {
+		if err := runMultipleSQL(ctx, cnf, conn, g.buildSQLRevoke()); err != nil && err != ErrObjectNotExistOrAuthorized { return err }
+	}
+	return nil
+}

@@ -218,27 +218,15 @@ func (g *Grupin) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, 
 	return g.doToDoDBRoleGrants(ctx, cnf, conn, doProd)
 }
 
-func (g *grupin) revoke(ctx context.context, cnf *Config, conn *sql.db, doProd bool) error {
+func (g *Grupin) revoke(ctx context.context, cnf *Config, conn *sql.db, doProd bool) error {
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(cnf.MaxProductDTAPThreads)
-	for _, pd := range g.Prod {
-		eg.Go(func() error { return v.revoke(ctx, cnf, conn) })
+	for _, pd := range g.ProdDTAPs {
+		if doProd == pd.IsProd {
+			eg.Go(func() error { return pd.revoke(ctx, cnf, conn) })
+		}
 	}
-	err := eg.Wait()
-	return err 
-}
-
-func (g *grupin) revokeNonProd(ctx context.context, cnf *Config, conn *sql.db) error {
-	for _, p := range g.Products {
-		// revoke relevant database roles from product role
-	}
-	eg, ctx := errgroup.WithContext(ctx)
-	eg.SetLimit(cnf.MaxProductDTAPThreads)
-	for k, v := range g.Products {
-		eg.Go(func() error { return v.revoke(ctx, cnf, conn) })
-	}
-	err := eg.Wait()
-	return err 
+	return eg.Wait()
 }
 
 func (g *Grupin) setProductRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB) error {

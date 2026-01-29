@@ -186,7 +186,7 @@ func (pd *ProductDTAP) pushToDoDBRoleGrants(yield func(Grant) bool, doProd bool,
 }
 
 func (p *ProductDTAP) revoke(ctx context.Context, cnf *Config, conn *sql.DB) error {
-	// if during granting we get ErrObjectNotExistOrAuthorized, we should refresh the product and then first grant
+	// if during revoking we get ErrObjectNotExistOrAuthorized, we can refresh the product and then first grant
 	// again, and then revoke
 	if err := p.Interface.revoke(ctx, cnf, conn, databaseRoles); err != nil { return err }
 	for iid, i := range p.Interfaces {
