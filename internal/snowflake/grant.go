@@ -296,3 +296,10 @@ func DoGrants(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[Gr
 	}
 	return nil
 }
+
+func DoGrantsSkipErrors(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[Grant]) error {
+	for g := range grants {
+		if err := runMultipleSQL(ctx, cnf, conn, g.buildSQLGrant()); err != nil && err != ErrObjectNotExistOrAuthorized { return err }
+	}
+	return nil
+}

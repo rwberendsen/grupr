@@ -154,7 +154,13 @@ func (pd *ProductDTAP) getToDoGrants() iter.Seq[Grant] {
 	}
 }
 
-func (pd *ProductDTAP) pushToDoDBRoleGrants(yield func(Grant) bool, doProd bool, isProd func(ProductDTAP) bool) bool {
+func (pd *ProductDTAP) getTodoDBRoleGrants(doProd bool, m map[semantics.ProductDTAPID]*ProductDTAP) iter.Seq[Grant] {
+	return func(yield func(Grant) bool) {
+		return pd.pushToDoDBRoleGrants(yield, doProd, m)
+	}
+}
+
+func (pd *ProductDTAP) pushToDoDBRoleGrants(yield func(Grant) bool, doProd bool, m map[semantics.ProductDTAPID]*ProductDTAP) bool {
 	// First grant database roles of product-level interface role to product read role
 	for db, dbObjs := range pd.Interface.aggAccountObjects.DBs {
 		if !dbObjs.isUsageGrantedToRead {
@@ -164,7 +170,7 @@ func (pd *ProductDTAP) pushToDoDBRoleGrants(yield func(Grant) bool, doProd bool,
 				Database: db,
 				GrantedRole: dbObjs.dbRole,
 				GrantedTo: ObjTpRole,
-				GrantedToRole: pd.ReadRole,
+				GrantedToRole: pd.ReadRole.ID,
 			}) {
 				return false
 			}

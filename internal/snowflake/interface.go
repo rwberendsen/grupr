@@ -126,10 +126,10 @@ func (i *Interface) pushToDoGrants(yield func(Grant) bool) bool {
 	return true
 }
 
-func (i *Interface) pushToDoDBRoleGrants(yield func(Grant) bool, doProd bool, isProd func(semantics.ProductDTAP) bool) bool {
+func (i *Interface) pushToDoDBRoleGrants(yield func(Grant) bool, doProd bool, m map[semantics.ProductDTAPID]*ProductDTAP) bool) bool {
 	for db, dbObjs := range i.aggAccountObjects.DBs {
-		for pd := range i.ConsumedBy {
-			if doProd == isProd(pd) {
+		for pdID := range i.ConsumedBy {
+			if doProd == m[pdID].IsProd {
 				if !dbObjs.consumedByGranted[pd] {
 					if !yield(Grant{
 						Privilege: PrvUsage,
@@ -137,7 +137,7 @@ func (i *Interface) pushToDoDBRoleGrants(yield func(Grant) bool, doProd bool, is
 						Database: db,
 						GrantedRole: dbObjs.dbRole,
 						GrantedTo: ObjTpRole,
-						GrantedToRole: pd.ReadRole,
+						GrantedToRole: m[pdID].ReadRole.ID,
 					}) {
 						return false
 					}

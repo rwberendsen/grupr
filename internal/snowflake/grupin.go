@@ -16,10 +16,8 @@ type Grupin struct {
 	Prod map[string]*ProductDTAP // Do prod first, in its entirety
 	NonProd map[string]map[string]*ProductDTAP // map[ProductID]map[DTAP]; rinse and repeat
 
-	hasProdObjects bool
-	hasProdAccessManaged bool
-	hasNonProdObjects bool
-	hasNonProdAccessManaged bool
+	ProductDTAPs map[semantics.ProductDTAPID]*ProductDTAP
+
 
 	// Some fetch-one time reference data on objects that exist in Snowflake already
 	productRoles map[ProductRole]struct{}
@@ -62,78 +60,46 @@ func (g *Grupin) getProductDTAP(pID string, dtap string) (pd *ProductDTAP, isPro
 	return
 }
 
-func (g *Grupin) SetObjectsProd(ctx context.Context, cnf *Context, conn *sql.DB) error {
-	if g.hasProdObjects { return nil }
-	// Calculating objects can be a time-consuming activity.
-	// If you want to manage access, it may make sense to first fetch objects only for production environments
-	// and then proceed to grant access for those production environments first.
-
-	// In non production environments, there may be even more objects, and it can be more volatile as well,
-	// requiring more retries or even re-runs to get things right. 
+func (g *Grupin) setObjects(ctx context.Context, cnf *Context, conn *sql.DB, doProd bool) error {
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(cnf.MaxProductDTAPThreads)
-	for pID, pd := range g.Prod {
-		eg.Go(func() error { return pd.refresh(ctx, cnf, conn, r.AccountCache) }
-	}
-	err := eg.Wait()
-	if err == nil {
-		g.hasProdObjects = true
-	}
-	return r, err
-}
-
-func (g *Grupin) SetObjectsNonProd(ctx context.Context, cnf *Context, conn *sql.DB) error {
-	if g.hasNonProdObjects { return nil }
-	// Calculating objects can be a time-consuming activity.
-	// If you want to manage access, it may make sense to first fetch objects only for production environments
-	// and then proceed to grant access for those production environments first.
-
-	// In non production environments, there may be even more objects, and it can be more volatile as well,
-	// requiring more retries or even re-runs to get things right. 
-	eg, ctx := errgroup.WithContext(ctx)
-	eg.SetLimit(cnf.MaxProductDTAPThreads)
-	for pID, dtaps := range g.NonProd {
-		for _, pd := range dtaps {
+	for _, pd := range g.ProductDTAPs {
+		if doProd == pd.IsProd {
 			eg.Go(func() error { return pd.refresh(ctx, cnf, conn, r.AccountCache) }
 		}
 	}
-	err := eg.Wait()
-	if err == nil {
-		g.hasNonProdObjects = true
-	}
-	return r, err
+	return eg.Wait()
 }
 
-func (g *Grupin) ManageAccessProd(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB) error {
-	if g.hasProdAccessManaged { return nil }
-	// first process grants, then revokes, to minimize downtime
-	// first process write rights, then read rights, otherwise COPY GRANTS on GRANT OWNERSHIP statements
-	//   may copy unnecessarily many grants
-	// whether granting or revoking, first process FUTURE GRANTS, then usual grants; otherwise concurrently created
-	//   objects may be missed out in a run.
-	if err := g.setProductRoles(ctx, synCnf, cnf, conn); err != nil { return err }
-	if err := g.setCreateDBRoleGrants(ctx, cnf, conn); err != nil { return err }
-	if err := g.grantProd(ctx, cnf, conn); err != nil { return err }
-	if err := g.revokeProd(ctx, cnf, conn); err != nil { return err }
-	if err := g.dropDatabaseRoles(ctx, synCnf, cnf, conn); err != nil { return err }
-	if err := g.dropProductRoles(ctx, synCnf, cnf, conn); err != nil { return err }
-	g.hasProdAccessManaged = true
+func (g *Grupin) SetObjects(ctx context.Context, cnf *Context, conn *sql.DB) error {
+	// Calculating objects can be a time-consuming activity.
+	// Since we care most about production, generally, we'll do it first.
+	if err := g.setObjects(ctx, cnf, conn, true); err != nil { return err }
+	if err := g.setObjects(ctx, cnf, conn, false); err != nil { return err }
 	return nil
 }
 
-func (g *Grupin) ManageAccessNonProd(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB) error {
-	if g.hasNonProdAccessManaged { return nil }
-	if !g.hasProdAccesssManaged {
-		return fmt.Errrof("need to have prod access managed first")
-	}
-	// first process grants, then revokes, to minimize downtime
-	// first process write rights, then read rights, otherwise COPY GRANTS on GRANT OWNERSHIP statements
+func (g * Grupin) manageAccess(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, doProd bool) error {
+	// First process grants, then revokes, to minimize downtime
+	// First process write rights, then read rights, otherwise COPY GRANTS on GRANT OWNERSHIP statements
 	//   may copy unnecessarily many grants
-	// whether granting or revoking, first process FUTURE GRANTS, then usual grants; otherwise concurrently created
+	// Whether granting or revoking, first process FUTURE GRANTS, then usual grants; otherwise concurrently created
 	//   objects may be missed out in a run.
-	if err := g.grantNonProd(ctx, cnf, conn); err != nil { return err }
-	if err := g.revokeNonProd(ctx, cnf, conn); err != nil { return err }
-	g.hasNonProdAccessManaged = true
+	if err := g.grant(ctx, cnf, conn, doProd); err != nil { return err }
+	if err := g.revoke(ctx, cnf, conn, doProd); err != nil { return err }
+	if err := g.dropDatabaseRoles(ctx, synCnf, cnf, conn, doProd); err != nil { return err }
+	if err := g.dropProductRoles(ctx, synCnf, cnf, conn, doProd); err != nil { return err }
+	return nil
+}
+
+func (g *Grupin) ManageAccess(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB) error {
+	// Some global information we need to start managing access
+	if err := g.setProductRoles(ctx, synCnf, cnf, conn); err != nil { return err }
+	if err := g.setCreateDBRoleGrants(ctx, cnf, conn); err != nil { return err }
+
+	// First complete production
+	if err := g.manageAccess(ctx, synCnf, cnf, conn, true); err != nil { return err }
+	if err := g.manageAccess(ctx, synCnf, cnf, conn, false); err != nil { return err }
 	return nil
 }
 
@@ -168,7 +134,7 @@ func (g *Grupin) setDBRoleGrants(ctx context.Context, synCnf *syntax.Config, cnf
 			} else if pd.Interface.ObjectMatchers.DisjointFromDB(grant.Database) {
 				pd.revokeGrantsToRead[grant] = struct{}{}
 			}
-			continue
+			continue // leave this grant be, it is correct, even if it is unexpected that it exists
 		}
 
 		// grantedDBRole.ProductID != pd.ProductID
@@ -193,10 +159,8 @@ func (g *Grupin) setDBRoleGrants(ctx context.Context, synCnf *syntax.Config, cnf
 		// sourceDTAP == grantedDBRole.DTAP
 
 		// Okay, so the database role belongs to a known interface of another product-dtap that pd consumes, 
-		sourcePD, _, ok := g.getProductDTAP(grantedDBRole, sourceDTAP)
-		if !ok { panic("ProductDTAP not found, but known to be there") }
-		sourceI, ok := sourcePD.Interfaces[grantedDBRole.InterfaceID]
-		if !ok { panic("Interface not found, but known to be there") }
+		sourcePD := g.ProductDTAPs[semantics.ProductDTAPID{ProductID: grantedDBRole.ProductID, DTAP: sourceDTAP,}]
+		sourceI := sourcePD.Interfaces[grantedDBRole.InterfaceID]
 
 		// But, is it true that the database in which the granted role was created still has objects that belong to that interface?
 		if sourceI.ObjectMatchers.DisjointFromDB(grantedDBRole.Database) {
@@ -213,52 +177,28 @@ func (g *Grupin) setDBRoleGrants(ctx context.Context, synCnf *syntax.Config, cnf
 	}
 }
 
-func (g *Grupin) getTodoDBRoleGrants(doProd bool) iter.Seq[Grant] {
-	return func(yield func(Grant) bool) {
-		for _, pd := range g.Prod {
-			pd.pushToDoDBRoleGrants(yield, doProd, func isProd(pd ProductDTAP) bool {
-				_, is, ok := g.getProductDTAP(pd.ProductID, pd.DTAP)
-				return ok && is
-			})
-		}
-		if !doProd {
-			for _, pd := range g.NonProd {
-				pd.pushToDoDBRoleGrants(yield, doProd, func isProd(pd ProductDTAP) bool {
-					_, is, ok := g.getProductDTAP(pd.ProductID, pd.DTAP)
-					return ok && is
-				})
-			}
+
+func (g *Grupin) doToDoDBRoleGrants(ctx context.Context, cnf *Config, conn *sql.DB, doProd bool) error {
+	eg, ctx := errgroup.WithContext(ctx)
+	eg.SetLimit(cnf.MaxProductDTAPThreads)
+	for _, pd := range g.ProductDTAPs {
+		// Even if doProd == false, we still have to process also production product-dtaps, as their interfaces may be consumed by non-prod product-dtaps
+		// So if doProd == false, we want to process all product-dtaps; otherwise, only production ones.
+		if doProd == false || pd.isProd {
+			eg.Go(func() error { return DoGrantsSkipErrors(ctx, cnf, conn, pd.getToDoDBRoleGrants(doProd, g.ProductDTAPs)) })
+			// Note that at this stage when we are touching all products, we just want to ignore obj not exist errors and move on
+			// no point refreshing all products, we might as well re-run the whole program
 		}
 	}
+	return eg.Wait()
 }
 
-func (g *Grupin) grantProd(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.db) error {
+func (g *Grupin) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.db, doProd bool) error {
 	// The bulk of the grants are granting objects to roles, we do it concurrently per product-dtap
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(cnf.MaxProductDTAPThreads)
-	for _, pd := range g.Prod {
-		eg.Go(func() error { return pd.grant(ctx, synCnf, cnf, conn, g.productRoles, g.createDBRoleGrants, g.accountCache) })
-	}
-	err := eg.Wait()
-	if err != nil { return err }
-	// Now all necessary db roles have been created and they have been granted the necessary privileges
-
-	// Next, find out which DB roles have been granted to which product roles, and which grants still to do / revoke
-	// We do not do this concurrently, because this concerns relationships between product dtaps, no need to overcomplicate
-	for _, pd := range g.Prod {
-		if err := g.setDBRoleGrants(ctx, synCnf, cnf, conn, pd); err != nil { return err }
-	}
-
-	// Next, do the grants still to do.
-	DoGrants(ctx, cnf, conn, g.getTodoDBROleGrants(true))
-}
-
-func (g *grupin) grantNonProd(ctx context.context, synCnf *syntax.Config, cnf *Config, conn *sql.db) error {
-	// The bulk of the grants are granting objects to roles, we do it concurrently per product-dtap
-	eg, ctx := errgroup.WithContext(ctx)
-	eg.SetLimit(cnf.MaxProductDTAPThreads)
-	for _, dtaps := range g.NonProd {
-		for _, pd := range dtaps {
+	for _, pd := range g.ProductDTAPs {
+		if doProd == pd.isProd {
 			eg.Go(func() error { return pd.grant(ctx, synCnf, cnf, conn, g.productRoles, g.createDBRoleGrants, g.accountCache) })
 		}
 	}
@@ -268,23 +208,20 @@ func (g *grupin) grantNonProd(ctx context.context, synCnf *syntax.Config, cnf *C
 
 	// Next, find out which DB roles have been granted to which product roles, and which grants still to do / revoke
 	// We do not do this concurrently, because this concerns relationships between product dtaps, no need to overcomplicate
-	for _, dtaps := range g.NonProd {
-		for _, pd := range dtaps {
+	for _, pd := range g.ProductDTAPs {
+		if doProd == pd.isProd {
 			if err := g.setDBRoleGrants(ctx, synCnf, cnf, conn, pd); err != nil { return err }
 		}
 	}
 
 	// Next, do the grants still to do.
-	DoGrants(ctx, cnf, conn, g.getTodoDBROleGrants(false))
+	return g.doToDoDBRoleGrants(ctx, cnf, conn, doProd)
 }
 
-func (g *grupin) revokeProd(ctx context.context, cnf *Config, conn *sql.db) error {
-	for _, p := range g.Products {
-		// revoke relevant database roles from product role
-	}
+func (g *grupin) revoke(ctx context.context, cnf *Config, conn *sql.db, doProd bool) error {
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(cnf.MaxProductDTAPThreads)
-	for k, v := range g.Products {
+	for _, pd := range g.Prod {
 		eg.Go(func() error { return v.revoke(ctx, cnf, conn) })
 	}
 	err := eg.Wait()
