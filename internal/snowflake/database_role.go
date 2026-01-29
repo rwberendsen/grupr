@@ -107,6 +107,9 @@ func (r DatabaseRole) Drop(ctx context.Context, cnf *Config, conn *sql.DB) error
 		log.Printf("Database role %s has privileges not managed by Grupr, skipping dropping\n", r.FQN)
 		return nil
 	}
+	// TODO: also check whether database role has been granted to roles or users other than grupr managed product roles,
+	// and if so, refuse to drop, logging a line explaining the reason. Although, if the role has no unmanaged
+	// privileges, it may not be harmful to drop it anyway.
 	err := runSQL(ctx, cnf, conn, `DROP DATABASE ROLE IF EXISTS IDENTIFIER(?)`, r.FQN)
 	if err == ErrObjectNotExistOrAuthorized {
 		// if the DB does not exist anymore, then neither would the database role, and our job is done

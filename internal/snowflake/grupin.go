@@ -137,7 +137,102 @@ func (g *Grupin) ManageAccessNonProd(ctx context.Context, synCnf *syntax.Config,
 	return nil
 }
 
-func (g *grupin) grantProd(ctx context.context, synCnf *syntax.Config, cnf *Config, conn *sql.db) error {
+func (g *Grupin) setDBRoleGrants(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.db, pd ProductDTAP) error {
+	// Loop over all granted grupr-managed database roles, and:
+	// - store which ones we already have been granted.
+	// - store which ones we should later revoke (when we have done a first granting loop over all products)
+	grantedRoleStartsWithPrefix = true
+	for grant, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, pd.ReadRole.ID, true,
+			map[GrantTemplate]struct{}{
+				GrantTemplate{
+					Privilege: PrvUsage,
+					GrantedOn: ObjTpDatabaseRole,
+					GrantedRoleStartsWithPrefix: &grantedRoleStartsWithPrefix,
+				}: {}
+			}, nil) {
+		if err != nil { return err }
+		grantedDBRole, err := newDatabaseRoleFromString(synCnf, cnf, grant.Database, grant.GrantedRole)
+		if err != nil { return err }
+
+		// Store if these database roles have already been granted:
+		// - Read database role of pd product-level interface
+		// - Read database roles of interfaces that pd consumes
+		if grantedDBRole.ProductID == pd.ProductID {
+			if grantedDBRole.InterfaceID != "" {
+				pd.revokeGrantsToRead[grant] = struct{}{}
+				continue
+			}
+			// grantedDBRole.InterfaceID == ""
+			if dbObjs, ok := pd.Interface.aggAccountObjects.DBs[grant.Database]; ok {
+				dbObjs.isDBRoleGrantedToProductRead = true
+			} else if pd.Interface.ObjectMatchers.DisjointFromDB(grant.Database) {
+				pd.revokeGrantsToRead[grant] = struct{}{}
+			}
+			continue
+		}
+
+		// grantedDBRole.ProductID != pd.ProductID
+		if grantedDBRole.InterfaceID == "" {
+			// we have no business with the product level interface of another product
+			pd.revokeGrantsToRead[grant] = struct{}{}
+			continue
+		}
+
+		// Check if granted database role belongs to an interface consumed by pd
+		sourceDTAP, ok := pd.Consumes[syntax.InterfaceID{ID: grantedDBRole.InterfaceID, ProductID: grantedDBRole.ProductID,}]
+		if !ok {
+			// we do not consume that interface from that product
+			pd.revokeGrantsToRead[grant] = struct{}{}
+			continue
+		}
+		if sourceDTAP != grantedDBRole.DTAP {
+			// we do consume that interface from that product, but not that dtap though
+			pd.revokeGrantsToRead[grant] = struct{}{}
+			continue
+		}
+		// sourceDTAP == grantedDBRole.DTAP
+
+		// Okay, so the database role belongs to a known interface of another product-dtap that pd consumes, 
+		sourcePD, _, ok := g.getProductDTAP(grantedDBRole, sourceDTAP)
+		if !ok { panic("ProductDTAP not found, but known to be there") }
+		sourceI, ok := sourcePD.Interfaces[grantedDBRole.InterfaceID]
+		if !ok { panic("Interface not found, but known to be there") }
+
+		// But, is it true that the database in which the granted role was created still has objects that belong to that interface?
+		if sourceI.ObjectMatchers.DisjointFromDB(grantedDBRole.Database) {
+			pd.revokeGrantsToRead[grant] = struct{}{}
+			continue
+		}
+
+		// Okay, so indeed this grant is legitimate. If indeed we did find objects in this DB, then we have an AggDBObjs for it,
+		// and we need to store in there that this grant has already been done, so that we don't make an unnecessary network request
+		// granting it again. 
+		if sourceAggDBObjs, ok := sourceI.aggAccountObjects.DBs[grantedDBRole.Database]; ok {
+			sourceI.aggAccountObjects.DBs[grantedDBRole.Database] = sourceAggDBObjs.setConsumedByGranted(pd.ProductDTAPID)
+		}
+	}
+}
+
+func (g *Grupin) getTodoDBRoleGrants(doProd bool) iter.Seq[Grant] {
+	return func(yield func(Grant) bool) {
+		for _, pd := range g.Prod {
+			pd.pushToDoDBRoleGrants(yield, doProd, func isProd(pd ProductDTAP) bool {
+				_, is, ok := g.getProductDTAP(pd.ProductID, pd.DTAP)
+				return ok && is
+			})
+		}
+		if !doProd {
+			for _, pd := range g.NonProd {
+				pd.pushToDoDBRoleGrants(yield, doProd, func isProd(pd ProductDTAP) bool {
+					_, is, ok := g.getProductDTAP(pd.ProductID, pd.DTAP)
+					return ok && is
+				})
+			}
+		}
+	}
+}
+
+func (g *Grupin) grantProd(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.db) error {
 	// The bulk of the grants are granting objects to roles, we do it concurrently per product-dtap
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(cnf.MaxProductDTAPThreads)
@@ -146,117 +241,41 @@ func (g *grupin) grantProd(ctx context.context, synCnf *syntax.Config, cnf *Conf
 	}
 	err := eg.Wait()
 	if err != nil { return err }
+	// Now all necessary db roles have been created and they have been granted the necessary privileges
 
-	// Loop over all products again and arrange relations between them, i.e., granting of database roles to product roles
+	// Next, find out which DB roles have been granted to which product roles, and which grants still to do / revoke
+	// We do not do this concurrently, because this concerns relationships between product dtaps, no need to overcomplicate
 	for _, pd := range g.Prod {
-		// loop over all granted grupr-managed database roles, and:
-		// - store which ones we already have been granted.
-		// - store which ones we should later revoke (when we have done a first granting loop over all products)
-		grantedRoleStartsWithPrefix = true
-		for grant, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, pd.ReadRole.ID, true,
-				map[GrantTemplate]struct{}{
-					GrantTemplate{
-						Privilege: PrvUsage,
-						GrantedOn: ObjTpDatabaseRole,
-						GrantedRoleStartsWithPrefix: &grantedRoleStartsWithPrefix,
-					}: {}
-				}, nil) {
-			if err != nil { return err }
-			grantedDBRole, err := newDatabaseRoleFromString(synCnf, cnf, grant.Database, grant.GrantedRole)
-			if err != nil { return err }
-
-			// Store if these database roles have already been granted:
-			// - Read database role of pd product-level interface
-			// - Read database roles of interfaces that pd consumes
-			if grantedDBRole.ProductID == pd.ProductID {
-				if grantedDBRole.InterfaceID != "" {
-					pd.revokeGrantsToRead[grant] = struct{}{}
-					continue
-				}
-				// grantedDBRole.InterfaceID == ""
-				if dbObjs, ok := pd.Interface.aggAccountObjects.DBs[grant.Database]; ok {
-					dbObjs.isDBRoleGrantedToProductRead = true
-				} else if pd.Interface.ObjectMatchers.DisjointFromDB(grant.Database) {
-					pd.revokeGrantsToRead[grant] = struct{}{}
-				}
-				continue
-			}
-
-			// grantedDBRole.ProductID != pd.ProductID
-			if grantedDBRole.InterfaceID == "" {
-				// we have no business with the product level interface of another product
-				pd.revokeGrantsToRead[grant] = struct{}{}
-				continue
-			}
-
-			// Check if granted database role belongs to an interface consumed by pd
-			sourceDTAP, ok := pd.Consumes[syntax.InterfaceID{ID: grantedDBRole.InterfaceID, ProductID: grantedDBRole.ProductID,}]
-			if !ok {
-				// we do not consume that interface from that product
-				pd.revokeGrantsToRead[grant] = struct{}{}
-				continue
-			}
-			if sourceDTAP != grantedDBRole.DTAP {
-				// we do consume that interface from that product, but not that dtap though
-				pd.revokeGrantsToRead[grant] = struct{}{}
-				continue
-			}
-			// sourceDTAP == grantedDBRole.DTAP
-
-			// Okay, so the database role belongs to a known interface of another product-dtap that pd consumes, 
-			sourcePD, _, ok := g.getProductDTAP(grantedDBRole, sourceDTAP)
-			if !ok { panic("ProductDTAP not found, but known to be there") }
-			sourceI, ok := sourcePD.Interfaces[grantedDBRole.InterfaceID]
-			if !ok { panic("Interface not found, but known to be there") }
-
-			// But, is it true that the database in which the granted role was created still has objects that belong to that interface?
-			if sourceI.ObjectMatchers.DisjointFromDB(grantedDBRole.Database) {
-				pd.revokeGrantsToRead[grant] = struct{}{}
-				continue
-			}
-
-			// Okay, so indeed this grant is legitimate. If indeed we did find objects in this DB, then we have an AggDBObjs for it,
-			// and we need to store in there that this grant has already been done, so that we don't make an unnecessary network request
-			// granting it again. 
-			if sourceAggDBObjs, ok := sourceI.aggAccountObjects.DBs[grantedDBRole.Database]; ok {
-				sourceI.aggAccountObjects.DBs[grantedDBRole.Database] = sourceAggDBObjs.setConsumedByGranted(pd.ProductDTAPID)
-			}
-		}
-
-		// WIP
-		// loop over pd.Consumes, and grant any database role that we have not yet granted to the product role
-		for iid := range pd.Consumes {
-			// grant relevant database roles to product read role
-			// WIP
-			// basic idea would be we check that product role is assigned right grupr database roles, grant them if not, and revoke any wrongfully granted
-			// but then also we iterate (later?) over all database roles, and check that they are granted to the right grupr product roles, grant them if not, and revoke any wrongfully granted.
-			// that second loop may be superfluous: if the database roles are granted to wrong grupr roles that should still exist, then the first loop would have taken care of that.
-			// if the product roles should not exist anymore, we will drop those later, and that would revoke those grants already.
-			// but perhaps we insist that grupr managed database roles should not be granted to any other role, not even non-grupr managed, and then in the second loop we might revoke that.
-			// but we might also say that if people want to use grupr managed database role, and grant them to other roles, maybe grupr doesn't have to interfere with that.
-			// if we go for that approach, then we also need to check before we drop a database role, that it is not granted to any role grupr does not manage.
-		}
+		if err := g.setDBRoleGrants(ctx, synCnf, cnf, conn, pd); err != nil { return err }
 	}
+
+	// Next, do the grants still to do.
+	DoGrants(ctx, cnf, conn, g.getTodoDBROleGrants(true))
 }
 
 func (g *grupin) grantNonProd(ctx context.context, synCnf *syntax.Config, cnf *Config, conn *sql.db) error {
+	// The bulk of the grants are granting objects to roles, we do it concurrently per product-dtap
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(cnf.MaxProductDTAPThreads)
-	for pID, dtaps := range g.NonProd {
+	for _, dtaps := range g.NonProd {
 		for _, pd := range dtaps {
 			eg.Go(func() error { return pd.grant(ctx, synCnf, cnf, conn, g.productRoles, g.createDBRoleGrants, g.accountCache) })
 		}
 	}
 	err := eg.Wait()
 	if err != nil { return err }
-	for pID, dtaps := range g.NonProd {
+	// Now all necessary db roles have been created and they have been granted the necessary privileges
+
+	// Next, find out which DB roles have been granted to which product roles, and which grants still to do / revoke
+	// We do not do this concurrently, because this concerns relationships between product dtaps, no need to overcomplicate
+	for _, dtaps := range g.NonProd {
 		for _, pd := range dtaps {
-			for iid, dtap := range pd.Consumes {
-				// grant relevant database roles to product read role
-				// Note that dtap can refer to a NonProd dtap, but also a prod one
-			}
+			if err := g.setDBRoleGrants(ctx, synCnf, cnf, conn, pd); err != nil { return err }
 		}
 	}
+
+	// Next, do the grants still to do.
+	DoGrants(ctx, cnf, conn, g.getTodoDBROleGrants(false))
 }
 
 func (g *grupin) revokeProd(ctx context.context, cnf *Config, conn *sql.db) error {

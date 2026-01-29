@@ -123,7 +123,7 @@ func (pd *ProductDTAP) grant_(ctx context.Context, synCnf *syntax.Config, cnf *C
 	for iid, i := range pd.Interfaces {
 		if err := i.setGrants(ctx, synCnf, cnf, conn, c); err != nil { return err }
 	}
-	if err := DoGrants(ctx, cnf, conn, pd.getTodoGrants()); err != nil { return err }
+	if err := DoGrants(ctx, cnf, conn, pd.getToDoGrants()); err != nil { return err }
 
 	return nil
 }
@@ -153,7 +153,31 @@ func (pd *ProductDTAP) getToDoGrants() iter.Seq[Grant] {
 		}
 	}
 }
-	
+
+func (pd *ProductDTAP) pushToDoDBRoleGrants(yield func(Grant) bool, doProd bool, isProd func(ProductDTAP) bool) bool {
+	// First grant database roles of product-level interface role to product read role
+	for db, dbObjs := range pd.Interface.aggAccountObjects.DBs {
+		if !dbObjs.isUsageGrantedToRead {
+			if !yield(Grant{
+				Privilege: PrvUsage,
+				GrantedOn: ObjTpDatabaseRole,
+				Database: db,
+				GrantedRole: dbObjs.dbRole,
+				GrantedTo: ObjTpRole,
+				GrantedToRole: pd.ReadRole,
+			}) {
+				return false
+			}
+		}
+	}
+	// Next, grant database roles of interfaces to consumers (prod / non-prod)
+	for _, i := range pd.Interfaces {
+		if !i.pushToDoDBRoleGrants(yield, doProd, isProd) {
+			return false
+		}
+	}
+	return true
+}
 
 func (p *ProductDTAP) revoke(ctx context.Context, cnf *Config, conn *sql.DB) error {
 	// if during granting we get ErrObjectNotExistOrAuthorized, we should refresh the product and then first grant
