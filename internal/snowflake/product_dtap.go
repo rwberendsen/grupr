@@ -21,9 +21,9 @@ type ProductDTAP struct {
 	revokeGrantsToRead map[Grant]struct{}
 }
 
-func NewProductDTAP(pID string, dtap string, isProd bool, pSem semantics.Product) *ProductDTAP {
+func NewProductDTAP(pdID semantics.ProductDTAPID, isProd bool, pSem semantics.Product) *ProductDTAP {
 	pd := &ProductDTAP{
-		ProductDTAPID: ProductDTAPID{ProductID: pID, DTAP: dtap,},
+		ProductDTAPID: pdID,
 		IsProd: isProd,
 		Interface: NewInterface(dtap, pSem.InterfaceMetadata),
 		Interfaces: map[string]Interface{},
@@ -43,7 +43,7 @@ func NewProductDTAP(pID string, dtap string, isProd bool, pSem semantics.Product
 	}
 
 	for k := range pd.Interface.ObjectMatchers {
-		p.matchedAccountObjects[k] = &matchedAccountObjects{}
+		pd.matchedAccountObjects[k] = &matchedAccountObjects{}
 	}
 	
 	return pd
@@ -116,7 +116,7 @@ func (pd *ProductDTAP) grant_(ctx context.Context, synCnf *syntax.Config, cnf *C
 	for iid, i := range pd.Interfaces {
 		if err := i.setFutureGrants(ctx, synCnf, cnf, conn, createDBRoleGrants, pd.ProductID, pd.DTAP, iid, c); err != nil { return err }
 	}
-	if err := DoFutureGrants(ctx, cnf, conn, pd.getTodoFutureGrants()); err != nil { return err }
+	if err := DoFutureGrants(ctx, cnf, conn, pd.getToDoFutureGrants()); err != nil { return err }
 
 	// Now, regular grants
 	if err := pd.Interface.setGrants(ctx, synCnf, cnf, conn, c); err != nil { return err }
@@ -154,7 +154,7 @@ func (pd *ProductDTAP) getToDoGrants() iter.Seq[Grant] {
 	}
 }
 
-func (pd *ProductDTAP) getTodoDBRoleGrants(doProd bool, m map[semantics.ProductDTAPID]*ProductDTAP) iter.Seq[Grant] {
+func (pd *ProductDTAP) getToDoDBRoleGrants(doProd bool, m map[semantics.ProductDTAPID]*ProductDTAP) iter.Seq[Grant] {
 	return func(yield func(Grant) bool) {
 		return pd.pushToDoDBRoleGrants(yield, doProd, m)
 	}
@@ -195,7 +195,40 @@ func (pd *ProductDTAP) revokeFromProductRole(ctx context.Context, cnf *Config, c
 	return DoRevokesSkipErrors(ctx, cnf, conn, maps.Keys(pd.revokeGrantsToRead))
 }
 
-func (pd *ProductDTAP) revoke(ctx context.Context, cnf *Config, conn *sql.DB) error {
+func (pd *ProductDTAP) refreshGrantRevoke(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{},
+		createDBRoleGrants map[string]struct{}, c *accountCache) error {
+	if err := pd.grant(ctx, synCnf, cnf, conn, productRoles, createDBRoleGrants, c); err != nil { return err }
+	if err := pd.revoke(ctx, synCnf, cnf, conn, productRoles, createDBRoleGrants, c); err != nil { return err }
+}
+
+func (pd *ProductDTAP) getToDoFutureRevokes() iter.Seq[Grant] {
+	return func(yield func(FutureGrant) bool) {
+		if !pd.Interface.pushToDoFutureRevokes(yield) {
+			return
+		}
+		for _, i := range pd.Interfaces {
+			if !i.pushToDoFutureRevokes(yield) {
+				return
+			}
+		}
+	}
+}
+
+func (pd *ProductDTAP) getToDoRevokes() iter.Seq[Grant] {
+	return func(yield func(Grant) bool) {
+		if !pd.Interface.pushToDoRevokes(yield) {
+			return
+		}
+		for _, i := range pd.Interfaces {
+			if !i.pushToDoRevokes(yield) {
+				return
+			}
+		}
+	}
+}
+
+func (pd *ProductDTAP) revoke(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{},
+		createDBRoleGrants map[string]struct{}, c *accountCache) error {
 	if err := pd.revokeFromProductRole(ctx, cnf, conn); err != nil { return err }
 
 	// If during revoking of privileges on objects to interface database
@@ -217,9 +250,17 @@ func (pd *ProductDTAP) revoke(ctx context.Context, cnf *Config, conn *sql.DB) er
 	//   we would need to grant now. Rather than ignoring that signal and wait for the
 	//   next entire Grupr run, it can save our DBAs some time if we act immediately and
 	//   refresh just this single data product-dtap.
-	if err := pd.Interface.revoke(ctx, cnf, conn, databaseRoles); err != nil { return err }
-	for iid, i := range pd.Interfaces {
-		if err := i.revoke(ctx, cnf, conn, databaseRoles); err != nil { return err }
+	if err := revoke_(ctx, cnf, conn); err == ErrObjectNotExistOrAuthorized {
+		return pd.refreshGrantRevoke(ctx, synCnf, cnf, conn, productRoles, createDBROleGrants, c)
+	} else {
+		return err
 	}
+}
+
+func (pd *ProductDTAP) revoke_(ctx context.Context, cnf *Config, conn *sql.DB) error {
+	// Future grants are revoked first, in case objects are being concurrently created, at least those
+	// object will stop receiving incorrect grants first.
+	if err := DoFutureRevokes(ctx, cnf, conn, pd.getToDoFutureRevokes()); err != nil { return err }
+	if err := DoRevokes(ctx, cnf, conn, pd.getToDoRevokes()); err != nil { return err }
 	return nil
 }

@@ -54,15 +54,15 @@ func (spec DTAPSpec) IsProd(dtap string) bool {
 	return spec.Prod != nil && dtap == *spec.Prod
 }
 
-func (spec DTAPSpec) All() iter.Seq[string] {
-	return func(yield func(string)) {
+func (spec DTAPSpec) All() iter.Seq2[string, bool] {
+	return func(yield func(string, bool) bool) {
 		if spec.Prod != nil {
-			if !yield(*spec.Prod) {
+			if !yield(*spec.Prod, true) {
 				return
 			}
 		}
 		for k := range spec.NonProd {
-			if !yield(k) {
+			if !yield(k, false) {
 				return
 			}
 		}

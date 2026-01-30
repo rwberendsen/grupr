@@ -57,7 +57,7 @@ func (i *Interface) recalcObjectsFromMatched(m map[semantics.ObjExpr]*matchedAcc
 func (i *Interface) recalcObjects(m map[semantics.ObjExpr]AccountObjs) {
 	// Called from the interface level, work with SubsetOf here
 	i.accountObjects = map[semantics.ObjExpr]AccountObjs{} // (re)set
-	for e, om := range i.ObjectMatchers {
+	for _, om := range i.ObjectMatchers {
 		i.accountObjects[e] = newAccountObjects(m[om.SubsetOf], om)
 	}
 }
@@ -143,6 +143,24 @@ func (i *Interface) pushToDoDBRoleGrants(yield func(Grant) bool, doProd bool, m 
 					}
 				}
 			}
+		}
+	}
+	return true
+}
+
+func (i *Interface) pushToDoFutureRevokes(yield func(FutureGrant) bool) bool {
+	for _, dbObjs := range i.aggAccountObjects.DBs {
+		if !dbObjs.pushToDoFutureRevokes(yield) {
+			return false
+		}
+	}
+	return true
+}
+
+func (i *Interface) pushToDoRevokes(yield func(Grant) bool) bool {
+	for _, dbObjs := range i.aggAccountObjects.DBs {
+		if !dbObjs.pushToDoRevokes(yield) {
+			return false
 		}
 	}
 	return true

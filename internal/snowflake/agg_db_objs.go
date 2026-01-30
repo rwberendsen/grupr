@@ -301,3 +301,19 @@ func (o AggDBObjs) pushToDoGrants(yield func(Grant) bool) bool {
 	}
 	return true
 }
+
+func (o AggDBObjs) pushToDoFutureRevokes(yield func(FutureGrant) bool) bool {
+	for g := range o.revokeFutureGrantsToRead {
+		if !yield(g) {
+			return false
+		}
+	}
+}
+
+func (o AggDBObjs) pushToDoRevokes(yield func(Grant) bool) bool {
+	for g := range o.revokeGrantsToRead {
+		if !yield(g) {
+			return false
+		}
+	}
+}

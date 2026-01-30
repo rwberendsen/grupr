@@ -13,11 +13,7 @@ import (
 )
 
 type Grupin struct {
-	Prod map[string]*ProductDTAP // Do prod first, in its entirety
-	NonProd map[string]map[string]*ProductDTAP // map[ProductID]map[DTAP]; rinse and repeat
-
 	ProductDTAPs map[semantics.ProductDTAPID]*ProductDTAP
-
 
 	// Some fetch-one time reference data on objects that exist in Snowflake already
 	productRoles map[ProductRole]struct{}
@@ -27,37 +23,20 @@ type Grupin struct {
 	accountCache *accountCache
 }
 
-func NewGrupin(ctx context.Context, cnf *Config, conn *sql.DB, g semantics.Grupin) (*Grupin, error) {
-	r := Grupin{
+func NewGrupin(ctx context.Context, cnf *Config, conn *sql.DB, g semantics.Grupin) *Grupin {
+	r := &Grupin{
 		Prod: map[string]*ProductDTAP{},
 		NonProd: map[string]map[string]*ProductDTAP{},
 		accountCache: &accountCache{},
 	}
 
 	for pID, pSem := range g.Products {
-		var prodDTAP string
-		if p.DTAPs.Prod != nil {
-			prodDTAP = *pSem.DTAPs.Prod
-			r.Prod[pID] = NewProductDTAP(pID, prodDTAP, pSem)
-		}
-
-		r.NonProd[pID] = map[string]*ProductDTAP{}
-		for dtap := range p.DTAPs.NonProd {
-			r.NonProd[pID][dtap] = NewProductDTAP(pID, dtap, pSem)
+		for dtap, isProd := range pSem.DTAPs.All() {
+			pdID := semantics.ProductDTAPID{ProductID: pID, DTAP: dtap,}
+			pd.ProductDTAPs[pdID] = NewProductDTAP(pdID, isProd, pSem)
 		}
 	}
-}
-
-func (g *Grupin) getProductDTAP(pID string, dtap string) (pd *ProductDTAP, isProd bool, ok bool) {
-	if pd, ok = g.Prod[pID]; ok && pd.DTAP == dtap {
-		isProd = true
-		return 
-	}
-	if dtaps, ok = g.NonProd[pID]; ok {
-		pd, ok = dtaps[dtap]
-		return
-	}
-	return
+	return r
 }
 
 func (g *Grupin) setObjects(ctx context.Context, cnf *Context, conn *sql.DB, doProd bool) error {
@@ -79,14 +58,14 @@ func (g *Grupin) SetObjects(ctx context.Context, cnf *Context, conn *sql.DB) err
 	return nil
 }
 
-func (g * Grupin) manageAccess(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, doProd bool) error {
+func (g *Grupin) manageAccess(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, doProd bool) error {
 	// First process grants, then revokes, to minimize downtime
 	// First process write rights, then read rights, otherwise COPY GRANTS on GRANT OWNERSHIP statements
 	//   may copy unnecessarily many grants
 	// Whether granting or revoking, first process FUTURE GRANTS, then usual grants; otherwise concurrently created
 	//   objects may be missed out in a run.
-	if err := g.grant(ctx, cnf, conn, doProd); err != nil { return err }
-	if err := g.revoke(ctx, cnf, conn, doProd); err != nil { return err }
+	if err := g.grant(ctx, synCnf, cnf, conn, doProd); err != nil { return err }
+	if err := g.revoke(ctx, synCnf, cnf, conn, doProd); err != nil { return err }
 	if err := g.dropDatabaseRoles(ctx, synCnf, cnf, conn, doProd); err != nil { return err }
 	if err := g.dropProductRoles(ctx, synCnf, cnf, conn, doProd); err != nil { return err }
 	return nil
@@ -218,12 +197,12 @@ func (g *Grupin) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, 
 	return g.doToDoDBRoleGrants(ctx, cnf, conn, doProd)
 }
 
-func (g *Grupin) revoke(ctx context.context, cnf *Config, conn *sql.db, doProd bool) error {
+func (g *Grupin) revoke(ctx context.context, synCnf *syntax.Config, cnf *Config, conn *sql.db, doProd bool) error {
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(cnf.MaxProductDTAPThreads)
 	for _, pd := range g.ProdDTAPs {
 		if doProd == pd.IsProd {
-			eg.Go(func() error { return pd.revoke(ctx, cnf, conn) })
+			eg.Go(func() error { return pd.revoke(ctx, synCnf, cnf, conn, g.productRoles, g.createDBRoleGrants, g.accountCache) })
 		}
 	}
 	return eg.Wait()
@@ -242,7 +221,7 @@ func (g *Grupin) setProductRoles(ctx context.Context, synCnf *syntax.Config, cnf
 			g.productRoles[r] = struct{}{}
 		}
 	}
-	if err = rows.Err(); err != nil { return err }
+	return rows.Err()
 }
 
 func (g *Grupin) setCreateDBRoleGrants(ctx context.Context, cnf *Config, conn *sql.DB) error {
@@ -259,6 +238,7 @@ func (g *Grupin) setCreateDBRoleGrants(ctx context.Context, cnf *Config, conn *s
 		if err != nil { return err }
 		g.createDBRoleGrants[grant.Database] = struct{}{}
 	}
+	return nil
 }
 
 func (g *Grupin) dropProductRoles(ctx context.Context, cnf *Config, conn *sql.DB) error {
@@ -270,6 +250,7 @@ func (g *Grupin) dropProductRoles(ctx context.Context, cnf *Config, conn *sql.DB
 		}
 		if err := r.Drop(ctx, cnf, conn); err != nil { return err }
 	}
+	return nil
 }
 
 func (g *Grupin) dropDatabaseRoles(ctx context.Context, cnf *Config, conn *sql.DB) error {
@@ -291,13 +272,5 @@ func (g *Grupin) dropDatabaseRoles(ctx context.Context, cnf *Config, conn *sql.D
 			if err := r.Drop(ctx, cnf, conn); err != nil { return err }
 		}
 	}
-}
-
-func (g Grupin) String() string {
-	// TODO: consider stripping this silly yaml serializing from semantics and snowflake package; it's really the domain of the syntax package only
-	data, err := yaml.Marshal(g)
-	if err != nil {
-		panic("grups could not be marshalled")
-	}
-	return string(data)
+	return nil
 }

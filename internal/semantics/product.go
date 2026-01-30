@@ -65,7 +65,7 @@ func newProduct(cnf *Config, pSyn syntax.Product, classes map[string]syntax.Clas
 		} else {
 			// Default DTAP Mapping is expecting a dtap with the same name in consumed product
 			pSem.Consumes[cs.InterfaceID] = map[string]string{}
-			for dtap := range pSem.DTAPs.All() {
+			for dtap, _ := range pSem.DTAPs.All() {
 				pSem.Consumes[cs.InterfaceID][dtap] = dtap
 			}
 		}
