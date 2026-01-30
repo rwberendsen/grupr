@@ -27,13 +27,19 @@ type Grant struct {
 	// TODO: consider using struct packing to align better and have more compact memory layout
 }
 
-func (g Grant) buildSQLGrant() string {
-	var toClause string
+func (g Grant) buildSQLGrant(revoke bool) string {
+	verb := 'GRANT'
+	preposition := 'TO'
+	if revoke {
+		verb = 'REVOKE'
+		prepostition = 'FROM'
+	}
+	var granteeClause string
 	switch g.GrantedTo {
 		case ObjTypeRole:
-			toClause = fmt.Sprintf(`TO ROLE %s`, quoteIdentifier(g.GrantedToRole))
+			granteeClause = fmt.Sprintf(`ROLE %s`, quoteIdentifier(g.GrantedToRole))
 		case ObjTypeDatabaseRole:
-			toClause = fmt.Sprintf(`TO DATABASE ROLE %s.%s`, quoteIdentifier(g.GrantedToDatabase), quoteIdentifier(g.GrantedToRole))
+			granteeClause = fmt.Sprintf(`DATABASE ROLE %s.%s`, quoteIdentifier(g.GrantedToDatabase), quoteIdentifier(g.GrantedToRole))
 		default:
 			panic("Not implemented")
 	}
@@ -41,26 +47,26 @@ func (g Grant) buildSQLGrant() string {
 	// GRANT ROLE ... / GRANT DATABASE ROLE ...
 	switch g.GrantedOn {
 	case ObjTpRole:
-		return fmt.Sprintf(`GRANT ROLE %s %s`, quoteIdentifier(g.GrantedRole), toClause)
+		return fmt.Sprintf(`%s ROLE %s %s %s`, verb, quoteIdentifier(g.GrantedRole), preposition, granteeClause)
 	case ObjTpDatabaseRole:
-		return fmt.Sprintf(`GRANT DATABASE ROLE %s.%s %s`, quoteIdentifier(g.Database), quoteIdentifier(g.GrantedRole), toClause)
+		return fmt.Sprintf(`%s DATABASE ROLE %s.%s %s`, verb, quoteIdentifier(g.Database), quoteIdentifier(g.GrantedRole), preposition, granteeClause)
 	}
 	
 	// GRANT <privileges> ... TO ROLE
 	privilegeClause := strings.Join(maps.Keys(g.Privileges), `, `)
 	
-	var onClause string
+	var objectClause string
 	switch g.GrantedOn {
 	case ObjTpDatabase:
-		onClause = fmt.Sprintf(`ON %v %s`, g.GrantedOn, quoteIdentifier(g.Database))
+		objectClause = fmt.Sprintf(`%v %s`, g.GrantedOn, quoteIdentifier(g.Database))
 	case ObjTpSchema:
-		onClause = fmt.Sprintf(`ON %v %s.%s`, g.GrantedOn, quoteIdentifier(g.Database), quoteIdentifier(g.Schema))
+		objectClause = fmt.Sprintf(`%v %s.%s`, g.GrantedOn, quoteIdentifier(g.Database), quoteIdentifier(g.Schema))
 	case ObjTpTable, ObjTypeView:
-		onClause = fmt.Sprintf(`ON %v %s.%s.%s`, g.GrantedOn, quoteIdentifier(g.Database), quoteIdentifier(g.Schema), quoteIdentifier(g.Object))
+		objectClause = fmt.Sprintf(`%v %s.%s.%s`, g.GrantedOn, quoteIdentifier(g.Database), quoteIdentifier(g.Schema), quoteIdentifier(g.Object))
 	default:
 		panic("Not implemented")
 	}
-	return fmt.Sprintf(`GRANT %s %s %s`, privilegeClause, onClause, toClause)
+	return fmt.Sprintf(`%s %s %s %s %s`, verb, privilegeClause, objectClause, preposition, granteeClause)
 }
 
 func newGrant(privilege string, createObjType string, grantedOn string, name string, grantedRoleStartsWithPrefix bool, grantedTo ObjType,
@@ -280,6 +286,22 @@ func queryGrantsToRole(ctx context.Context, cnf *Config, conn *sql.DB, db string
 }
 
 func DoGrants(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[Grant]) error {
+	return doGrants(ctx, cnf, conn, grants, false)	
+}
+
+func DoGrantsSkipErrors(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[Grant]) error {
+	return doGrants(ctx, cnf, conn, grants, false)	
+}
+
+func DoRevokes(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[Grant]) error {
+	return doGrants(ctx, cnf, conn, grants, true)	
+}
+
+func DoRevokesSkipErrors(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[Grant]) error {
+	return doGrants(ctx, cnf, conn, grants, true)	
+}
+
+func doGrants(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[Grant], revoke bool) error {
 	// Runs grant statements in batches
 	buf := make([]string, cnf.StmtBatchSize)
 	i := 0
@@ -288,7 +310,7 @@ func DoGrants(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[Gr
 			if err := runMultipleSQL(ctx, cnf, conn, slices.Join(buf, ";"), i); err != nil { return err }
 			i = 0
 		}
-		buf[i] := g.buildSQLGrant()
+		buf[i] := g.buildSQLGrant(revoke)
 		i++
 	}
 	if i > 0 {
@@ -297,17 +319,9 @@ func DoGrants(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[Gr
 	return nil
 }
 
-func DoGrantsSkipErrors(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[Grant]) error {
+func doGrantsSkipErrors(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[Grant], revoke bool) error {
 	for g := range grants {
-		if err := runMultipleSQL(ctx, cnf, conn, g.buildSQLGrant()); err != nil && err != ErrObjectNotExistOrAuthorized { return err }
-	}
-	return nil
-}
-
-func DoRevokesSkipErrors(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[Grant]) error {
-	// WIP WIP WIP
-	for g := range grants {
-		if err := runMultipleSQL(ctx, cnf, conn, g.buildSQLRevoke()); err != nil && err != ErrObjectNotExistOrAuthorized { return err }
+		if err := runMultipleSQL(ctx, cnf, conn, g.buildSQLGrant(revoke)); err != nil && err != ErrObjectNotExistOrAuthorized { return err }
 	}
 	return nil
 }

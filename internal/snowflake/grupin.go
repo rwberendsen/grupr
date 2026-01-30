@@ -185,7 +185,7 @@ func (g *Grupin) doToDoDBRoleGrants(ctx context.Context, cnf *Config, conn *sql.
 		// Even if doProd == false, we still have to process also production product-dtaps, as their interfaces may be consumed by non-prod product-dtaps
 		// So if doProd == false, we want to process all product-dtaps; otherwise, only production ones.
 		if doProd == false || pd.isProd {
-			eg.Go(func() error { return DoGrantsSkipErrors(ctx, cnf, conn, pd.getToDoDBRoleGrants(doProd, g.ProductDTAPs)) })
+			eg.Go(func() error { return DoGrantsSkipErrors(ctx, cnf, conn, pd.getToDoDBRoleGrants(doProd, g.ProductDTAPs), false) })
 			// Note that at this stage when we are touching all products, we just want to ignore obj not exist errors and move on
 			// no point refreshing all products, we might as well re-run the whole program
 		}

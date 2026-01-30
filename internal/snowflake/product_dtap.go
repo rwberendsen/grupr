@@ -123,7 +123,7 @@ func (pd *ProductDTAP) grant_(ctx context.Context, synCnf *syntax.Config, cnf *C
 	for iid, i := range pd.Interfaces {
 		if err := i.setGrants(ctx, synCnf, cnf, conn, c); err != nil { return err }
 	}
-	if err := DoGrants(ctx, cnf, conn, pd.getToDoGrants()); err != nil { return err }
+	if err := DoGrants(ctx, cnf, conn, pd.getToDoGrants(), false); err != nil { return err }
 
 	return nil
 }
@@ -185,11 +185,40 @@ func (pd *ProductDTAP) pushToDoDBRoleGrants(yield func(Grant) bool, doProd bool,
 	return true
 }
 
-func (p *ProductDTAP) revoke(ctx context.Context, cnf *Config, conn *sql.DB) error {
-	// if during revoking we get ErrObjectNotExistOrAuthorized, we can refresh the product and then first grant
-	// again, and then revoke
-	if err := p.Interface.revoke(ctx, cnf, conn, databaseRoles); err != nil { return err }
-	for iid, i := range p.Interfaces {
+func (pd *ProductDTAP) revokeFromProductRole(ctx context.Context, cnf *Config, conn *sql.DB) error {
+	// We skip errors here because this concerns relationships between
+	// products, and refreshing brings no value on top of just rerunning
+	// the whole program.  Note that an error would only mean some DB was
+	// dropped concurrently, and this would mean the grants we thought we
+	// needed to revoke would have already been dropped server side as
+	// well.
+	return DoRevokesSkipErrors(ctx, cnf, conn, maps.Keys(pd.revokeGrantsToRead))
+}
+
+func (pd *ProductDTAP) revoke(ctx context.Context, cnf *Config, conn *sql.DB) error {
+	if err := pd.revokeFromProductRole(ctx, cnf, conn); err != nil { return err }
+
+	// If during revoking of privileges on objects to interface database
+	// roles we get ErrObjectNotExistOrAuthorized, we can refresh the
+	// product and then first grant again, and then revoke; 
+	//
+	// In this case, too, it means some objects were dropped, and thus any privileges
+	// on them would have been dropped as well, rendering our job already done.
+	// So why then refresh? Some reasons:
+	// - There can be many objects, thousands. If whole schemas or even databases were dropped,
+	//   concurrently, it could mean thousands of queries done in vain, taking a lot of time. 
+	// - Because there can be many objects, we do multiple statements
+	//   per network call. But if we get an error in those, the batch is only partially
+	//   applied. Figuring out which statement caused the error, removing
+	//   it from the batch, and retrying  could be a repetitive exercise, although it
+	//   may be quicker than refreshing the whole product.
+	// - But, finally, objects being dropped concurrently signals activity in this data
+	//   product while Grupr was running. This could mean also some objects were added that
+	//   we would need to grant now. Rather than ignoring that signal and wait for the
+	//   next entire Grupr run, it can save our DBAs some time if we act immediately and
+	//   refresh just this single data product-dtap.
+	if err := pd.Interface.revoke(ctx, cnf, conn, databaseRoles); err != nil { return err }
+	for iid, i := range pd.Interfaces {
 		if err := i.revoke(ctx, cnf, conn, databaseRoles); err != nil { return err }
 	}
 	return nil
