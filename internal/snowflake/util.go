@@ -51,3 +51,7 @@ func printSQL(sql string, params ...any) {
 	fmt.Print("\n")
 }
 
+func newTrue() *bool {
+	t := true
+	return &t
+}

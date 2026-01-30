@@ -46,17 +46,7 @@ func (r ProductRole) Create(ctx context.Context, cnf *Config, conn *sql.DB) erro
 }
 
 func (r ProductRole) hasUnmanagedPrivileges(ctx context.Context, cnf *Config, conn *sql.DB) (bool, error) {
-	// TODO put the privileges in cnf
-	// WIP: use filter on prefix like we do in grupin
-	for grant, err := range QueryGrantsToRoleFilteredLimit(ctx, conn, r.ID, nil,
-		map[Grant]struct{}{
-			Grant{
-				Privilege: PrvUsage,
-				GrantedOn: ObjTpDatabaseRole,
-				GrantedBy: cnf.Role,
-			}: {},
-		},
-		1) {
+	for grant, err := range QueryGrantsToRoleFilteredLimit(ctx, conn, r.ID, nil, cnf.ProductRolePrivileges[r.Mode], 1) {
 		if err != nil { return true, err }
 		return true, nil
 	}

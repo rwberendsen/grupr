@@ -86,15 +86,7 @@ func (g *Grupin) setDBRoleGrants(ctx context.Context, synCnf *syntax.Config, cnf
 	// Loop over all granted grupr-managed database roles, and:
 	// - store which ones we already have been granted.
 	// - store which ones we should later revoke (when we have done a first granting loop over all products)
-	grantedRoleStartsWithPrefix = true
-	for grant, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, pd.ReadRole.ID, true,
-			map[GrantTemplate]struct{}{
-				GrantTemplate{
-					Privilege: PrvUsage,
-					GrantedOn: ObjTpDatabaseRole,
-					GrantedRoleStartsWithPrefix: &grantedRoleStartsWithPrefix,
-				}: {}
-			}, nil) {
+	for grant, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, pd.ReadRole.ID, true, cnf.ProductRolePrivileges[ModeRead], nil) {
 		if err != nil { return err }
 		grantedDBRole, err := newDatabaseRoleFromString(synCnf, cnf, grant.Database, grant.GrantedRole)
 		if err != nil { return err }
@@ -243,10 +235,8 @@ func (g *Grupin) setCreateDBRoleGrants(ctx context.Context, cnf *Config, conn *s
 
 func (g *Grupin) dropProductRoles(ctx context.Context, cnf *Config, conn *sql.DB) error {
 	for r := range g.productRoles {
-		if pSem, ok := g.gSem.Products[r.ProductID]; ok {
-			if pSem.DTAPs.HasDTAP(r.DTAP) {
-				continue // no need to drop this role
-			}
+		if _, ok := g.ProductDTAPs[semantics.ProductDTAPID{ProductID: r.ProductID, DTAP: r.DTAP,}]; ok {
+			continue // no need to drop this role
 		}
 		if err := r.Drop(ctx, cnf, conn); err != nil { return err }
 	}
@@ -256,16 +246,14 @@ func (g *Grupin) dropProductRoles(ctx context.Context, cnf *Config, conn *sql.DB
 func (g *Grupin) dropDatabaseRoles(ctx context.Context, cnf *Config, conn *sql.DB) error {
 	for db, dbCache := range g.accountCache.getDBs() {
 		for r := range dbCache.dbRoles {
-			if pSem, ok := g.Sem.Products[r.ProductID]; ok {
-				if pSem.DTAPs.HasDTAP(r.DTAP) {
-					if r.InterfaceID == "" {
-						if !pSem.ObjectMatchers.DisjointFromDB(db) {
-							continue // this role is still needed
-						}
-					} else if iSem, ok := pSem.Interfaces[r.InterfaceID]; ok {
-						if !iSem.ObjectMatchers.DisjointFromDB(db) {
-							continue // this role is still needed
-						}
+			if pd, ok := g.ProductDTAPs[semantics.ProductDTAPID{ProductID: r.ProductID, DTAP: r.DTAP,}]; ok {
+				if r.InterfaceID == "" {
+					if !pd.Interface.ObjectMatchers.DisjointFromDB(db) {
+						continue // this role is still needed
+					}
+				} else if i, ok := pd.Interfaces[r.InterfaceID]; ok {
+					if !i.ObjectMatchers.DisjointFromDB(db) {
+						continue // this role is still needed
 					}
 				}
 			}
