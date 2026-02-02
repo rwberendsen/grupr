@@ -82,28 +82,17 @@ func main() {
 	snowflakeNewGrupin, err := snowflake.NewGrupin(ctx, snowCnf, conn, newGrupin)
 	if err != nil { log.Fatalf("making Snowflake grupin: %v", err) }
 
-	// use it now to manage access
+	// Use it now to manage access
 	if err := snowflakeGrupin.ManageAccess(ctx, synCnf, snowCnf, conn); err != nil {
 		log.Fatalf("ManageAccess: %v", err)
 	}
-
-	// TODO: think about it, do we first build our snowflake grupin, which until now just contains matched objects and that's it; and then we start looping over that one
-	// to work out what database roles to create, and what privileges to grant to each of them? Or, do we already when building the grupin also work out and store what
-	// (database) roles and what granted privileges already exist in each of them? (as well as between them, with consume relations, much like in semantics.Grupin?)
-	// The latter is more appealing at first thought, more closely following what semantics.Grupin contains as well.
-	// And then, when we have that entire decorated Christmas tree, then we loop over that one to compute what statements we would have to execute to make the reality as we found
-	// it in Snowflake reflect what we want it to be in our yaml. And at that point, if we then encounter issues such as objects that have been deleted, then we could use
-	// cheap methods to refresh a particular product in the Snowflake grupin object. In particular because we are going to batch GRANT statements; the batch will fail even if
-	// just one statement fails; we could try to figure out which one(s) failed, omit them, and re-run the batch, but, it might be smarter to recompute the objects we think are
-	// there and then retry the whole batch, recomputing the grant statements we want to run. And if we are going to be able to recompute a product, we can also do this already
-	// if we detect objects being deleted out from under us while we are creating the Snowflake grupin object. Won't hurt.
 
 	// TODO: also think about how to guard against an error scenario in which someone triggers an old grupr run in CI/CD, e.g., we could store a UUID, or even a git hash
 	// in the Grupr schema of the currently running run; the last thing Grupr would always try before crashing is to wipe that one; but, it'd mean from time to time ops may have
 	// to come in and delete that one; but imagine the bewilderment if two grupr processes are concurrently trying to make two different yamls the reality...
 
 	basicStats := snowflake.NewBasicStats(newGrupin, snowflakeNewGrupin)
-	err = snowflake.PersistInSnowflake(ctx, conn, basicStats)
-
-	if err != nil { log.Fatalf("persisting stats: %v", err) }
+	if err := StoreObjCounts(ctx, snowCnf, conn, snowflakeNewGrupin.GetObjCountsRows()); err != nil {
+		log.Fatalf("storing object counts: %v", err) }
+	}
 }

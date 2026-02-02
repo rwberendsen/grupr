@@ -262,3 +262,13 @@ func (g *Grupin) dropDatabaseRoles(ctx context.Context, cnf *Config, conn *sql.D
 	}
 	return nil
 }
+
+func (g * Grupin) GetObjCountsRows() iter.Seq[ObjCountsRow] {
+	return func(yield func(ObjCountsRow) bool) {
+		for pdID, pd := range g.ProductDTAPs {
+			if !pd.pushObjectCounts(yield, pdID) {
+				return
+			}
+		}
+	}
+}

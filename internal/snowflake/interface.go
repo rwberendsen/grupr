@@ -3,6 +3,8 @@ package snowflake
 import (
 	"context"
 	"maps"
+	"slices"
+	"strings"
 
 	"github.com/rwberendsen/grupr/internal/syntax"
 	"github.com/rwberendsen/grupr/internal/semantics"
@@ -10,22 +12,27 @@ import (
 
 type Interface struct {
 	ObjectMatchers semantics.ObjMatchers
+	UserGroups syntax.Rendering
 	ConsumedBy map[semantics.ProductDTAPID]struct{}
 
 	// Granular accountObjects by ObjExpr; will be discarded after aggregate() is called
 	accountObjects map[semantics.ObjExpr]AccountObjs
 
 	// Computed by aggregate()
-	tableCountsByUserGroup map[string]int
-	viewCountsByUserGroup map[string]int
+	objectCountsByUserGroup map[string]map[ObjType]int
 
 	// Computed by aggregate()
 	aggAccountObjects AggAccountObjs
+	
+	// For use in pushObjectCounts
+	userGroupsStr string
 }
 
 func NewInterface(dtap string, iSem semantics.InterfaceMetadata) *Interface {
 	i := &Interface{
 		ObjectMatchers: semantics.ObjMatchers{},
+		UserGroups: iSem.UserGroups,
+		userGroupsStr: strings.Join(slices.Sorted(maps.Keys(iSem.UserGroups)), ",")
 	}	
 	// Just take what you need from own DTAP
 	for e, om := range iSem.ObjectMatchers {
@@ -68,11 +75,13 @@ func (i *Interface) aggregate() {
 }
 
 func (i *Interface) setCountsByUserGroup() {
-	i.tableCountsByUserGroup = map[string]int{}
-	i.viewCountsByUserGroup = map[string]int{}
+	i.objectCountsByUserGroup = map[string]map[ObjType]int
 	for e, om := range i.ObjectMatchers {
-		i.tableCountsByUserGroup[om.UserGroup] += i.accountObjects[e].countByObjType(ObjTpTable)
-		i.viewCountsByUserGroup[om.UserGroup] += i.accountObjects[e].countByObjType(ObjTpView)
+		if i.objectCountsByUserGroup[om.UserGroup] = nil {
+			i.objectCountsByUserGroup[om.UserGroup] = map[ObjType]int{}
+		}
+		i.objectCountsByUserGroup[om.UserGroup][ObjTpTable] += i.accountObjects[e].countByObjType(ObjTpTable)
+		i.objectCountsByUserGroup[om.UserGroup][ObjTpView] += i.accountObjects[e].countByObjType(ObjTpView)
 	}
 }
 
@@ -162,6 +171,24 @@ func (i *Interface) pushToDoRevokes(yield func(Grant) bool) bool {
 		if !dbObjs.pushToDoRevokes(yield) {
 			return false
 		}
+	}
+	return true
+}
+
+func (i *Interface) pushObjectCounts(yield func(ObjCountsRow) bool, pdID semantics.ProductDTAPID, iid string) bool {
+	for ug, countsByObjType := range i.objectCountsByUserGroup {
+		r := ObjCountsRow{
+			ProductID: pdID.ProductID,
+			DTAP: pdID.DTAP,
+			InterfaceID: iid,
+			UserGroups: ug,
+			TableCount: countsByObjType[ObjTpTable],
+			ViewCount: countsByObjType[ObjTpView],
+		}
+		if ug == "" {
+			r.UserGroups = i.userGroupsStr
+		}
+		if !yield(r) { return false }
 	}
 	return true
 }

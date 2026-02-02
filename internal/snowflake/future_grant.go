@@ -11,8 +11,7 @@ import (
 )
 
 type FutureGrant struct {
-	// NOTE that this struct could be used to represent a GRANT ... ON ALL <object_type_plural> IN ... grant as well.
-	// (Only syntactical difference between the statements is ALL <-> FUTURE)
+	// TODO: use map of PrivilegeComplete
 	Privilege 		Privilege
 	CreateObjectType	ObjType
 	GrantedOn 		ObjType
@@ -25,6 +24,7 @@ type FutureGrant struct {
 	GrantOption		bool // TODO: if we re-grant the same grant with a different grant option, does it get overwritten? Could be a way to correct such mishaps
 }
 
+// TODO: add revoke parameter
 func (g FutureGrant) buildSQLGrant() string {
 	if g.Privilege == PrvCreate {
 		panic("Granting CREATE not implemented yet")
@@ -286,3 +286,5 @@ func DoFutureGrants(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.
 	}
 	return nil
 }
+
+// TODO: implement RevokeFutureGrants

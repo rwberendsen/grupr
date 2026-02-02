@@ -1,8 +1,7 @@
 package snowflake
 
 type GrantTemplate struct {
-	Privilege Privilege
-	CreateObjectType ObjType
+	PrivilegeComplete
 	GrantedOn ObjType
 	GrantedRoleStartsWithPrefix *bool
 }

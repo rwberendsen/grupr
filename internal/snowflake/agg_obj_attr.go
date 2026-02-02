@@ -46,6 +46,7 @@ func (o AggObjAttr) hasGrantTo(m Mode, p Privilege) bool {
 
 func (o AggObjAttr) pushToDoGrants(yield func(Grant) bool, dbRole DatabaseRole, schema string, obj string) bool {
 	for _, p := range [2]Privilege{PrvSelect, PrvReferences} {
+		// TODO: combine select and references in a single grant statement
 		if !o.hasGrantTo(ModeRead, p) {
 			if !yield(Grant{
 				Privilege: p,

@@ -2,6 +2,7 @@ package snowflake
 
 import (
 	"os"
+	"strings"
 	
 	"github.com/rwberendsen/grupr/internal/syntax"
 	"github.com/rwberendsen/grupr/internal/semantics"
@@ -45,7 +46,7 @@ func GetConfig(semCnf *semantics.Config) *Config, error {
 		if !semCnf.ValidUnquotedExpr.MatchString(user) {
 			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_USER: Invalid user name")	
 		}
-		cnf.User = user
+		cnf.User = strings.ToUpper(user)
 	}
 
 	if role, ok := os.LookupEnv("GRUPR_SNOWFLAKE_ROLE"); !ok {
@@ -54,19 +55,31 @@ q		return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_U
 		if !semCnf.ValidUnquotedExpr.MatchString(role) {
 			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_ROLE: Invalid role name")	
 		}
-		cnf.Role = role
+		cnf.Role = strings.ToUpper(role)
 	}
 
 	if account, ok := os.LookupEnv("GRUPR_SNOWFLAKE_ACCOUNT"); !ok {
 		return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_ACCOUNT")
 	} else {
-		cnf.Account = account
+		cnf.Account = strings.ToUpper(account)
 	}
 
 	if database, ok := os.LookupEnv("GRUPR_SNOWFLAKE_DB"); !ok {
 		return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_DB")
 	} else {
-		cnf.Database = database
+		if !semCnf.ValidUnquotedExpr.MatchString(database) {
+			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_DB: Invalid database name")	
+		}
+		cnf.Database = strings.ToUpper(database)
+	}
+
+	if schema, ok := os.LookupEnv("GRUPR_SNOWFLAKE_SCHEMA"); !ok {
+		return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_SCHEMA")
+	} else {
+		if !semCnf.ValidUnquotedExpr.MatchString(schema) {
+			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_SCHEMA: Invalid schema name")	
+		}
+		cnf.Schema = strings.ToUpper(schema)
 	}
 
 	if useSQLOpen, ok := os.LookupEnv("GRUPR_SNOWFLAKE_USE_SQL_OPEN") {
@@ -84,7 +97,7 @@ q		return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_U
 		if err := !syntax.validateID(objectPrefix); err != nil {
 			return nil, fmt.Errorf("invalid value for GRUPR_SNOWFLAKE_OBJECT_PREFIX")
 		}
-		cnf.ObjectPrefix = objectPrefix
+		cnf.ObjectPrefix = strings.ToUpper(objectPrefix)
 	} 
 
 	if maxOpenConns, ok := os.LookupEnv("GRUPR_SNOWFLAKE_MAX_OPEN_CONNS"); ok {

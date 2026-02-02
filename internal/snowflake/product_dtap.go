@@ -264,3 +264,11 @@ func (pd *ProductDTAP) revoke_(ctx context.Context, cnf *Config, conn *sql.DB) e
 	if err := DoRevokes(ctx, cnf, conn, pd.getToDoRevokes()); err != nil { return err }
 	return nil
 }
+
+func (pd *ProductDTAP) pushObjectCounts(yield func(ObjCountsRow) bool, pdID semantics.ProductDTAPID) bool {
+	if !pd.Interface.pushObjectCounts(yield, pdID, "") { return false }
+	for iid, i := range pd.Interfaces {
+		if !i.pushObjectCounts(yield, pdID, iid) { return false }
+	}
+	return true
+}

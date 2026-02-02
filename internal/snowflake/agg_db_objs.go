@@ -258,6 +258,7 @@ func (o AggDBObjs) pushToDoFutureGrants(yield func(FutureGrant) bool) bool {
 		for _, ot := range [2]ObjType{ObjTpTable, ObjTpView} {
 			for _, p := range [2]Privilege{PrvSelect, PrvReferences} {
 				if !o.hasFutureGrantTo(ModeRead, ot, p) {
+					// TODO: combine select and references in a single grant statement
 					if !yield(FutureGrant{
 						Privilege: p,
 						GrantedOn: ot,
