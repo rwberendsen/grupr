@@ -2,9 +2,8 @@ package snowflake
 
 import (
 	"context"
-	"fmt"
-	"strings"
 	"database/sql"
+	"fmt"
 	"log"
 	"strings"
 	"sync"
@@ -17,9 +16,9 @@ import (
 
 // caching objects in Snowflake locally
 type accountCache struct {
-	mu	sync.RWMutex // guards dbs, dbExists, and version
-	version int
-	dbs     map[string]*dbCache // nil: never requested; empty: none found
+	mu       sync.RWMutex // guards dbs, dbExists, and version
+	version  int
+	dbs      map[string]*dbCache // nil: never requested; empty: none found
 	dbExists map[string]bool
 }
 
@@ -35,13 +34,19 @@ func escapeString(s string) string {
 func (c *accountCache) match(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, om semantics.ObjMatcher, o *matchedAccountObjs) error {
 	// will modify both c and o
 	err := c.matchDBs(ctx, synCnf, cnf, om, o)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	for db, dbObjs := range o.getDBs() {
 		err := c.matchSchemas(ctx, conn, db, om, dbObjs)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 		for schema, schemaObjs := range dbObjs.getSchemas() {
 			err = c.matchObjects(ctx, conn, db, schema, om, schemaObjs)
-			if err != nil { return err }
+			if err != nil {
+				return err
+			}
 		}
 	}
 }
@@ -52,7 +57,9 @@ func (c *accountCache) matchDBs(ctx context.Context, synCnf *syntax.Config, cnf 
 	if o.version == c.version {
 		// cache entry is stale
 		err := c.refreshDBs(ctx, synCnf, cnf, conn)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 	}
 	o.version = c.version
 	for k, _ := range o.getDBs() {
@@ -69,8 +76,8 @@ func (c *accountCache) matchDBs(ctx context.Context, synCnf *syntax.Config, cnf 
 }
 
 func (c *accountCache) matchSchemas(ctx context.Context, conn *sql.DB, db string, om semantics.ObjMatcher, o *matchedDBObjs) error {
-	c.mu.RLock() // Block till a (requesting) writer (obtains and) releases the lock, if any, get a read lock, now you can read this node, 
-		     // concurrently with other readers
+	c.mu.RLock() // Block till a (requesting) writer (obtains and) releases the lock, if any, get a read lock, now you can read this node,
+	// concurrently with other readers
 	defer c.mu.RUnlock()
 	if !c.hasDB(db) {
 		// Another thread may have modified c, refreshing db's, and deleted this db.
@@ -85,7 +92,9 @@ func (c *accountCache) matchSchemas(ctx context.Context, conn *sql.DB, db string
 	if o.version == c.dbs[db].version {
 		// cache entry is stale
 		err := c.dbs[db].refreshSchemas(ctx, conn, db.Name)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 	}
 	o.version = c.dbs[db].version
 	for k, _ := range o.getSchemas() {
@@ -104,20 +113,26 @@ func (c *accountCache) matchSchemas(ctx context.Context, conn *sql.DB, db string
 func (c *accountCache) matchObjects(ctx context.Context, conn *sql.DB, db string, schema string, om semantics.ObjMatcher, o *matchedSchemaObjs) error {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	if !c.hasDB(db) { return ErrObjectNotExistOrAuthorized }
+	if !c.hasDB(db) {
+		return ErrObjectNotExistOrAuthorized
+	}
 	c.dbs[db].mu.RLock()
 	defer c.dbs[db].mu.RUnlock()
-	if !c.dbs[db].hasSchema(schema) { return ErrObjectNotExistOrAuthorized }
+	if !c.dbs[db].hasSchema(schema) {
+		return ErrObjectNotExistOrAuthorized
+	}
 	c.dbs[db].schemas[schema].mu.Lock() // get a write lock on this schema
 	defer c.dbs[db].schemas[schema].mu.Unlock()
 	if o.version == c.dbs[db].schemas[schema].version {
 		// cache entry is stale
 		err := c.refreshObjects(ctx, conn, db.Name, schema)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 	}
 	o.version = c.dbs[db].schemas[schema].version
 	// Next, we overwrite whatever objects o may have had; but note that we would have set it to nil to save memory; see schema_objs.go
-	o.objects = map[string]ObjAttr{} 
+	o.objects = map[string]ObjAttr{}
 	for k, v := range c.dbs[db].schemas[schema].objects {
 		if !om.DisjointFromObject(db.Name, schema, k) {
 			o.objects[k] = v
@@ -130,7 +145,9 @@ func (c *accountCache) refreshDBs(ctx context.Context, synCnf *syntax.Config, cn
 	// Do not directly call this function, meant to be called only via match and friends,
 	// which would have required appropriate write locks to mutexes
 	dbs, err := queryDBs(ctx, conn)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	for k, v := range c.getDBs() {
 		if _, ok := dbs[k]; !ok {
 			c.dropDB(k)
@@ -138,7 +155,9 @@ func (c *accountCache) refreshDBs(ctx context.Context, synCnf *syntax.Config, cn
 	}
 	for k := range dbs {
 		if !c.hasDB(k) {
-			if err := c.addDB(ctx, synCnf, cnf, conn, k); err != nil { return err }
+			if err := c.addDB(ctx, synCnf, cnf, conn, k); err != nil {
+				return err
+			}
 		}
 	}
 	c.version += 1
@@ -154,7 +173,9 @@ func (c *accountCache) addDB(ctx context.Context, synCnf *syntax.Config, cnf *Co
 		c.dbs[k] = &dbCache{}
 	}
 	// After a DB has been dropped and recreated, DB roles may have been dropped
-	if err := c.dbs[k].refreshDBRoles(ctx, synCnf, cnf, conn, k); err != nil { return err }
+	if err := c.dbs[k].refreshDBRoles(ctx, synCnf, cnf, conn, k); err != nil {
+		return err
+	}
 	c.dbExists[k] = true
 	return nil
 }
@@ -197,7 +218,9 @@ func queryDBs(ctx context.Context, conn *sql.DB) (map[string]struct{}, error) {
 		if err = rows.Scan(&db); err != nil {
 			return nil, fmt.Errorf("queryDBs: error scanning row: %w", err)
 		}
-		if _, ok := dbs[db]; ok { return nil, fmt.Errorf("duplicate db: %v", db) }
+		if _, ok := dbs[db]; ok {
+			return nil, fmt.Errorf("duplicate db: %v", db)
+		}
 		dbs[db] = struct{}{}
 	}
 	if err = rows.Err(); err != nil {

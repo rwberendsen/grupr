@@ -4,16 +4,15 @@ import (
 	"github.com/rwberendsen/grupr/internal/semantics"
 )
 
-
-// AccountObjs aggregated to (product, dtap, interface) level, with fields to store granted privileges on them 
+// AccountObjs aggregated to (product, dtap, interface) level, with fields to store granted privileges on them
 type AggAccountObjs struct {
 	DBs map[string]AggDBObjs
 }
 
 func newAggAccountObjs(o AccountObjs) AggAccountObjs {
-	r := AggAccountObjs{DBs: make(map[string]AggDBObjs{}, len(o.DBs)),}
+	r := AggAccountObjs{DBs: make(map[string]AggDBObjs{}, len(o.DBs))}
 	for db, dbObjs := range o.DBs {
-		r.DBs[db] = newAggDBObjs(dbObjs)	
+		r.DBs[db] = newAggDBObjs(dbObjs)
 	}
 	return r
 }

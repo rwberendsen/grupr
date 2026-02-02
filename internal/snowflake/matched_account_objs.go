@@ -5,8 +5,8 @@ import (
 )
 
 type matchedAccountObjs struct {
-	version int
-	dbs map[string]*matchedDBObjs
+	version  int
+	dbs      map[string]*matchedDBObjs
 	dbExists map[string]bool
 }
 

@@ -1,13 +1,13 @@
 package snowflake
 
 type PrivilegeComplete struct {
-	Privilege Privilege
+	Privilege        Privilege
 	CreateObjectType ObjType
 }
 
 func ParsePrivilegeComplete(p string, cot string) PrivilegeComplete {
 	return PrivilegeComplete{
-		Privilege: ParsePrivilege(p),
+		Privilege:        ParsePrivilege(p),
 		CreateObjectType: ParseObjType(cot),
 	}
 }

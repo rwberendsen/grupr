@@ -5,9 +5,9 @@ import (
 )
 
 type Obj struct {
-	Name string
+	Name       string
 	ObjectType ObjType
-	Owner string
+	Owner      string
 }
 
 func QueryObjs(ctx context.Context, conn *sql.DB, db string, schema string) iter.Seq2[Obj, error] {
@@ -33,7 +33,7 @@ SELECT
   , '' AS kind
   , '' AS owner
 FROM $1
-`, limit, fromClause), quoteIdentifier(dbName) + "." + quoteIdentifier(schemaName), ObjTpTable.String(), ObjTpView.String())
+`, limit, fromClause), quoteIdentifier(dbName)+"."+quoteIdentifier(schemaName), ObjTpTable.String(), ObjTpView.String())
 			if err != nil {
 				if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
 					err = ErrObjectNotExistOrAuthorized
@@ -60,7 +60,7 @@ FROM $1
 					}
 					continue
 				}
-				obj := Obj{Name: name, ObjectType: ParseObjType(kind), Owner: owner,}
+				obj := Obj{Name: name, ObjectType: ParseObjType(kind), Owner: owner}
 				if !yield(obj, nil) {
 					return
 				}

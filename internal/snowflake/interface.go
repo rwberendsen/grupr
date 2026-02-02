@@ -6,14 +6,14 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/rwberendsen/grupr/internal/syntax"
 	"github.com/rwberendsen/grupr/internal/semantics"
+	"github.com/rwberendsen/grupr/internal/syntax"
 )
 
 type Interface struct {
 	ObjectMatchers semantics.ObjMatchers
-	UserGroups syntax.Rendering
-	ConsumedBy map[semantics.ProductDTAPID]struct{}
+	UserGroups     syntax.Rendering
+	ConsumedBy     map[semantics.ProductDTAPID]struct{}
 
 	// Granular accountObjects by ObjExpr; will be discarded after aggregate() is called
 	accountObjects map[semantics.ObjExpr]AccountObjs
@@ -23,7 +23,7 @@ type Interface struct {
 
 	// Computed by aggregate()
 	aggAccountObjects AggAccountObjs
-	
+
 	// For use in pushObjectCounts
 	userGroupsStr string
 }
@@ -31,9 +31,9 @@ type Interface struct {
 func NewInterface(dtap string, iSem semantics.InterfaceMetadata) *Interface {
 	i := &Interface{
 		ObjectMatchers: semantics.ObjMatchers{},
-		UserGroups: iSem.UserGroups,
-		userGroupsStr: strings.Join(slices.Sorted(maps.Keys(iSem.UserGroups)), ",")
-	}	
+		UserGroups:     iSem.UserGroups,
+		userGroupsStr:  strings.Join(slices.Sorted(maps.Keys(iSem.UserGroups)), ","),
+	}
 	// Just take what you need from own DTAP
 	for e, om := range iSem.ObjectMatchers {
 		if e.DTAP == dtap {
@@ -77,7 +77,7 @@ func (i *Interface) aggregate() {
 func (i *Interface) setCountsByUserGroup() {
 	i.objectCountsByUserGroup = map[string]map[ObjType]int
 	for e, om := range i.ObjectMatchers {
-		if i.objectCountsByUserGroup[om.UserGroup] = nil {
+		if i.objectCountsByUserGroup[om.UserGroup] == nil {
 			i.objectCountsByUserGroup[om.UserGroup] = map[ObjType]int{}
 		}
 		i.objectCountsByUserGroup[om.UserGroup][ObjTpTable] += i.accountObjects[e].countByObjType(ObjTpTable)
@@ -95,13 +95,15 @@ func (i *Interface) setAggAccountObjects() {
 }
 
 func (i *Interface) setFutureGrants(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, createDBRoleGrants map[string]struct{},
-		pID string, dtap string, iID string, c *accountCache) error {
+	pID string, dtap string, iID string, c *accountCache) error {
 	for db, dbObjs := range i.aggAccountObjects.DBs {
 		if !c.hasDB(db) {
 			return ErrObjectNotExistOrAuthorized // db may have been dropped concurrently
 		}
 		dbObjs, err := dbObjs.setFutureGrants(ctx, synCnf, cnf, conn, pID, dtap, iID, db, i.ObjectMatchers, createDBRoleGrants, c.dbs[db].dbRoles)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 		i.aggAccountObjects.DBs[db] = dbObjs
 	}
 }
@@ -112,7 +114,9 @@ func (i *Interface) setGrants(ctx context.Context, synCnf *syntax.Config, cnf *C
 			return ErrObjectNotExistOrAuthorized // db may have been dropped concurrently
 		}
 		dbObjs, err := dbObjs.setGrants(ctx, synCnf, cnf, conn, db, i.ObjectMatchers)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 		i.aggAccountObjects.DBs[db] = dbObjs
 	}
 }
@@ -135,17 +139,17 @@ func (i *Interface) pushToDoGrants(yield func(Grant) bool) bool {
 	return true
 }
 
-func (i *Interface) pushToDoDBRoleGrants(yield func(Grant) bool, doProd bool, m map[semantics.ProductDTAPID]*ProductDTAP) bool) bool {
+func (i *Interface) pushToDoDBRoleGrants(yield func(Grant) bool, doProd bool, m map[semantics.ProductDTAPID]*ProductDTAP) bool {
 	for db, dbObjs := range i.aggAccountObjects.DBs {
 		for pdID := range i.ConsumedBy {
 			if doProd == m[pdID].IsProd {
 				if !dbObjs.consumedByGranted[pd] {
 					if !yield(Grant{
-						Privileges: []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage,}},
-						GrantedOn: ObjTpDatabaseRole,
-						Database: db,
-						GrantedRole: dbObjs.dbRole,
-						GrantedTo: ObjTpRole,
+						Privileges:    []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage}},
+						GrantedOn:     ObjTpDatabaseRole,
+						Database:      db,
+						GrantedRole:   dbObjs.dbRole,
+						GrantedTo:     ObjTpRole,
 						GrantedToRole: m[pdID].ReadRole.ID,
 					}) {
 						return false
@@ -178,17 +182,19 @@ func (i *Interface) pushToDoRevokes(yield func(Grant) bool) bool {
 func (i *Interface) pushObjectCounts(yield func(ObjCountsRow) bool, pdID semantics.ProductDTAPID, iid string) bool {
 	for ug, countsByObjType := range i.objectCountsByUserGroup {
 		r := ObjCountsRow{
-			ProductID: pdID.ProductID,
-			DTAP: pdID.DTAP,
+			ProductID:   pdID.ProductID,
+			DTAP:        pdID.DTAP,
 			InterfaceID: iid,
-			UserGroups: ug,
-			TableCount: countsByObjType[ObjTpTable],
-			ViewCount: countsByObjType[ObjTpView],
+			UserGroups:  ug,
+			TableCount:  countsByObjType[ObjTpTable],
+			ViewCount:   countsByObjType[ObjTpView],
 		}
 		if ug == "" {
 			r.UserGroups = i.userGroupsStr
 		}
-		if !yield(r) { return false }
+		if !yield(r) {
+			return false
+		}
 	}
 	return true
 }

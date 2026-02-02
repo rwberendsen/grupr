@@ -8,15 +8,15 @@ import (
 )
 
 type InterfaceMetadata struct {
-	ObjectMatchers   	ObjMatchers
-	Classification   	Classification
-	GlobalUserGroups 	map[string]bool
-	UserGroups       	syntax.Rendering
-	MaskColumns      	ColMatcher
-	HashColumns      	ColMatcher
-	ConsumedBy		map[string]map[ProductDTAPID]struct{} // will be populated by Grupin.allConsumedOK
-	ExposeDTAPs      	map[string]bool // TODO: convert this to HideDTAPs, to be unioned between product and interface
-	ForProduct       	*string
+	ObjectMatchers   ObjMatchers
+	Classification   Classification
+	GlobalUserGroups map[string]bool
+	UserGroups       syntax.Rendering
+	MaskColumns      ColMatcher
+	HashColumns      ColMatcher
+	ConsumedBy       map[string]map[ProductDTAPID]struct{} // will be populated by Grupin.allConsumedOK
+	ExposeDTAPs      map[string]bool                       // TODO: convert this to HideDTAPs, to be unioned between product and interface
+	ForProduct       *string
 }
 
 func newInterfaceMetadata(cnf *Config, imSyn syntax.InterfaceMetadata, classes map[string]syntax.Class, globalUserGroups map[string]bool,
@@ -49,7 +49,7 @@ func newInterfaceMetadata(cnf *Config, imSyn syntax.InterfaceMetadata, classes m
 		// TODO: take into account hidden DTAPs
 		for d := range dtaps {
 			imSem.ConsumedBy[d] = map[ProductDTAPID]struct{}{} // will be further populated by Grupin.allConsumedOK
-		}	
+		}
 	}
 	return imSem, nil
 }
@@ -112,7 +112,7 @@ func (imSem *InterfaceMetadata) setUserGroups(imSyn syntax.InterfaceMetadata, pa
 			}
 		}
 		// if parent product has user groups, interface should also have a at least one
-		if len(parent.GlobalUserGroups) > 0 and len(imSem.GlobalUserGroups) == 0 {
+		if len(parent.GlobalUserGroups) > 0 && len(imSem.GlobalUserGroups) == 0 {
 			return &PolicyError{fmt.Sprintf("Product has global user groups, so interface should have at least one also", u)}
 		}
 	}

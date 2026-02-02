@@ -68,7 +68,7 @@ func main() {
 	ctx, cancel := context.WithCancel()
 	defer cancel()
 	go func() {
-		<- sigs // block until we receive Signal
+		<-sigs   // block until we receive Signal
 		cancel() // cancel context we will use to spawn threads, e.g., that hit our backend, e.g., Snowflake
 	}()
 
@@ -76,11 +76,15 @@ func main() {
 	snowCnf, err := snowflake.GetConfig(semCnf)
 
 	conn, err := snowflake.GetDB(ctx, snowCnf)
-	if err != nil { log.Fatalf("error creating db connection: %v", err) }
+	if err != nil {
+		log.Fatalf("error creating db connection: %v", err)
+	}
 
 	// Create Snowflake Grupin object, which will hold relevant account objects per data product
 	snowflakeNewGrupin, err := snowflake.NewGrupin(ctx, snowCnf, conn, newGrupin)
-	if err != nil { log.Fatalf("making Snowflake grupin: %v", err) }
+	if err != nil {
+		log.Fatalf("making Snowflake grupin: %v", err)
+	}
 
 	// Use it now to manage access
 	if err := snowflakeGrupin.ManageAccess(ctx, synCnf, snowCnf, conn); err != nil {
@@ -93,6 +97,6 @@ func main() {
 
 	basicStats := snowflake.NewBasicStats(newGrupin, snowflakeNewGrupin)
 	if err := StoreObjCounts(ctx, snowCnf, conn, snowflakeNewGrupin.GetObjCountsRows()); err != nil {
-		log.Fatalf("storing object counts: %v", err) }
+		log.Fatalf("storing object counts: %v", err)
 	}
 }

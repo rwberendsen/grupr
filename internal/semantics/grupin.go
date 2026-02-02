@@ -97,9 +97,9 @@ func (g Grupin) allConsumedOk() error {
 			if p.Classification < iSource.Classification {
 				// TODO: consider removing this policy rule, possibly too strict
 				// It might be useful to keep it, if e.g., you are using masking or hashing directives in the YAML,
-				// then when you define those, you lower the classification of the interface accordingly; 
+				// then when you define those, you lower the classification of the interface accordingly;
 				// you can have a separate interface for the same tables where you do not use such directives, and
-				// where you keep the higher classification. 
+				// where you keep the higher classification.
 				// and then you implement some mechanism by which you make sure if a consumer consumes the
 				// interface with masking or hashing directives, that the consumer indeed does not consume the
 				// unmasked and unhashed data.
@@ -116,7 +116,7 @@ func (g Grupin) allConsumedOk() error {
 				}
 				// Even though iSource is a copy, all copies reference the same map, initialized upon creation by NewInterface
 				// So we can reach into that map here and add an element to it
-				iSource.ConsumedBy[dtapSource][ProductDTAPID{ProductID: p.ID, DTAP: dtapSelf,}] = struct{}{}
+				iSource.ConsumedBy[dtapSource][ProductDTAPID{ProductID: p.ID, DTAP: dtapSelf}] = struct{}{}
 			}
 		}
 		for id, im := range p.Interfaces {

@@ -5,13 +5,13 @@ import (
 )
 
 type DBObjs struct {
-	Schemas  map[string]SchemaObjs
-	MatchAllSchemas 	bool
-	MatchAllObjects 	bool
+	Schemas         map[string]SchemaObjs
+	MatchAllSchemas bool
+	MatchAllObjects bool
 }
 
 func newDBObjs(db string, o DBObjs, om semantics.ObjMatcher) DBObjs {
-	r := DBObjs{Schemas: map[string]SchemaObjs{},}
+	r := DBObjs{Schemas: map[string]SchemaObjs{}}
 	r = r.setMatchAllSchemas(db, om)
 	r.setMatchAllObjects(db, om)
 	for schema, schemaObjs := range o.Schemas {
@@ -23,7 +23,7 @@ func newDBObjs(db string, o DBObjs, om semantics.ObjMatcher) DBObjs {
 }
 
 func newDBObjsFromMatched(m *matchedDBObjs) DBObjs {
-	o := DBObjs{Schemas: map[string]SchemaObjs{},}
+	o := DBObjs{Schemas: map[string]SchemaObjs{}}
 	for k, v := range m.getSchemas() {
 		o.Schemas[k] = newSchemaObjsFromMatched(v)
 	}
@@ -31,7 +31,9 @@ func newDBObjsFromMatched(m *matchedDBObjs) DBObjs {
 }
 
 func (o DBObjs) setMatchAllSchemas(db string, om semantics.ObjMatcher) DBObjs {
-	if !om.Include[semantics.Schema].MatchAll() { return o }
+	if !om.Include[semantics.Schema].MatchAll() {
+		return o
+	}
 	o.MatchAllSchemas = true
 	for excludeExpr := range om.Exclude {
 		if excludeExpr.MatchesAllObjectsInAnySchemaInDB(db.Name) {

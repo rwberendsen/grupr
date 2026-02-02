@@ -5,9 +5,9 @@ import (
 	"iter"
 )
 
-type struct matchedDBObjs {
-	version int
-	schemas map[string]*matchedSchemaObjs
+type matchedDBObjs struct {
+	version      int
+	schemas      map[string]*matchedSchemaObjs
 	schemaExists map[string]bool
 }
 

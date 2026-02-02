@@ -6,6 +6,6 @@ import (
 )
 
 type ObjAttr struct {
-	ObjectType 	ObjType
-	Owner 		string
+	ObjectType ObjType
+	Owner      string
 }

@@ -1,6 +1,6 @@
 package semantics
 
 type ProductDTAPID struct {
-	ProductID	string
-	DTAP		string
+	ProductID string
+	DTAP      string
 }

@@ -5,7 +5,7 @@ type GruprSnowflakeError struct {
 }
 
 var (
-	ErrObjectNotExistOrAuthorized = errObjectNotExistOrAuthorized() 
+	ErrObjectNotExistOrAuthorized = errObjectNotExistOrAuthorized()
 )
 
 func (e *GruprSnowflakeError) Error() string {

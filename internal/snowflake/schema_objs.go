@@ -1,12 +1,12 @@
 package snowflake
 
 type SchemaObjs struct {
-	Objects map[string]ObjAttr
+	Objects         map[string]ObjAttr
 	MatchAllObjects bool
 }
 
 func newSchemaObjs(db string, schema string, o SchemaObjs, om semantics.ObjMatcher) SchemaObjs {
-	r := SchemaObjs{Objects: map[string]ObjAttr{},}
+	r := SchemaObjs{Objects: map[string]ObjAttr{}}
 	r = r.setMatchAllObjects(db, om)
 	for k, v := range o.Objects {
 		if !om.DisjointFromObject(db.Name, schema, k) {

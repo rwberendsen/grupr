@@ -19,7 +19,9 @@ func GetDB(ctx *context.Context, snowCnf *Config) (*sql.DB, error) {
 		dsn := snowCnf.User + "@" + snowCnf.Account + "/" + snowCnf.Database + "?authenticator=" + gosnowflake.AuthTypeExternalBrowser.String()
 		log.Printf("dsn: %v", dsn)
 		db, err := sql.Open("snowflake", dsn)
-		if err != nil { return nil, err }
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		var cnf *gosnowflake.Config
 		if cnf.RSAKeyPath == "" {

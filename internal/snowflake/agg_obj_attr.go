@@ -6,11 +6,11 @@ import (
 )
 
 type AggObjAttr struct {
-	ObjectType 	ObjType
-	Owner 		string
-	
+	ObjectType ObjType
+	Owner      string
+
 	// set when grant() is called on AggDBObjs
-	isSelectGrantedToRead bool
+	isSelectGrantedToRead     bool
 	isReferencesGrantedToRead bool
 }
 
@@ -48,19 +48,19 @@ func (o AggObjAttr) pushToDoGrants(yield func(Grant) bool, dbRole DatabaseRole, 
 	prvs := []PrivilegeComplete{}
 	for _, p := range [2]Privilege{PrvSelect, PrvReferences} {
 		if !o.hasGrantTo(ModeRead, p) {
-			prvs = append(prvs, PrivilegeComplete{Privilege: p,})
+			prvs = append(prvs, PrivilegeComplete{Privilege: p})
 		}
 	}
 	if len(prvs) > 0 {
 		if !yield(Grant{
-			Privileges: prvs,
-			GrantedOn: ObjTpSchema,
-			Database: dbRole.Database,
-			Schema: schema,
-			Object: obj,
-			GrantedTo: ObjTpDatabaseRole,
+			Privileges:        prvs,
+			GrantedOn:         ObjTpSchema,
+			Database:          dbRole.Database,
+			Schema:            schema,
+			Object:            obj,
+			GrantedTo:         ObjTpDatabaseRole,
 			GrantedToDatabase: dbRole.Database,
-			GrantedToRole: o.dbRole.Name,
+			GrantedToRole:     o.dbRole.Name,
 		}) {
 			return false
 		}

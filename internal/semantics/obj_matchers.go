@@ -21,7 +21,7 @@ func newObjMatchers(cnf *Config, include []string, exclude []string, dtaps synta
 			if _, ok := oms[e]; ok {
 				return oms, fmt.Errorf("duplicate include expr: '%v', with attributes: '%v'", e, ea)
 			}
-			oms[e] = ObjMatcher{Include: e, ObjExprAttr: ea,}
+			oms[e] = ObjMatcher{Include: e, ObjExprAttr: ea}
 		}
 	}
 	// Check that ObjMatcher objects are all disjoint with regard to each other in the context of this ObjMatchers object;
@@ -37,7 +37,7 @@ func newObjMatchers(cnf *Config, include []string, exclude []string, dtaps synta
 		}
 		for e, _ := range objExprs { // We don't care about DTAP and UserGroup for excluded objects
 			hasStrictSuperset := false
-			for i, om range oms {
+			for i, om := range oms {
 				if e.subsetOf(i) && !i.subsetOf(e) { // e should be a strict subset of exactly one i
 					if _, ok := om.Exclude[e]; ok {
 						return oms, fmt.Errorf("duplicate exclude expr")
@@ -117,27 +117,32 @@ func (lhs ObjMatchers) setSubsetOf(rhs ObjMatchers) ObjMatchers {
 		}
 		ret[eLHS] = omLHS
 	}
-	return ret	
+	return ret
 }
 
 func (lhs ObjMatcher) DisjointFromDB(db string) bool {
 	for _, om := range oms {
-		if !om.DisjointFromDB(db, schema) { return false }
+		if !om.DisjointFromDB(db, schema) {
+			return false
+		}
 	}
 	return true
 }
 
 func (oms ObjMatchers) DisjointFromSchema(db string, schema string) bool {
 	for _, om := range oms {
-		if !om.DisjointFromSchema(db, schema) { return false }
+		if !om.DisjointFromSchema(db, schema) {
+			return false
+		}
 	}
 	return true
 }
 
 func (oms ObjMatchers) DisjointFromObject(db string, schema string, object string) bool {
 	for _, om := range oms {
-		if !om.DisjointFromObject(db, schema, object) { return false }
+		if !om.DisjointFromObject(db, schema, object) {
+			return false
+		}
 	}
 	return true
 }
-

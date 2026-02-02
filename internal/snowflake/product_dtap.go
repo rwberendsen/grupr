@@ -12,24 +12,24 @@ type ProductDTAP struct {
 	IsProd bool
 	*Interface
 	Interfaces map[string]*Interface
-	Consumes map[syntax.InterfaceID]string // value is source dtap
-	ReadRole ProductRole
+	Consumes   map[syntax.InterfaceID]string // value is source dtap
+	ReadRole   ProductRole
 
-	refreshCount int // how many times has this ProductDTAP been refreshed: populated with Snowflake objects
+	refreshCount          int // how many times has this ProductDTAP been refreshed: populated with Snowflake objects
 	matchedAccountObjects map[semantics.ObjExpr]*matchedAccountObjs
-	hasProductRoles bool
-	revokeGrantsToRead map[Grant]struct{}
+	hasProductRoles       bool
+	revokeGrantsToRead    map[Grant]struct{}
 }
 
 func NewProductDTAP(pdID semantics.ProductDTAPID, isProd bool, pSem semantics.Product) *ProductDTAP {
 	pd := &ProductDTAP{
-		ProductDTAPID: pdID,
-		IsProd: isProd,
-		Interface: NewInterface(dtap, pSem.InterfaceMetadata),
-		Interfaces: map[string]Interface{},
-		Consumes: map[syntac.InterfaceID]string{},
+		ProductDTAPID:         pdID,
+		IsProd:                isProd,
+		Interface:             NewInterface(dtap, pSem.InterfaceMetadata),
+		Interfaces:            map[string]Interface{},
+		Consumes:              map[syntac.InterfaceID]string{},
 		matchedAccountObjects: map[semantics.ObjExpr]*matchedAccountObjs{},
-		revokeGrantsToRead: map[Grant]struct{}{},
+		revokeGrantsToRead:    map[Grant]struct{}{},
 	}
 
 	for id, iSem := range pSem.Interfaces {
@@ -45,12 +45,14 @@ func NewProductDTAP(pdID semantics.ProductDTAPID, isProd bool, pSem semantics.Pr
 	for k := range pd.Interface.ObjectMatchers {
 		pd.matchedAccountObjects[k] = &matchedAccountObjects{}
 	}
-	
+
 	return pd
 }
 
 func (pd *ProductDTAP) refresh(ctx context.Context, cnf *Config, conn *sql.DB, c *accountCache) error {
-	if err := pd.refresh_(ctx, cnf, conn, c); err != nil { return err }
+	if err := pd.refresh_(ctx, cnf, conn, c); err != nil {
+		return err
+	}
 	pd.recalcObjects()
 }
 
@@ -60,7 +62,7 @@ func (pd *ProductDTAP) refresh_(ctx context.Context, cnf *Config, conn *sql.DB, 
 		if pd.refreshCount > cnf.MaxProductRefreshCount {
 			return fmt.Errorf("Max product refresh count reached")
 		}
-		util.SleepContext(ctx, 1 << pd.refreshCount - 1) // exponential backoff
+		util.SleepContext(ctx, 1<<pd.refreshCount-1) // exponential backoff
 		if err := pd.refreshObjExprs(ctx, conn, c); err != ErrObjectNotExistOrAuthorized {
 			return err
 		}
@@ -86,20 +88,24 @@ func (pd *ProductDTAP) recalcObjects() {
 }
 
 func (pd *ProductDTAP) createProductRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config,
-			      conn *sql.DB, productRoles map[ProductRole]struct{}) error {
-	if pd.hasProductRoles { return nil }
+	conn *sql.DB, productRoles map[ProductRole]struct{}) error {
+	if pd.hasProductRoles {
+		return nil
+	}
 	pd.ReadRole = newProductRole(synCnf, cnf, pd.ProductID, pd.DTAP, ModeRead)
 	if _, ok := productRoles[productRole]; !ok {
-		if err := productRole.create(ctx, cnf, conn); err != nil { return err }
+		if err := productRole.create(ctx, cnf, conn); err != nil {
+			return err
+		}
 	}
 	pd.hasProductRoles = true
 	return nil
-	
+
 }
 
 func (pd *ProductDTAP) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{},
-		createDBRoleGrants map[string]struct{}, c *accountCache) error {
-	for { 
+	createDBRoleGrants map[string]struct{}, c *accountCache) error {
+	for {
 		if err := pd.grant_(ctx, synCnf, cnf, conn, productRoles, createDBRoleGrants, c); err != ErrObjectNotExistOrAuthorized {
 			return err
 		}
@@ -107,23 +113,39 @@ func (pd *ProductDTAP) grant(ctx context.Context, synCnf *syntax.Config, cnf *Co
 }
 
 func (pd *ProductDTAP) grant_(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{},
-		createDBRoleGrants map[string]struct{}, c *accountCache) error {
-	if err := pd.refresh(ctx, cnf, conn, c); err != nil { return err }
-	if err := pd.createProductRoles(ctx, synCnf, cnf, conn, productRoles); err != nil { return err }
+	createDBRoleGrants map[string]struct{}, c *accountCache) error {
+	if err := pd.refresh(ctx, cnf, conn, c); err != nil {
+		return err
+	}
+	if err := pd.createProductRoles(ctx, synCnf, cnf, conn, productRoles); err != nil {
+		return err
+	}
 
 	// Future grants go first, so that as quickly as possible newly created objects will have correct privileges granted
-	if err := pd.Interface.setFutureGrants(ctx, synCnf, cnf, conn, createDBRoleGrants, pd.ProductID, pd.DTAP, "", c); err != nil { return err }
-	for iid, i := range pd.Interfaces {
-		if err := i.setFutureGrants(ctx, synCnf, cnf, conn, createDBRoleGrants, pd.ProductID, pd.DTAP, iid, c); err != nil { return err }
+	if err := pd.Interface.setFutureGrants(ctx, synCnf, cnf, conn, createDBRoleGrants, pd.ProductID, pd.DTAP, "", c); err != nil {
+		return err
 	}
-	if err := DoFutureGrants(ctx, cnf, conn, pd.getToDoFutureGrants()); err != nil { return err }
+	for iid, i := range pd.Interfaces {
+		if err := i.setFutureGrants(ctx, synCnf, cnf, conn, createDBRoleGrants, pd.ProductID, pd.DTAP, iid, c); err != nil {
+			return err
+		}
+	}
+	if err := DoFutureGrants(ctx, cnf, conn, pd.getToDoFutureGrants()); err != nil {
+		return err
+	}
 
 	// Now, regular grants
-	if err := pd.Interface.setGrants(ctx, synCnf, cnf, conn, c); err != nil { return err }
-	for iid, i := range pd.Interfaces {
-		if err := i.setGrants(ctx, synCnf, cnf, conn, c); err != nil { return err }
+	if err := pd.Interface.setGrants(ctx, synCnf, cnf, conn, c); err != nil {
+		return err
 	}
-	if err := DoGrants(ctx, cnf, conn, pd.getToDoGrants(), false); err != nil { return err }
+	for iid, i := range pd.Interfaces {
+		if err := i.setGrants(ctx, synCnf, cnf, conn, c); err != nil {
+			return err
+		}
+	}
+	if err := DoGrants(ctx, cnf, conn, pd.getToDoGrants(), false); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -165,11 +187,11 @@ func (pd *ProductDTAP) pushToDoDBRoleGrants(yield func(Grant) bool, doProd bool,
 	for db, dbObjs := range pd.Interface.aggAccountObjects.DBs {
 		if !dbObjs.isUsageGrantedToRead {
 			if !yield(Grant{
-				Privileges: []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage,}},
-				GrantedOn: ObjTpDatabaseRole,
-				Database: db,
-				GrantedRole: dbObjs.dbRole,
-				GrantedTo: ObjTpRole,
+				Privileges:    []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage}},
+				GrantedOn:     ObjTpDatabaseRole,
+				Database:      db,
+				GrantedRole:   dbObjs.dbRole,
+				GrantedTo:     ObjTpRole,
 				GrantedToRole: pd.ReadRole.ID,
 			}) {
 				return false
@@ -196,9 +218,13 @@ func (pd *ProductDTAP) revokeFromProductRole(ctx context.Context, cnf *Config, c
 }
 
 func (pd *ProductDTAP) refreshGrantRevoke(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{},
-		createDBRoleGrants map[string]struct{}, c *accountCache) error {
-	if err := pd.grant(ctx, synCnf, cnf, conn, productRoles, createDBRoleGrants, c); err != nil { return err }
-	if err := pd.revoke(ctx, synCnf, cnf, conn, productRoles, createDBRoleGrants, c); err != nil { return err }
+	createDBRoleGrants map[string]struct{}, c *accountCache) error {
+	if err := pd.grant(ctx, synCnf, cnf, conn, productRoles, createDBRoleGrants, c); err != nil {
+		return err
+	}
+	if err := pd.revoke(ctx, synCnf, cnf, conn, productRoles, createDBRoleGrants, c); err != nil {
+		return err
+	}
 }
 
 func (pd *ProductDTAP) getToDoFutureRevokes() iter.Seq[Grant] {
@@ -228,18 +254,20 @@ func (pd *ProductDTAP) getToDoRevokes() iter.Seq[Grant] {
 }
 
 func (pd *ProductDTAP) revoke(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{},
-		createDBRoleGrants map[string]struct{}, c *accountCache) error {
-	if err := pd.revokeFromProductRole(ctx, cnf, conn); err != nil { return err }
+	createDBRoleGrants map[string]struct{}, c *accountCache) error {
+	if err := pd.revokeFromProductRole(ctx, cnf, conn); err != nil {
+		return err
+	}
 
 	// If during revoking of privileges on objects to interface database
 	// roles we get ErrObjectNotExistOrAuthorized, we can refresh the
-	// product and then first grant again, and then revoke; 
+	// product and then first grant again, and then revoke;
 	//
 	// In this case, too, it means some objects were dropped, and thus any privileges
 	// on them would have been dropped as well, rendering our job already done.
 	// So why then refresh? Some reasons:
 	// - There can be many objects, thousands. If whole schemas or even databases were dropped,
-	//   concurrently, it could mean thousands of queries done in vain, taking a lot of time. 
+	//   concurrently, it could mean thousands of queries done in vain, taking a lot of time.
 	// - Because there can be many objects, we do multiple statements
 	//   per network call. But if we get an error in those, the batch is only partially
 	//   applied. Figuring out which statement caused the error, removing
@@ -260,15 +288,23 @@ func (pd *ProductDTAP) revoke(ctx context.Context, synCnf *syntax.Config, cnf *C
 func (pd *ProductDTAP) revoke_(ctx context.Context, cnf *Config, conn *sql.DB) error {
 	// Future grants are revoked first, in case objects are being concurrently created, at least those
 	// object will stop receiving incorrect grants first.
-	if err := DoFutureRevokes(ctx, cnf, conn, pd.getToDoFutureRevokes()); err != nil { return err }
-	if err := DoRevokes(ctx, cnf, conn, pd.getToDoRevokes()); err != nil { return err }
+	if err := DoFutureRevokes(ctx, cnf, conn, pd.getToDoFutureRevokes()); err != nil {
+		return err
+	}
+	if err := DoRevokes(ctx, cnf, conn, pd.getToDoRevokes()); err != nil {
+		return err
+	}
 	return nil
 }
 
 func (pd *ProductDTAP) pushObjectCounts(yield func(ObjCountsRow) bool, pdID semantics.ProductDTAPID) bool {
-	if !pd.Interface.pushObjectCounts(yield, pdID, "") { return false }
+	if !pd.Interface.pushObjectCounts(yield, pdID, "") {
+		return false
+	}
 	for iid, i := range pd.Interfaces {
-		if !i.pushObjectCounts(yield, pdID, iid) { return false }
+		if !i.pushObjectCounts(yield, pdID, iid) {
+			return false
+		}
 	}
 	return true
 }

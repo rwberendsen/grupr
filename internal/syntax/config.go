@@ -5,5 +5,5 @@ type Config struct {
 }
 
 func GetConfig() *Config {
-	return &Config{Infix: "_x_",}
+	return &Config{Infix: "_x_"}
 }

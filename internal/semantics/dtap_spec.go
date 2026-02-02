@@ -14,10 +14,10 @@ type DTAPSpec struct {
 }
 
 func newDTAPSpec(cnf *Config, dsSyn *syntax.DTAPSpec, dtapRendering syntax.Rendering) DTAPSpec {
-	if dSyn == nil () {
+	if dSyn == nil() {
 		// Not specifying any DTAP info means you will get a default DTAP spec, which has only a production DTAP
 		return DTAPSpec{
-			Prod:          &cnf.DefaultProdDTAPName,
+			Prod: &cnf.DefaultProdDTAPName,
 		}
 	}
 	dsSem := DTAPSpec{
@@ -27,7 +27,7 @@ func newDTAPSpec(cnf *Config, dsSyn *syntax.DTAPSpec, dtapRendering syntax.Rende
 	}
 	if dsSyn.Prod != nil {
 		s := *dsSyn.Prod
-		dsSem.Prod = &s // s will escape, but, if we had assigned dsSyn.Prod directly, then dsSyn would not be garbage collected.
+		dsSem.Prod = &s            // s will escape, but, if we had assigned dsSyn.Prod directly, then dsSyn would not be garbage collected.
 		dsSem.DTAPRendering[s] = s // default value when not in dtapRendering
 	}
 	for _, d := range dsSyn.NonProd {
@@ -70,9 +70,15 @@ func (spec DTAPSpec) All() iter.Seq2[string, bool] {
 }
 
 func (lhs DTAPSpec) Equal(rhs DTAPSpec) bool {
-	if lhs.Prod == nil && rhs.Prod != nil { return false }
-	if lhs.Prod != nil && rhs.Prod == nil { return false }
-	if lhs.Prod != nil && rhs.Prod != nil && *lhs.Prod != *rhs.Prod { return false }
+	if lhs.Prod == nil && rhs.Prod != nil {
+		return false
+	}
+	if lhs.Prod != nil && rhs.Prod == nil {
+		return false
+	}
+	if lhs.Prod != nil && rhs.Prod != nil && *lhs.Prod != *rhs.Prod {
+		return false
+	}
 	return maps.Equal(lhs.NonProd, rhs.NonProd) &&
 		maps.Equal(lhs.DTAPRendering, rhs.DTAPRendering)
 }

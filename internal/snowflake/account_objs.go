@@ -4,14 +4,13 @@ import (
 	"github.com/rwberendsen/grupr/internal/semantics"
 )
 
-
 // Couple of simple data structures to hold matched objects in account
 type AccountObjs struct {
 	DBs map[string]DBObjs
 }
 
 func newAccountObjs(o *AccountObjs, om semantics.ObjMatcher) AccountObjs {
-	r := AccountObjs{DBs: map[string]DBObjs{},}
+	r := AccountObjs{DBs: map[string]DBObjs{}}
 	for db, dbObjects := range o.DBs {
 		if !om.DisjointFromDB(db) {
 			r.DBs[db] = newDBObjs(db, dbObjects, om)
@@ -21,7 +20,7 @@ func newAccountObjs(o *AccountObjs, om semantics.ObjMatcher) AccountObjs {
 }
 
 func newAccountObjsFromMatched(m *matchedAccountObjs) AccountObjs {
-	r := AccountObjs{DBS: map[string]DBObjs{},}
+	r := AccountObjs{DBS: map[string]DBObjs{}}
 	for k, v := range m.getDBs() {
 		r.DBs[k] = newDBObjsFromMatched(v)
 	}

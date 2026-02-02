@@ -1,21 +1,21 @@
 package snowflake
 
 type AggSchemaObjs struct {
-	Objects 				map[string]AggObjAttr
-	MatchAllObjects 			bool
+	Objects         map[string]AggObjAttr
+	MatchAllObjects bool
 
 	// set while grants are being set
-	isUsageGrantedToRead 			bool
-	isPrivilegeGrantedToFutureObject	[2][2]bool // [ObjectType][Privilege]
+	isUsageGrantedToRead             bool
+	isPrivilegeGrantedToFutureObject [2][2]bool // [ObjectType][Privilege]
 }
 
 func newAggSchemaObjs(o SchemaObjs) AggSchemaObjs {
 	r := AggSchemaObjs{
-		Objects: make(map[string]ObjAttr, len(o.Objects)),
+		Objects:         make(map[string]ObjAttr, len(o.Objects)),
 		MatchAllObjects: o.MatchAllObjects,
 	}
 	for k, v := range o.Objects {
-		r.Objects[k] = AggObjAttr{ObjectType: v.ObjectType, Owner: v.Owner,}
+		r.Objects[k] = AggObjAttr{ObjectType: v.ObjectType, Owner: v.Owner}
 	}
 	return r
 }
@@ -26,12 +26,16 @@ func (o AggSchemaObjs) hasObject(k string) bool {
 }
 
 func (o AggSchemaObjs) setFutureGrantTo(m Mode, grantedOn ObjType, p privilege) AggSchemaObjs {
-	fObjTp := func (ot ObjType) int {
-		if ot == ObjTpTable { return 0 }
+	fObjTp := func(ot ObjType) int {
+		if ot == ObjTpTable {
+			return 0
+		}
 		return 1
 	}
-	fPrv := func (p Privilege) int {
-		if p == PrvSelect { return 0 }
+	fPrv := func(p Privilege) int {
+		if p == PrvSelect {
+			return 0
+		}
 		return 1
 	}
 	switch grantedOn {
@@ -49,12 +53,16 @@ func (o AggSchemaObjs) setFutureGrantTo(m Mode, grantedOn ObjType, p privilege) 
 }
 
 func (o AggSchemaObjs) hasFutureGrantTo(m Mode, grantedOn ObjType, p Privilege) bool {
-	fObjTp := func (ot ObjType) int {
-		if ot == ObjTpTable { return 0 }
+	fObjTp := func(ot ObjType) int {
+		if ot == ObjTpTable {
+			return 0
+		}
 		return 1
 	}
-	fPrv := func (p Privilege) int {
-		if p == PrvSelect { return 0 }
+	fPrv := func(p Privilege) int {
+		if p == PrvSelect {
+			return 0
+		}
 		return 1
 	}
 	switch grantedOn {
@@ -68,7 +76,9 @@ func (o AggSchemaObjs) hasFutureGrantTo(m Mode, grantedOn ObjType, p Privilege) 
 }
 
 func (o AggSchemaObjs) setGrantTo(m Mode, p Privilege) AggSchemaObjs {
-	if m != ModeRead || p != PrvUsage { panic("not implemented") }
+	if m != ModeRead || p != PrvUsage {
+		panic("not implemented")
+	}
 	o.isUsageGrantedToRead = true
 	return o
 }
@@ -83,22 +93,22 @@ func (o AggDBObjs) pushToDoFutureGrants(yield func(FutureGrant) bool, dbRole Dat
 			prvs := []PrivilegeComplete{}
 			for _, p := range [2]Privilege{PrvSelect, PrvReferences} {
 				if !o.hasFutureGrantTo(ModeRead, ot, p) {
-					prvs = append(prvs, PrivilegeComplete{Privilege: PrvUsage,})
+					prvs = append(prvs, PrivilegeComplete{Privilege: PrvUsage})
 				}
 			}
-			if len(prvs) > 0:
+			if len(prvs) > 0 {
 				if !yield(FutureGrant{
-					Privileges: prvs,
-					GrantedOn: ot,
-					GrantedIn: ObjTpSchema,
-					Database: dbRole.Database,
-					Schema: schema,
-					GrantedTo: ObjTpDatabaseRole,
+					Privileges:        prvs,
+					GrantedOn:         ot,
+					GrantedIn:         ObjTpSchema,
+					Database:          dbRole.Database,
+					Schema:            schema,
+					GrantedTo:         ObjTpDatabaseRole,
 					GrantedToDatabase: dbRole.Database,
-					GrantedToRole: dbRole.Name,
+					GrantedToRole:     dbRole.Name,
 				}) {
 					return false
-				}	
+				}
 			}
 		}
 	}
@@ -108,13 +118,13 @@ func (o AggDBObjs) pushToDoFutureGrants(yield func(FutureGrant) bool, dbRole Dat
 func (o AggSchemaObjs) pushToDoGrants(yield func(Grant) bool, dbRole DatabaseRole, schema string) bool {
 	if !o.hasGrantTo(ModeRead, PrvUsage) {
 		if !yield(Grant{
-			Privileges: []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage,}},
-			GrantedOn: ObjTpSchema,
-			Database: dbRole.Database,
-			Schema: schema,
-			GrantedTo: ObjTpDatabaseRole,
+			Privileges:        []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage}},
+			GrantedOn:         ObjTpSchema,
+			Database:          dbRole.Database,
+			Schema:            schema,
+			GrantedTo:         ObjTpDatabaseRole,
 			GrantedToDatabase: dbRole.Database,
-			GrantedToRole: dbRole.Name,
+			GrantedToRole:     dbRole.Name,
 		}) {
 			return false
 		}

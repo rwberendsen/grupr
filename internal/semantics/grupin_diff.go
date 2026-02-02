@@ -1,9 +1,9 @@
 package semantics
 
 type GrupinDiff struct {
-	Created map[string]Product     
-	Deleted map[string]Product     
-	Updated map[string]ProductDiff 
+	Created map[string]Product
+	Deleted map[string]Product
+	Updated map[string]ProductDiff
 	// TODO: GlobalUserGroups, UserGroupMappings, when use cases need to compare them, expose them here somehow.
 	Old Grupin
 	New Grupin

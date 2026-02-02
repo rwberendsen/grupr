@@ -3,57 +3,57 @@ package snowflake
 import (
 	"os"
 	"strings"
-	
-	"github.com/rwberendsen/grupr/internal/syntax"
+
 	"github.com/rwberendsen/grupr/internal/semantics"
+	"github.com/rwberendsen/grupr/internal/syntax"
 )
 
 type Config struct {
-	User string
-	Role string
-	Account string
-	Database string
-	Schema string
-	UseSQLOpen bool
-	RSAKeyPath string
-	ObjectPrefix string // for objects (roles) created by Grupr in Snowflake
-	MaxOpenConns int
-	MaxIdleConns int
-	MaxProductDTAPThreads int
-	StmtBatchSize int
+	User                    string
+	Role                    string
+	Account                 string
+	Database                string
+	Schema                  string
+	UseSQLOpen              bool
+	RSAKeyPath              string
+	ObjectPrefix            string // for objects (roles) created by Grupr in Snowflake
+	MaxOpenConns            int
+	MaxIdleConns            int
+	MaxProductDTAPThreads   int
+	StmtBatchSize           int
 	MaxProductDTAPRefreshes int
-	Modes [1]Mode
-	DatabaseRolePrivileges map[Mode]map[GrantTemplate]struct{}
-	ProductRolePrivileges map[Mode]map[GrantTemplate]struct{}
-	DryRun bool
+	Modes                   [1]Mode
+	DatabaseRolePrivileges  map[Mode]map[GrantTemplate]struct{}
+	ProductRolePrivileges   map[Mode]map[GrantTemplate]struct{}
+	DryRun                  bool
 }
 
-func GetConfig(semCnf *semantics.Config) *Config, error {
+func GetConfig(semCnf *semantics.Config) (*Config, error) {
 	cnf := &Config{
-		UseSQLOpen: false,
-		MaxOpenConns: 0, 	// unlimited
-		MaxIdleConns: 3,	// MaxProductDTAPThreads - 1 (sometimes we use only one conn before quickly fanning out again)
-		MaxProductDTAPThreads: 4,
-		StmtBatchSize: 100,
-		MaxProductDTAPRefreshes: 4, 
-		Modes: [1]Mode{Read,},
-		DryRun: true
+		UseSQLOpen:              false,
+		MaxOpenConns:            0, // unlimited
+		MaxIdleConns:            3, // MaxProductDTAPThreads - 1 (sometimes we use only one conn before quickly fanning out again)
+		MaxProductDTAPThreads:   4,
+		StmtBatchSize:           100,
+		MaxProductDTAPRefreshes: 4,
+		Modes:                   [1]Mode{Read},
+		DryRun:                  true,
 	}
 
 	if user, ok := os.LookupEnv("GRUPR_SNOWFLAKE_USER"); !ok {
 		return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_USER")
 	} else {
 		if !semCnf.ValidUnquotedExpr.MatchString(user) {
-			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_USER: Invalid user name")	
+			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_USER: Invalid user name")
 		}
 		cnf.User = strings.ToUpper(user)
 	}
 
 	if role, ok := os.LookupEnv("GRUPR_SNOWFLAKE_ROLE"); !ok {
-q		return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_USER")
+		return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_USER")
 	} else {
 		if !semCnf.ValidUnquotedExpr.MatchString(role) {
-			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_ROLE: Invalid role name")	
+			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_ROLE: Invalid role name")
 		}
 		cnf.Role = strings.ToUpper(role)
 	}
@@ -68,7 +68,7 @@ q		return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_U
 		return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_DB")
 	} else {
 		if !semCnf.ValidUnquotedExpr.MatchString(database) {
-			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_DB: Invalid database name")	
+			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_DB: Invalid database name")
 		}
 		cnf.Database = strings.ToUpper(database)
 	}
@@ -77,13 +77,13 @@ q		return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_U
 		return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_SCHEMA")
 	} else {
 		if !semCnf.ValidUnquotedExpr.MatchString(schema) {
-			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_SCHEMA: Invalid schema name")	
+			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_SCHEMA: Invalid schema name")
 		}
 		cnf.Schema = strings.ToUpper(schema)
 	}
 
-	if useSQLOpen, ok := os.LookupEnv("GRUPR_SNOWFLAKE_USE_SQL_OPEN") {
-		if b, err := strconv.ParseBool(useSQLOpen); err!= nil {
+	if useSQLOpen, ok := os.LookupEnv("GRUPR_SNOWFLAKE_USE_SQL_OPEN"); ok {
+		if b, err := strconv.ParseBool(useSQLOpen); err != nil {
 			return fmt.Errorf("GRUPR_SNOWFLAKE_USE_SQL_OPEN: %w", err)
 		}
 		cnf.UseSQLOpen = b
@@ -98,7 +98,7 @@ q		return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_U
 			return nil, fmt.Errorf("invalid value for GRUPR_SNOWFLAKE_OBJECT_PREFIX")
 		}
 		cnf.ObjectPrefix = strings.ToUpper(objectPrefix)
-	} 
+	}
 
 	if maxOpenConns, ok := os.LookupEnv("GRUPR_SNOWFLAKE_MAX_OPEN_CONNS"); ok {
 		if i, err := strconv.Atoi(maxOpenConns); err != nil {
@@ -134,7 +134,7 @@ q		return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_U
 			cnf.StmtBatchSize = i
 		}
 	}
-	
+
 	if maxProductRefreshes, ok := os.LookupEnv("GRUPR_SNOWFLAKE_MAX_PRODUCT_DTAP_REFRESHES"); ok {
 		if i, err := strconv.Atoi(maxProductRefreshes); err != nil {
 			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_MAX_PRODUCT_DTAP_REFRESHES: %w", err)
@@ -146,7 +146,7 @@ q		return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_U
 	cnf.DatabaseRolePrivileges = map[Mode]map[GrantTemplate]struct{}{}
 	cnf.DatabaseRolePrivileges[ModeRead] = map[GrantTemplate]struct{}{
 		GrantTemplate{
-			Privilege: PrvUsage,
+			Privilege:     PrvUsage,
 			GrantTemplate: ObjTpDatabase,
 		}: {},
 		GrantTemplate{
@@ -174,9 +174,9 @@ q		return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_U
 	cnf.ProductRolePrivileges = map[Mode]map[GrantTemplate]struct{}{}
 	cnf.ProductRolePrivileges[ModeRead] = map[GrantTemplate]struct{}{
 		GrantTemplate{
-			Privilege: PrvUsage,
-			GrantedOn: ObjTpDatabaseRole,
+			Privilege:                   PrvUsage,
+			GrantedOn:                   ObjTpDatabaseRole,
 			GrantedRoleStartsWithPrefix: newTrue(),
-		}: {}
+		}: {},
 	}
 }

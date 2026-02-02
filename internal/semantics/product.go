@@ -8,13 +8,13 @@ import (
 )
 
 type Product struct {
-	ID       string 
-	DTAPs    DTAPSpec
+	ID               string
+	DTAPs            DTAPSpec
 	UserGroupMapping string
 	InterfaceMetadata
-	UserGroupColumn  ColMatcher
-	Consumes map[syntax.InterfaceID]map[string]string
-	Interfaces map[string]InterfaceMetadata
+	UserGroupColumn ColMatcher
+	Consumes        map[syntax.InterfaceID]map[string]string
+	Interfaces      map[string]InterfaceMetadata
 }
 
 func newProduct(cnf *Config, pSyn syntax.Product, classes map[string]syntax.Class, globalUserGroups map[string]bool,
@@ -51,7 +51,7 @@ func newProduct(cnf *Config, pSyn syntax.Product, classes map[string]syntax.Clas
 				fmt.Sprintf("product '%s' not allowed to consume own interface '%s'", cs.ProductID, cs.ID),
 			}
 		}
-		// If a dtap mapping is specified, it means 
+		// If a dtap mapping is specified, it means
 		// - product only wants to consume source interface in specified dtaps
 		// - designated source dtaps have to exist (though they are allowed to be hidden)
 		// If no dtap mapping is specified, it is interpreted as if all DTAPs want to consume from a source DTAP with the same name.
@@ -99,20 +99,34 @@ func (lhs Product) disjoint(rhs Product) bool {
 }
 
 func (lhs Product) Equal(rhs Product) bool {
-	if lhs.ID != rhs.ID { return false }
-	if !lhs.DTAPs.Equal(rhs.DTAPs) { return false }
-	if lhs.UserGroupMapping != rhs.UserGroupMapping { return false }
-	if !lhs.InterfaceMetadata.Equal(rhs.InterfaceMetadata) { return false }
-	if !lhs.UserGroupColumn.Equal(rhs.UserGroupColumn) { return false }
+	if lhs.ID != rhs.ID {
+		return false
+	}
+	if !lhs.DTAPs.Equal(rhs.DTAPs) {
+		return false
+	}
+	if lhs.UserGroupMapping != rhs.UserGroupMapping {
+		return false
+	}
+	if !lhs.InterfaceMetadata.Equal(rhs.InterfaceMetadata) {
+		return false
+	}
+	if !lhs.UserGroupColumn.Equal(rhs.UserGroupColumn) {
+		return false
+	}
 	for lhsKey, lhsValue := range lhs.Consumes {
 		if rhsValue, ok := rhs.Consumes[lhsKey]; !ok {
 			return false
 		} else {
-			if !maps.Equal(lhsValue, rhsValue) { return false }
+			if !maps.Equal(lhsValue, rhsValue) {
+				return false
+			}
 		}
 	}
 	for rhsKey, _ := range rhs.Consumes {
-		if _, ok := lhs.Consumes[rhsKey]; !ok { return false }
+		if _, ok := lhs.Consumes[rhsKey]; !ok {
+			return false
+		}
 	}
 	if !maps.EqualFunc(lhs.Interfaces, rhs.Interfaces, InterfaceMetadata.Equal) {
 		return false

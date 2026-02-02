@@ -14,11 +14,11 @@ import (
 )
 
 type dbCache struct {
-	mu 		sync.Mutex // guards schemas, schemaExists, and version
-	version int
-	schemas     map[string]*schemaCache // nil: never requested; empty: none found
+	mu           sync.Mutex // guards schemas, schemaExists, and version
+	version      int
+	schemas      map[string]*schemaCache // nil: never requested; empty: none found
 	schemaExists map[string]bool
-	dbRoles map[DatabaseRole]struct{}
+	dbRoles      map[DatabaseRole]struct{}
 }
 
 func (c *dbCache) addSchema(k string) {
@@ -40,7 +40,7 @@ func (c *dbCache) dropSchema(k string) {
 }
 
 func (c *dbCache) hasSchema(k string) {
-	return c.schemaExists != nil && c.schemaExists[k];
+	return c.schemaExists != nil && c.schemaExists[k]
 }
 
 func (c *dbCache) getSchemas() iter.Seq2[string, *schemaCache] {
@@ -59,7 +59,9 @@ func (c *dbCache) refreshSchemas(ctx context.Context, conn *sql.DB, dbName strin
 	// Do not directly call this function, meant to be called only via match and friends,
 	// which would have required appropriate write locks to mutexes
 	schemas, err := querySchemas(ctx, conn, dbName)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	c.version += 1
 	for k, _ := range c.getSchemas() {
 		if _, ok := schemas[k]; !ok {
@@ -76,8 +78,10 @@ func (c *dbCache) refreshSchemas(ctx context.Context, conn *sql.DB, dbName strin
 
 func (c *dbCache) refreshDBRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, db string) error {
 	c.dbRoles = map[DatabaseRole]struct{}{} // overwrite if c.dbRoles already had a value
-	for r, err := range QueryDatabaseRoles(ctx, synCnf, cnf, conn, db() {
-		if err != nil { return err }
+	for r, err := range QueryDatabaseRoles(ctx, synCnf, cnf, conn, db) {
+		if err != nil {
+			return err
+		}
 		c.dbRoles[DatabaseRole] = struct{}{}
 	}
 	return nil
@@ -105,7 +109,9 @@ func querySchemas(ctx context.Context, conn *sql.DB, dbName string) (map[string]
 		if err = rows.Scan(&schemaName); err != nil {
 			return nil, fmt.Errorf("querySchemas: error scanning row: %w", err)
 		}
-		if _, ok := schemas[schemaName]; ok { return nil, fmt.Errorf("duplicate schema name: %s", schemaName) }
+		if _, ok := schemas[schemaName]; ok {
+			return nil, fmt.Errorf("duplicate schema name: %s", schemaName)
+		}
 		schemas[schemaName] = true
 	}
 	if err = rows.Err(); err != nil {

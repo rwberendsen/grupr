@@ -5,14 +5,14 @@ import (
 )
 
 type Product struct {
-	ID                string            `yaml:"id"`
-	DTAPs             *DTAPSpec          `yaml:"dtaps,flow,omitempty"`
-	DTAPRendering     Rendering         `yaml:"dtap_rendering,omitempty"`
-	UserGroupMapping  string    	    `yaml:"user_group_mapping,omitempty"`
-	UserGroupColumn    string    `yaml:"user_group_column,omitempty"`
-	UserGroupRendering Rendering `yaml:"user_group_rendering,omitempty"`
-	Consumes          []ConsumptionSpec `yaml:"consumption_spec",omitempty"`
-	InterfaceMetadata                   `yaml:",inline"`
+	ID                 string            `yaml:"id"`
+	DTAPs              *DTAPSpec         `yaml:"dtaps,flow,omitempty"`
+	DTAPRendering      Rendering         `yaml:"dtap_rendering,omitempty"`
+	UserGroupMapping   string            `yaml:"user_group_mapping,omitempty"`
+	UserGroupColumn    string            `yaml:"user_group_column,omitempty"`
+	UserGroupRendering Rendering         `yaml:"user_group_rendering,omitempty"`
+	Consumes           []ConsumptionSpec `yaml:"consumption_spec",omitempty"`
+	InterfaceMetadata  `yaml:",inline"`
 }
 
 func (p *Product) validate(cnf *Config) error {
@@ -58,7 +58,9 @@ func (p *Product) validate(cnf *Config) error {
 		}
 	}
 	for _, cs := range p.Consumes {
-		if err := cs.validate(); err != nil { return err }
+		if err := cs.validate(); err != nil {
+			return err
+		}
 	}
 	if err := p.InterfaceMetadata.validate(cnf); err != nil {
 		return fmt.Errorf("product %s: %w", p.ID, err)
