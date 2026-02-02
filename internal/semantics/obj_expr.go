@@ -4,7 +4,9 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
+	"iter"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -91,7 +93,7 @@ func (lhs ObjExpr) disjoint(rhs ObjExpr) bool {
 	// ...
 }
 
-func (lhs ObjExpr) subsetOfObjExprMap(map[ObjExpr]any) bool {
+func (lhs ObjExpr) subsetOfObjExprs(rhs iter.Seq[ObjExpr]) bool {
 	for r := range rhs {
 		if lhs.subsetOf(r) {
 			return true
@@ -100,18 +102,15 @@ func (lhs ObjExpr) subsetOfObjExprMap(map[ObjExpr]any) bool {
 	return false
 }
 
-func allDisjointObjExprMap(m map[ObjExpr]any) error {
-	if len(m) < 2 {
+func allDisjointObjExprs(i iter.Seq[ObjExpr]) error {
+	l = slices.Collect(i)
+	if len(l) < 2 {
 		return nil
 	}
-	var keys []ObjExpr
-	for k := range m {
-		keys = append(keys, k)
-	}
-	for i := 0; i < len(keys)-1; i++ {
-		for j := i + 1; j < len(keys); j++ {
-			if !m[keys[i]].disjoint(m[keys[j]]) {
-				return &SetLogicError{fmt.Sprintf("overlapping ObjExpr's '%s' and '%s'", keys[i], keys[j])}
+	for i := 0; i < len(l)-1; i++ {
+		for j := i + 1; j < len(l); j++ {
+			if !l[i].disjoint(l[j]) {
+				return &SetLogicError{fmt.Sprintf("overlapping ObjExpr's '%s' and '%s'", l[i], l[j])}
 			}
 		}
 	}

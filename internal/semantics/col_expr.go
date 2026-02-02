@@ -4,6 +4,8 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
+	"iter"
+	"maps"
 	"regexp"
 	"strings"
 
@@ -98,9 +100,9 @@ func (lhs ColExpr) disjoint(rhs ColExpr) bool {
 	// TODO implement tests
 }
 
-func (c ColExpr) subsetOfObjExprMap(objExprs map[ObjExpr]any) bool {
+func (c ColExpr) subsetOfObjExprs(objExprs iter.Seq[ObjExpr]) bool {
 	objExpr := ObjExpr{c[0], c[1], c[2]}
-	return objExpr.subsetOfObjExprMap(objExprs)
+	return objExpr.subsetOfObjExprs(objExprs)
 }
 
 func (c ColExpr) disjointWithObjExpr(e ObjExpr) bool {
@@ -112,7 +114,7 @@ func (c ColExpr) disjointWithObjMatchers(oms ObjMatchers, dtap string) bool {
 	for _, om := range oms {
 		if om.DTAP == dtap {
 			if !c.disjointWithObjExpr(om.Include) {
-				if !c.subsetOfObjExprMap(om.Exclude) {
+				if !c.subsetOfObjExprs(maps.Keys(om.Exclude)) {
 					return false
 				}
 			}

@@ -26,7 +26,7 @@ func newObjMatchers(cnf *Config, include []string, exclude []string, dtaps synta
 	}
 	// Check that ObjMatcher objects are all disjoint with regard to each other in the context of this ObjMatchers object;
 	// Note that we do not consider exclude expressions here.
-	if err := allDisjointObjExprMap(oms); err != nil {
+	if err := allDisjointObjExprs(maps.Keys(oms)); err != nil {
 		return oms, err
 	}
 	// For each rendered exclude expression, assign it to the correct rendered include expression
@@ -53,7 +53,7 @@ func newObjMatchers(cnf *Config, include []string, exclude []string, dtaps synta
 	}
 	// Check, after adding each exclude ObjExpr to the correct include ObjExpr, that each include has disjoint excludes
 	for _, objMatcher := range oms {
-		if err := allDisjointObjExprMap(oms.Exclude); err != nil {
+		if err := allDisjointObjExprs(maps.Keys(oms.Exclude)); err != nil {
 			return oms, fmt.Errorf("exclude exprs: %w", err)
 		}
 	}
