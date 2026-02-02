@@ -52,7 +52,7 @@ func NewGrupin(cnf *Config, gSyn syntax.Grupin) (Grupin, error) {
 		}
 		dtaps := gSem.Products[iid.ProductID].DTAPs.DTAPRendering
 		parent := gSem.Products[iid.ProductID].InterfaceMetadata
-		if im, err := newInterfaceMetadata(cnf, v.InterfaceMetadata, gSem.Classes, gSem.GlobalUserGroups, gSem.UserGroupMappings, dtaps, &parent); err != nil {
+		if im, err := newInterfaceMetadata(cnf, v.InterfaceMetadata, gSem.Classes, gSem.GlobalUserGroups, gSem.UserGroupMappings[parent.UserGroupMapping], dtaps, &parent); err != nil {
 			return gSem, fmt.Errorf("interface '%s': %w", iid, err)
 		} else {
 			gSem.Products[iid.ProductID].Interfaces[iid.ID] = im
@@ -84,7 +84,7 @@ func (g Grupin) allConsumedOk() error {
 			if !ok {
 				return &SetLogicError{fmt.Sprintf("product '%s': consumed interface '%s': product not found", p.ID, iid)}
 			}
-			isSource, ok := pSource.Interfaces[iid.ID]
+			iSource, ok := pSource.Interfaces[iid.ID]
 			if !ok {
 				return &SetLogicError{
 					fmt.Sprintf("product '%s': consumed interface '%s': interface not found", p.ID, iid),

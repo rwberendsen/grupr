@@ -14,7 +14,7 @@ type DTAPSpec struct {
 }
 
 func newDTAPSpec(cnf *Config, dsSyn *syntax.DTAPSpec, dtapRendering syntax.Rendering) DTAPSpec {
-	if dSyn == nil() {
+	if dsSyn == nil {
 		// Not specifying any DTAP info means you will get a default DTAP spec, which has only a production DTAP
 		return DTAPSpec{
 			Prod: &cnf.DefaultProdDTAPName,

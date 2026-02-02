@@ -26,18 +26,20 @@ func newProduct(cnf *Config, pSyn syntax.Product, classes map[string]syntax.Clas
 		Interfaces: map[string]InterfaceMetadata{},
 	}
 	// Set UsergroupMapping
-	if _, ok := userGroupMappings[pSyn.UserGroupMapping]; !ok {
-		return &SetLogicError{fmt.Sprintf("Unknown user group mapping: '%s'", pSyn.UserGroupMapping)}
+	if pSyn.UserGroupMapping != "" {
+		if _, ok := userGroupMappings[pSyn.UserGroupMapping]; !ok {
+			return &SetLogicError{fmt.Sprintf("Unknown user group mapping: '%s'", pSyn.UserGroupMapping)}
+		}
 	}
 	pSem.UserGroupMapping = pSyn.UserGroupMapping
 	// Set InterfaceMetadata
-	if im, err := newInterfaceMetadata(cnf, pSyn.InterfaceMetadata, classes, globalUserGroups, userGroupMappings, pSem.DTAPs.DTAPRendering, nil); err != nil {
+	if im, err := newInterfaceMetadata(cnf, pSyn.InterfaceMetadata, classes, globalUserGroups, userGroupMappings[pSem.UserGroupMapping], pSem.DTAPs.DTAPRendering, nil); err != nil {
 		return pSem, fmt.Errorf("product id %s: interface metadata: %w", pSem.ID, err)
 	} else {
 		pSem.InterfaceMetadata = im
 	}
 	// Set UserGroupColumn (this requires InterfaceMetadata its ObjectMatchers to be set)
-	if err := pSem.setUserGroupColumn(pSyn); err != nil {
+	if err := pSem.setUserGroupColumn(cnf, pSyn); err != nil {
 		return pSem, err
 	}
 	// Set Consumes
@@ -73,11 +75,11 @@ func newProduct(cnf *Config, pSyn syntax.Product, classes map[string]syntax.Clas
 	return pSem, nil
 }
 
-func (pSem *Product) setUserGroupColumn(pSyn syntax.Product, dtaps syntax.Rendering) error {
+func (pSem *Product) setUserGroupColumn(cnf *Config, pSyn syntax.Product, dtaps syntax.Rendering) error {
 	if pSyn.UserGroupColumn == "" {
 		return nil
 	}
-	if m, err := newColMatcher([]string{pSyn.UserGroupColumn}, pSem.DTAPs.DTAPRendering, pSem.UserGroups, pSem.ObjectMatchers); err != nil {
+	if m, err := newColMatcher(cnf, []string{pSyn.UserGroupColumn}, pSem.DTAPs.DTAPRendering, pSem.UserGroups, pSem.ObjectMatchers); err != nil {
 		return fmt.Errorf("user_group_column: %w", err)
 	} else {
 		pSem.UserGroupColumn = m

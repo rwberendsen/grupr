@@ -23,8 +23,8 @@ func (p ExprPart) validate(validQuotedExpr *regexp.Regexp, validUnquotedExpr *re
 		return validQuotedExpr.MatchString(p.S)
 	}
 	s := strings.ReplaceAll(p.S, "[dtap]", "")
-	s := strings.ReplaceAll(s, "[user_group]", "")
-	if !validUnquotedExpr.MatchString(p.S) {
+	s = strings.ReplaceAll(s, "[user_group]", "")
+	if !validUnquotedExpr.MatchString(s) {
 		return p.S == "*"
 	}
 	return true

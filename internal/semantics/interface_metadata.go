@@ -20,12 +20,12 @@ type InterfaceMetadata struct {
 }
 
 func newInterfaceMetadata(cnf *Config, imSyn syntax.InterfaceMetadata, classes map[string]syntax.Class, globalUserGroups map[string]bool,
-	userGroupMappings map[string]UserGroupMapping, dtaps syntax.Rendering, parent *InterfaceMetadata) (InterfaceMetadata, error) {
+	userGroupMapping UserGroupMapping, dtaps syntax.Rendering, parent *InterfaceMetadata) (InterfaceMetadata, error) {
 	imSem := InterfaceMetadata{}
 	if err := imSem.setClassification(imSyn, parent, classes); err != nil {
 		return imSem, err
 	}
-	if err := imSem.setUserGroups(imSyn, parent, globalUserGroups, userGroupMappings); err != nil {
+	if err := imSem.setUserGroups(imSyn, parent, globalUserGroups, userGroupMapping); err != nil {
 		return imSem, err
 	}
 	// TODO: replace with HideDTAPs
@@ -35,17 +35,17 @@ func newInterfaceMetadata(cnf *Config, imSyn syntax.InterfaceMetadata, classes m
 	if err := imSem.setObjectMatchers(cnf, imSyn, parent, dtaps); err != nil {
 		return imSem, err
 	}
-	if err := imSem.setMaskColumns(imSyn, parent, dtaps); err != nil {
+	if err := imSem.setMaskColumns(cnf, imSyn, parent, dtaps); err != nil {
 		return imSem, err
 	}
-	if err := imSem.setHashColumns(imSyn, parent, dtaps); err != nil {
+	if err := imSem.setHashColumns(cnf, imSyn, parent, dtaps); err != nil {
 		return imSem, err
 	}
 	if err := imSem.setForProduct(imSyn, parent, dtaps); err != nil {
 		return imSem, err
 	}
 	if parent != nil {
-		ConsumedBy = map[string]map[ProductDTAPID]struct{}{}
+		imSem.ConsumedBy = map[string]map[ProductDTAPID]struct{}{}
 		// TODO: take into account hidden DTAPs
 		for d := range dtaps {
 			imSem.ConsumedBy[d] = map[ProductDTAPID]struct{}{} // will be further populated by Grupin.allConsumedOK
@@ -73,17 +73,18 @@ func (imSem *InterfaceMetadata) setClassification(imSyn syntax.InterfaceMetadata
 	return nil
 }
 
-func getGlobalUserGroup(userGroup string, userGroupMapping string, globalUserGroups map[string]bool, userGroupMappings map[string]UserGroupMapping) (string, bool) {
-	if userGroupMapping == "" {
+func getGlobalUserGroup(userGroup string, userGroupMapping UserGroupMapping, globalUserGroups map[string]bool) (string, bool) {
+	if userGroupMapping == nil {
+		// product did not define a user group mapping id
 		_, ok := globalUserGroups[userGroup]
 		return userGroup, ok // userGroup is a global user group
 	}
-	globalUserGroup, ok := userGroupMappings[userGroupMapping][userGroup]
+	globalUserGroup, ok := userGroupMapping[userGroup]
 	return globalUserGroup, ok
 }
 
 func (imSem *InterfaceMetadata) setUserGroups(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata,
-	globalUserGroups map[string]bool, userGroupMappings map[string]UserGroupMapping) error {
+	globalUserGroups map[string]bool, userGroupMapping UserGroupMapping) error {
 	if imSyn.UserGroups == nil {
 		if parent != nil {
 			imSem.UserGroups = parent.UserGroups
@@ -94,7 +95,7 @@ func (imSem *InterfaceMetadata) setUserGroups(imSyn syntax.InterfaceMetadata, pa
 	imSem.UserGroups = syntax.Rendering{}
 	imSem.GlobalUserGroups = map[string]bool{}
 	for _, u := range imSyn.UserGroups {
-		if g, ok := getGlobalUserGroup(u, imSem.UserGroupMapping, globalUserGroups, userGroupMappings); !ok {
+		if g, ok := getGlobalUserGroup(u, userGroupMapping, globalUserGroups); !ok {
 			return &SetLogicError{fmt.Sprintf("Unknown user group: %s", u)}
 		} else {
 			imSem.GlobalUserGroups[g] = true
@@ -163,14 +164,14 @@ func (imSem *InterfaceMetadata) setObjectMatchers(cnf *Config, imSyn syntax.Inte
 	return nil
 }
 
-func (imSem *InterfaceMetadata) setHashColumns(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata, dtaps syntax.Rendering) error {
+func (imSem *InterfaceMetadata) setHashColumns(cnf *Config, imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata, dtaps syntax.Rendering) error {
 	if imSyn.MaskColumns == nil {
 		if parent != nil {
 			imSem.HashColumns = parent.HashColumns
 		}
 		return nil
 	}
-	if m, err := newColMatcher(imSyn.HashColumns, dtaps, imSem.UserGroups, imSem.ObjectMatcher); err != nil {
+	if m, err := newColMatcher(cnf, imSyn.HashColumns, dtaps, imSem.UserGroups, imSem.ObjectMatcher); err != nil {
 		return fmt.Errorf("hash_columns: %w", err)
 	} else {
 		imSem.HashColumns = m
@@ -178,14 +179,14 @@ func (imSem *InterfaceMetadata) setHashColumns(imSyn syntax.InterfaceMetadata, p
 	return nil
 }
 
-func (imSem *InterfaceMetadata) setMaskColumns(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata, dtaps syntax.Rendering) error {
+func (imSem *InterfaceMetadata) setMaskColumns(cnf *Config, imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata, dtaps syntax.Rendering) error {
 	if imSyn.MaskColumns == nil {
 		if parent != nil {
 			imSem.MaskColumns = parent.MaskColumns
 		}
 		return nil
 	}
-	if m, err := newColMatcher(imSyn.MaskColumns, dtaps, imSem.UserGroups, imSem.ObjectMatcher); err != nil {
+	if m, err := newColMatcher(cnf, imSyn.MaskColumns, dtaps, imSem.UserGroups, imSem.ObjectMatcher); err != nil {
 		return fmt.Errorf("mask_columns: %w", err)
 	} else {
 		imSem.MaskColumns = m

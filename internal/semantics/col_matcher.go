@@ -9,10 +9,10 @@ type ColMatcher struct {
 	ColExprs ColExprs
 }
 
-func newColMatcher(l []string, dtaps syntax.Rendering, userGroups syntax.Rendering, objectMatchers ObjMatchers) (ColMatcher, error) {
+func newColMatcher(cnf *Config, l []string, dtaps syntax.Rendering, userGroups syntax.Rendering, objectMatchers ObjMatchers) (ColMatcher, error) {
 	m := ColMatcher{ColExprs{}}
 	for _, expr := range l {
-		exprs, err := newColExprs(expr, dtaps, userGroups)
+		exprs, err := newColExprs(cnf, expr, dtaps, userGroups)
 		if err != nil {
 			return m, err
 		}
