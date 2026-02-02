@@ -1,8 +1,12 @@
 package semantics
 
+import (
+	"regexp"
+)
+
 type Config struct {
 	ValidUnquotedExpr   *regexp.Regexp
-	ValidQuotedExpr     *regexp.RegEgxp
+	ValidQuotedExpr     *regexp.Regexp
 	DTAPTemplate        string
 	UserGroupTemplate   string
 	DefaultProdDTAPName string

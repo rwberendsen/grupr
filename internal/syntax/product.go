@@ -2,6 +2,7 @@ package syntax
 
 import (
 	"fmt"
+	"slices"
 )
 
 type Product struct {
@@ -37,7 +38,7 @@ func (p *Product) validate(cnf *Config) error {
 		}
 	}
 	if p.UserGroupMapping != "" {
-		if err := validateIDPart(cnf, i.UserGroupMapping); err != nil {
+		if err := validateIDPart(cnf, p.UserGroupMapping); err != nil {
 			return fmt.Errorf("user_group_mapping: %w", err)
 		}
 	}
@@ -58,7 +59,7 @@ func (p *Product) validate(cnf *Config) error {
 		}
 	}
 	for _, cs := range p.Consumes {
-		if err := cs.validate(); err != nil {
+		if err := cs.validate(cnf); err != nil {
 			return err
 		}
 	}

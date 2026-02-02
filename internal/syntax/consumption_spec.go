@@ -5,8 +5,8 @@ type ConsumptionSpec struct {
 	DTAPMapping map[string]string `yaml:"dtap_mapping,omitempty"`
 }
 
-func (cs ConsumptionSpec) validate() error {
-	if err := cs.InterfaceID.validate(); err != nil {
+func (cs ConsumptionSpec) validate(cnf *Config) error {
+	if err := cs.InterfaceID.validate(cnf); err != nil {
 		return err
 	}
 	for k, v := range cs.DTAPMapping {

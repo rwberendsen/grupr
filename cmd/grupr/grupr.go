@@ -5,7 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"os/signals"
+	"os/signal"
 	"syscall"
 
 	"github.com/rwberendsen/grupr/internal/semantics"

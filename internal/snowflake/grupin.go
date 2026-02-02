@@ -3,7 +3,6 @@ package snowflake
 import (
 	"context"
 	"database/sql"
-	"errgroup"
 	"strings"
 
 	"github.com/rwberendsen/grupr/internal/semantics"

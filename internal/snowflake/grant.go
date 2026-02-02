@@ -2,8 +2,8 @@ package snowflake
 
 import (
 	"context"
-	"csv"
 	"database/sql"
+	"encoding/csv"
 	"fmt"
 	"iter"
 	"maps"

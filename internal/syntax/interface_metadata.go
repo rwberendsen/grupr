@@ -2,7 +2,6 @@ package syntax
 
 import (
 	"fmt"
-	"slices"
 )
 
 type InterfaceMetadata struct {

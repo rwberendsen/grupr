@@ -13,7 +13,7 @@ import (
 type ColExpr [4]ExprPart
 
 const (
-	Column Part = iota + 3 // Database, Schema, and Table are defined with Expr; as well as type Part
+	Column Part = iota + 3 // Database, Schema, and Object are defined with Expr; as well as type Part
 )
 
 func newColExpr(s string, validQuotedExpr *regexp.Regexp, validUnquotedExpr *regexp.Regexp) (ColExpr, error) {
@@ -60,7 +60,7 @@ func newColExpr(s string, validQuotedExpr *regexp.Regexp, validUnquotedExpr *reg
 	if _, err := reader.Read(); err != io.EOF {
 		panic("parsing obj expr did not result in single result")
 	}
-	// left-padding fields with * matchers until we have Database, Schema, Table, Column
+	// left-padding fields with * matchers until we have Database, Schema, Object, Column
 	for i := 0; i < 4-len(fields); i++ {
 		r[i] = ExprPart{S: "*", IsQuoted: false}
 	}
@@ -78,7 +78,7 @@ func (lhs ColExpr) subsetOf(rhs ColExpr) bool {
 	if !lhs[Schema].subsetOf(rhs[Schema]) {
 		return false
 	}
-	if !lhs[Table].subsetOf(rhs[Table]) {
+	if !lhs[Object].subsetOf(rhs[Object]) {
 		return false
 	}
 	return lhs[Column].subsetOf(rhs[Column])
@@ -91,7 +91,7 @@ func (lhs ColExpr) disjoint(rhs ColExpr) bool {
 	if lhs[Schema].disjoint(rhs[Schema]) {
 		return true
 	}
-	if lhs[Table].disjoint(rhs[Table]) {
+	if lhs[Object].disjoint(rhs[Object]) {
 		return true
 	}
 	return lhs[Column].disjoint(rhs[Column])

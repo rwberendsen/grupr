@@ -44,6 +44,7 @@ func (d DTAPSpec) HasDTAP(dtap string) bool {
 	if d.Prod != nil {
 		return dtap == *d.Prod
 	}
+	return false
 }
 
 func (d DTAPSpec) Count() int {
