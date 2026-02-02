@@ -80,22 +80,25 @@ func (o AggSchemaObjs) hasGrantTo(m Mode, p Privilege) {
 func (o AggDBObjs) pushToDoFutureGrants(yield func(FutureGrant) bool, dbRole DatabaseRole, schema string) bool {
 	if o.MatchAllObjects {
 		for _, ot := range [2]ObjType{ObjTpTable, ObjTpView} {
+			prvs := []PrivilegeComplete{}
 			for _, p := range [2]Privilege{PrvSelect, PrvReferences} {
 				if !o.hasFutureGrantTo(ModeRead, ot, p) {
-					// TODO: combine select and references in a single grant statement
-					if !yield(FutureGrant{
-						Privilege: p,
-						GrantedOn: ot,
-						GrantedIn: ObjTpSchema,
-						Database: dbRole.Database,
-						Schema: schema,
-						GrantedTo: ObjTpDatabaseRole,
-						GrantedToDatabase: dbRole.Database,
-						GrantedToRole: dbRole.Name,
-					}) {
-						return false
-					}	
+					prvs = append(prvs, PrivilegeComplete{Privilege: PrvUsage,})
 				}
+			}
+			if len(prvs) > 0:
+				if !yield(FutureGrant{
+					Privileges: prvs,
+					GrantedOn: ot,
+					GrantedIn: ObjTpSchema,
+					Database: dbRole.Database,
+					Schema: schema,
+					GrantedTo: ObjTpDatabaseRole,
+					GrantedToDatabase: dbRole.Database,
+					GrantedToRole: dbRole.Name,
+				}) {
+					return false
+				}	
 			}
 		}
 	}
@@ -105,7 +108,7 @@ func (o AggDBObjs) pushToDoFutureGrants(yield func(FutureGrant) bool, dbRole Dat
 func (o AggSchemaObjs) pushToDoGrants(yield func(Grant) bool, dbRole DatabaseRole, schema string) bool {
 	if !o.hasGrantTo(ModeRead, PrvUsage) {
 		if !yield(Grant{
-			Privilege: PrvUsage,
+			Privileges: []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage,}},
 			GrantedOn: ObjTpSchema,
 			Database: dbRole.Database,
 			Schema: schema,

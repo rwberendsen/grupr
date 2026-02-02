@@ -141,7 +141,7 @@ func (i *Interface) pushToDoDBRoleGrants(yield func(Grant) bool, doProd bool, m 
 			if doProd == m[pdID].IsProd {
 				if !dbObjs.consumedByGranted[pd] {
 					if !yield(Grant{
-						Privilege: PrvUsage,
+						Privileges: []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage,}},
 						GrantedOn: ObjTpDatabaseRole,
 						Database: db,
 						GrantedRole: dbObjs.dbRole,

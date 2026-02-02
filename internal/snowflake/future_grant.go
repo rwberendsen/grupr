@@ -11,9 +11,7 @@ import (
 )
 
 type FutureGrant struct {
-	// TODO: use map of PrivilegeComplete
-	Privilege 		Privilege
-	CreateObjectType	ObjType
+	Privileges		[]PrivilegeComplete
 	GrantedOn 		ObjType
 	GrantedIn		ObjType 
 	Database		string
@@ -24,21 +22,25 @@ type FutureGrant struct {
 	GrantOption		bool // TODO: if we re-grant the same grant with a different grant option, does it get overwritten? Could be a way to correct such mishaps
 }
 
-// TODO: add revoke parameter
-func (g FutureGrant) buildSQLGrant() string {
-	if g.Privilege == PrvCreate {
-		panic("Granting CREATE not implemented yet")
+func (g FutureGrant) buildSQLGrant(revoke bool) string {
+	verb := 'GRANT'
+	preposition := 'TO'
+	if revoke {
+		verb = 'REVOKE'
+		preposition = 'FROM'
 	}
 
-	var toClause string
+	var granteeClause string
 	switch g.GrantedTo {
 		case ObjTypeRole:
-			toClause = fmt.Sprintf(`TO ROLE %s`, quoteIdentifier(g.GrantedToRole))
+			granteeClause = fmt.Sprintf(`%s ROLE %s`, preposition, quoteIdentifier(g.GrantedToRole))
 		case ObjTypeDatabaseRole:
-			toClause = fmt.Sprintf(`TO DATABASE ROLE %s.%s`, quoteIdentifier(g.GrantedToDatabase), quoteIdentifier(g.GrantedToRole))
+			granteeClause = fmt.Sprintf(`%s DATABASE ROLE %s.%s`, preposition, quoteIdentifier(g.GrantedToDatabase), quoteIdentifier(g.GrantedToRole))
 		default:
 			panic("Not implemented")
 	}
+
+	privilegeClause := strings.Join(g.Privileges, `, `)
 
 	onClause := `ON FUTURE `
 	inClause := `IN `
@@ -67,14 +69,13 @@ func (g FutureGrant) buildSQLGrant() string {
 	}
 
 	onClause += fmt.Sprintf(`%vS`, g.GrantedOn)
-	return fmt.Sprintf(`GRANT %s %s %s %s`, g.Privilege, onClause, inClause, toClause)
+	return fmt.Sprintf(`%v %s %s %s %s`, verb, privilegeClause, onClause, inClause, granteeClause)
 }
 
 func newFutureGrant(privilege string, createObjType string, grantedOn string, name string, grantedTo ObjType,
 		grantedToDatabase string, grantedToRole string, grantOption bool) (FutureGrant, error) {
 	g := FutureGrant{
-		Privilege: ParsePrivilege(privilege),
-		CreateObjectType: ParseObjType(createObjType),
+		Privileges: []PrivilegeComplete{ParsePrivilegeComplete(privilege, createObjType)}
 		GrantedOn: ParseObjType(grantedOn),
 		GrantedTo: grantedTo,
 		GrantedToDatabase: grantedToDatabase,
@@ -268,8 +269,15 @@ func queryFutureGrantsToRole(ctx context.Context, conn *sql.DB, db string, role 
 	}
 }
 
-
 func DoFutureGrants(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq2[FutureGrant, error]) error {
+	return doFutureGrants(ctx, cnf, conn, grants, false)
+}
+
+func DoFutureRevokes(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq2[FutureGrant, error]) error {
+	return doFutureGrants(ctx, cnf, conn, grants, true)
+}
+
+func doFutureGrants(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq2[FutureGrant, error], revoke bool) error {
 	// Runs grant statements in batches
 	buf := make([]string, cnf.StmtBatchSize)
 	i := 0
@@ -278,7 +286,7 @@ func DoFutureGrants(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.
 			if err := runMultipleSQL(ctx, cnf, conn, slices.Join(buf, ";"), i); err != nil { return err }
 			i = 0
 		}
-		buf[i] := g.buildSQLGrant()
+		buf[i] := g.buildSQLGrant(revoke)
 		i++
 	}
 	if i > 0 {
@@ -286,5 +294,3 @@ func DoFutureGrants(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.
 	}
 	return nil
 }
-
-// TODO: implement RevokeFutureGrants

@@ -45,21 +45,24 @@ func (o AggObjAttr) hasGrantTo(m Mode, p Privilege) bool {
 }
 
 func (o AggObjAttr) pushToDoGrants(yield func(Grant) bool, dbRole DatabaseRole, schema string, obj string) bool {
+	prvs := []PrivilegeComplete{}
 	for _, p := range [2]Privilege{PrvSelect, PrvReferences} {
-		// TODO: combine select and references in a single grant statement
 		if !o.hasGrantTo(ModeRead, p) {
-			if !yield(Grant{
-				Privilege: p,
-				GrantedOn: ObjTpSchema,
-				Database: dbRole.Database,
-				Schema: schema,
-				Object: obj,
-				GrantedTo: ObjTpDatabaseRole,
-				GrantedToDatabase: dbRole.Database,
-				GrantedToRole: o.dbRole.Name,
-			}) {
-				return false
-			}
+			prvs = append(prvs, PrivilegeComplete{Privilege: p,})
+		}
+	}
+	if len(prvs) > 0 {
+		if !yield(Grant{
+			Privileges: prvs,
+			GrantedOn: ObjTpSchema,
+			Database: dbRole.Database,
+			Schema: schema,
+			Object: obj,
+			GrantedTo: ObjTpDatabaseRole,
+			GrantedToDatabase: dbRole.Database,
+			GrantedToRole: o.dbRole.Name,
+		}) {
+			return false
 		}
 	}
 	return true

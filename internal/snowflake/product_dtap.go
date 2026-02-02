@@ -165,7 +165,7 @@ func (pd *ProductDTAP) pushToDoDBRoleGrants(yield func(Grant) bool, doProd bool,
 	for db, dbObjs := range pd.Interface.aggAccountObjects.DBs {
 		if !dbObjs.isUsageGrantedToRead {
 			if !yield(Grant{
-				Privilege: PrvUsage,
+				Privileges: []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage,}},
 				GrantedOn: ObjTpDatabaseRole,
 				Database: db,
 				GrantedRole: dbObjs.dbRole,

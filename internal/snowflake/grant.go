@@ -11,7 +11,7 @@ import (
 )
 
 type Grant struct {
-	Privileges 			map[PrivilegeComplete]struct{}
+	Privileges 			[]PrivilegeComplete
 	GrantedOn 			ObjType
 	Database			string
 	Schema				string
@@ -53,7 +53,7 @@ func (g Grant) buildSQLGrant(revoke bool) string {
 	}
 	
 	// GRANT <privileges> ... TO ROLE
-	privilegeClause := strings.Join(maps.Keys(g.Privileges), `, `)
+	privilegeClause := strings.Join(g.Privileges, `, `)
 	
 	var objectClause string
 	switch g.GrantedOn {
@@ -66,13 +66,13 @@ func (g Grant) buildSQLGrant(revoke bool) string {
 	default:
 		panic("Not implemented")
 	}
-	return fmt.Sprintf(`%s %s %s %s %s`, verb, privilegeClause, objectClause, preposition, granteeClause)
+	return fmt.Sprintf(`%s %s ON %s %s %s`, verb, privilegeClause, objectClause, preposition, granteeClause)
 }
 
 func newGrant(privilege string, createObjType string, grantedOn string, name string, grantedRoleStartsWithPrefix bool, grantedTo ObjType,
 		grantedToDatabase string, grantedToRole string, grantedToRoleStartsWithPrefix bool, grantOption bool, grantedBy string) (Grant, error) {
 	g := Grant{
-		Privileges: map[PrivilegeComplete]struct{}{ParsePrivilegeComplete(privilege, createObjType): {}},
+		Privileges: []PrivilegeComplete{ParsePrivilegeComplete(privilege, createObjType)}
 		GrantedOn: ParseObjType(grantedOn),
 		GrantedRoleStartsWithPrefix: grantedRoleStartsWithPrefix,
 		GrantedTo: grantedTo,
