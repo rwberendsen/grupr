@@ -8,21 +8,18 @@ import (
 )
 
 type InterfaceMetadata struct {
-	ObjectMatchers ObjMatchers
-	Classification Classification
-	UserGroups     syntax.Rendering
-	UserGroupMappingOnGlobal UserGroupMappingOnGlobal
-	MaskColumns    ColMatcher
-	HashColumns    ColMatcher
-	ConsumedBy     map[string]map[ProductDTAPID]struct{} // will be populated by Grupin.allConsumedOK
-	ForProduct     *string
+	ObjectMatchers           ObjMatchers
+	Classification           Classification
+	UserGroups               syntax.Rendering
+	MaskColumns              ColMatcher
+	HashColumns              ColMatcher
+	ConsumedBy               map[string]map[ProductDTAPID]struct{} // will be populated by Grupin.allConsumedOK
+	ForProduct               *string
 }
 
 func newInterfaceMetadata(cnf *Config, imSyn syntax.InterfaceMetadata, classes map[string]syntax.Class, dtaps syntax.Rendering, userGroupMapping UserGroupMapping,
 	userGroupRendering syntax.Rendering, parent *InterfaceMetadata) (InterfaceMetadata, error) {
-	imSem := InterfaceMetadata{
-		resolveUserGroup: resolveUserGroup,
-	}
+	imSem := InterfaceMetadata{}
 	if err := imSem.setClassification(imSyn, parent, classes); err != nil {
 		return imSem, err
 	}
@@ -101,8 +98,9 @@ func (imSem *InterfaceMetadata) setUserGroups(imSyn syntax.InterfaceMetadata, pa
 	for _, u := range imSyn.UserGroups {
 		if rendering, ok := parent.UserGroups[u]; !ok {
 			return &PolicyError{fmt.Sprintf("Interface should not have user group '%s' that product does not have", u)}
+		} else {
+			imSem.UserGroups[u] = rendering
 		}
-		imSem.UserGroups[u] = rendering
 	}
 	return nil
 }

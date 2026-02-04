@@ -52,16 +52,18 @@ func NewGrupin(cnf *Config, gSyn syntax.Grupin) (Grupin, error) {
 	}
 	// Validate interface specs
 	for iid, v := range gSyn.Interfaces {
-		if err := gSem.validateInterfaceID(iid); err != nil {
-			return gSem, err
-		}
-		dtaps := gSem.Products[iid.ProductID].DTAPs.DTAPRendering
-		userGroupRendering := gSem.Products[iid.ProductID].UserGroupRendering
-		parent := gSem.Products[iid.ProductID].InterfaceMetadata
-		if im, err := newInterfaceMetadata(cnf, v.InterfaceMetadata, gSem.Classes, dtaps, gSem.UserGroupMappings[parent.UserGroupMappingID], userGroupRendering, &parent); err != nil {
-			return gSem, fmt.Errorf("interface '%s': %w", iid, err)
+		if parentProduct, ok := gSem.Products[iid.ProductID]; !ok {
+			return gSem, &SetLogicError{fmt.Sprintf("interface id '%s': product not found", iid)}
 		} else {
-			gSem.Products[iid.ProductID].Interfaces[iid.ID] = im
+			dtaps := parentProduct.DTAPs.DTAPRendering
+			userGroupMapping := gSem.UserGroupMappings[parentProduct.UserGroupMappingID]
+			userGroupRendering := parentProduct.UserGroupRendering
+			parent := parentProduct.InterfaceMetadata
+			if im, err := newInterfaceMetadata(cnf, v.InterfaceMetadata, gSem.Classes, dtaps, userGroupMapping, userGroupRendering, &parent); err != nil {
+				return gSem, fmt.Errorf("interface '%s': %w", iid, err)
+			} else {
+				parentProduct.Interfaces[iid.ID] = im
+			}
 		}
 	}
 	// Validate DTAP and UserGroup tagging

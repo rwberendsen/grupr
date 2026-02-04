@@ -44,7 +44,7 @@ func newProduct(cnf *Config, pSyn syntax.Product, classes map[string]syntax.Clas
 	pSem.UserGroupRendering = pSyn.UserGroupRendering
 
 	// Set InterfaceMetadata
-	if im, err := newInterfaceMetadata(cnf, pSyn.InterfaceMetadata, classes, ,pSem.DTAPs.DTAPRendering, userGroupMappings[pSem.UserGroupMappingID], pSem.UserGroupRendering, nil); err != nil {
+	if im, err := newInterfaceMetadata(cnf, pSyn.InterfaceMetadata, classes, pSem.DTAPs.DTAPRendering, userGroupMappings[pSem.UserGroupMappingID], pSem.UserGroupRendering, nil); err != nil {
 		return pSem, fmt.Errorf("product id %s: interface metadata: %w", pSem.ID, err)
 	} else {
 		pSem.InterfaceMetadata = im
