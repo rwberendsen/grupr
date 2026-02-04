@@ -9,7 +9,7 @@ type Product struct {
 	ID                 string            `yaml:"id"`
 	DTAPs              *DTAPSpec         `yaml:"dtaps,flow,omitempty"`
 	DTAPRendering      Rendering         `yaml:"dtap_rendering,omitempty"`
-	UserGroupMapping   string            `yaml:"user_group_mapping,omitempty"`
+	UserGroupMappingID   string            `yaml:"user_group_mapping,omitempty"`
 	UserGroupColumn    string            `yaml:"user_group_column,omitempty"`
 	UserGroupRendering Rendering         `yaml:"user_group_rendering,omitempty"`
 	Consumes           []ConsumptionSpec `yaml:"consumption_spec",omitempty"`
@@ -37,8 +37,8 @@ func (p *Product) validate(cnf *Config) error {
 			return &FormattingError{fmt.Sprintf("product '%s': dtap_rendering specified but no dtaps")}
 		}
 	}
-	if p.UserGroupMapping != "" {
-		if err := validateIDPart(cnf, p.UserGroupMapping); err != nil {
+	if p.UserGroupMappingID != "" {
+		if err := validateIDPart(cnf, p.UserGroupMappingID); err != nil {
 			return fmt.Errorf("user_group_mapping: %w", err)
 		}
 	}

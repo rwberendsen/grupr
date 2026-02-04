@@ -11,7 +11,6 @@ type InterfaceMetadata struct {
 	ObjectsExclude []string `yaml:"objects_exclude,omitempty"`
 	MaskColumns    []string `yaml:"mask_columns,omitempty"`
 	HashColumns    []string `yaml:"hash_columns,omitempty"`
-	ExposeDTAPs    []string `yaml:"expose_dtaps,flow,omitempty"`
 	ForProduct     *string  `yaml:"for_product",omitempty"`
 }
 
@@ -31,11 +30,6 @@ func (i InterfaceMetadata) validate(cnf *Config) error {
 	}
 	if i.Objects == nil && i.ObjectsExclude != nil {
 		return fmt.Errorf("no objects specified, but objects to exclude were specified")
-	}
-	for _, d := range i.ExposeDTAPs {
-		if err := validateIDPart(cnf, d); err != nil {
-			return fmt.Errorf("ExposeDTAPs: %w", err)
-		}
 	}
 	if i.ForProduct != nil {
 		if err := validateIDPart(cnf, *i.ForProduct); err != nil {

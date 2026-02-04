@@ -12,7 +12,7 @@ import (
 
 type Interface struct {
 	ObjectMatchers semantics.ObjMatchers
-	UserGroups     syntax.Rendering
+	GlobalUserGroups map[string]struct{}
 	ConsumedBy     map[semantics.ProductDTAPID]struct{}
 
 	// Granular accountObjects by ObjExpr; will be discarded after aggregate() is called
@@ -25,20 +25,30 @@ type Interface struct {
 	aggAccountObjects AggAccountObjs
 
 	// For use in pushObjectCounts
-	userGroupsStr string
+	globalUserGroupsStr string
+
+	// To resolve user groups to global ones
+	func resolveUserGroup(string) string
 }
 
 func NewInterface(dtap string, iSem semantics.InterfaceMetadata) *Interface {
 	i := &Interface{
 		ObjectMatchers: semantics.ObjMatchers{},
-		UserGroups:     iSem.UserGroups,
-		userGroupsStr:  strings.Join(slices.Sorted(maps.Keys(iSem.UserGroups)), ","),
+		resolveUserGroup: iSem.GetResolveUserGroupFunc(),
 	}
 	// Just take what you need from own DTAP
 	for e, om := range iSem.ObjectMatchers {
 		if e.DTAP == dtap {
 			i.ObjectMatchers[e] = om
 		}
+	}
+	// Set Global user groups and userGroupStr
+	if iSem.UserGroups != nil {
+		i.GlobalUserGroups = map[string]struct{}{}
+		for u := iSem.UserGroups {
+			i.GlobalUserGroups[i.resolveUserGroup(u)] = struct{}{}
+		}
+		i.globalUserGroupStr = strings.Join(slices.Sorted(maps.Keys(i.GlobalUserGroups)), ",")
 	}
 	if iSem.ConsumedBy != nil {
 		// this is an interface (not a product-level one)
@@ -80,8 +90,12 @@ func (i *Interface) setCountsByUserGroup() {
 		if i.objectCountsByUserGroup[om.UserGroup] == nil {
 			i.objectCountsByUserGroup[om.UserGroup] = map[ObjType]int{}
 		}
-		i.objectCountsByUserGroup[om.UserGroup][ObjTpTable] += i.accountObjects[e].countByObjType(ObjTpTable)
-		i.objectCountsByUserGroup[om.UserGroup][ObjTpView] += i.accountObjects[e].countByObjType(ObjTpView)
+		var resolvedUserGroup string
+		if om.UserGroup != "" {
+			resolvedUserGroup = i.resolveUserGroup(om.UserGroup)
+		}
+		i.objectCountsByUserGroup[resolvedUserGroup][ObjTpTable] += i.accountObjects[e].countByObjType(ObjTpTable)
+		i.objectCountsByUserGroup[resolvedUserGroup][ObjTpView] += i.accountObjects[e].countByObjType(ObjTpView)
 	}
 }
 
@@ -190,7 +204,7 @@ func (i *Interface) pushObjectCounts(yield func(ObjCountsRow) bool, pdID semanti
 			ViewCount:   countsByObjType[ObjTpView],
 		}
 		if ug == "" {
-			r.UserGroups = i.userGroupsStr
+			r.UserGroups = i.globalUserGroupsStr
 		}
 		if !yield(r) {
 			return false

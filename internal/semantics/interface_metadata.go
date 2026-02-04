@@ -10,26 +10,25 @@ import (
 type InterfaceMetadata struct {
 	ObjectMatchers   ObjMatchers
 	Classification   Classification
-	GlobalUserGroups map[string]bool
 	UserGroups       syntax.Rendering
 	MaskColumns      ColMatcher
 	HashColumns      ColMatcher
 	ConsumedBy       map[string]map[ProductDTAPID]struct{} // will be populated by Grupin.allConsumedOK
-	ExposeDTAPs      map[string]bool                       // TODO: convert this to HideDTAPs, to be unioned between product and interface
 	ForProduct       *string
+
+	// Used to resolve user groups to global user groups
+	resolveUserGroup	func(string) (string, error)
 }
 
-func newInterfaceMetadata(cnf *Config, imSyn syntax.InterfaceMetadata, classes map[string]syntax.Class, globalUserGroups map[string]bool,
-	userGroupMapping UserGroupMapping, dtaps syntax.Rendering, parent *InterfaceMetadata) (InterfaceMetadata, error) {
-	imSem := InterfaceMetadata{}
+func newInterfaceMetadata(cnf *Config, imSyn syntax.InterfaceMetadata, classes map[string]syntax.Class, resolveUserGroup func(string) (string, error),
+	dtaps syntax.Rendering, userGroupRendering syntax.Rendering, parent *InterfaceMetadata) (InterfaceMetadata, error) {
+	imSem := InterfaceMetadata{
+		resolveUserGroup: resolveUserGroup,
+	}
 	if err := imSem.setClassification(imSyn, parent, classes); err != nil {
 		return imSem, err
 	}
 	if err := imSem.setUserGroups(imSyn, parent, globalUserGroups, userGroupMapping); err != nil {
-		return imSem, err
-	}
-	// TODO: replace with HideDTAPs
-	if err := imSem.setExposeDTAPs(imSyn, parent, dtaps); err != nil {
 		return imSem, err
 	}
 	if err := imSem.setObjectMatchers(cnf, imSyn, parent, dtaps); err != nil {
@@ -73,70 +72,38 @@ func (imSem *InterfaceMetadata) setClassification(imSyn syntax.InterfaceMetadata
 	return nil
 }
 
-func getGlobalUserGroup(userGroup string, userGroupMapping UserGroupMapping, globalUserGroups map[string]bool) (string, bool) {
-	if userGroupMapping == nil {
-		// product did not define a user group mapping id
-		_, ok := globalUserGroups[userGroup]
-		return userGroup, ok // userGroup is a global user group
-	}
-	globalUserGroup, ok := userGroupMapping[userGroup]
-	return globalUserGroup, ok
-}
-
-func (imSem *InterfaceMetadata) setUserGroups(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata,
-	globalUserGroups map[string]bool, userGroupMapping UserGroupMapping) error {
-	if imSyn.UserGroups == nil {
-		if parent != nil {
-			imSem.UserGroups = parent.UserGroups
-			imSem.GlobalUserGroups = parent.GlobalUserGroups
+func (imSem *InterfaceMetadata) setUserGroups(imSyn syntax.InterfaceMetadata, userGroupRendering syntax.Rendering, parent *InterfaceMetadata) error {
+	if parent == nil {
+		// this is a product-level interface
+		if imSyn.UserGroups == nil {
+			return nil
 		}
+		imSem.UserGroups = syntax.Rendering{}
+		for _, u := range imSyn.UserGroups {
+			if _, err := imSem.resolveUserGroup(u); err != nil {
+				return err
+			}
+			// this is a valid user group
+			if rendering, ok := userGroupRendering[u]; ok {
+				imSem.UserGroups[u] = rendering
+			} else {
+				imSem.UserGroups[u] = u
+			}
+		}
+		return nil
+	}
+
+	// we have a parent (product-level) interface
+	if len(imSyn.UserGroups) == 0 {
+		imSem.UserGroups = parent.UserGroups
 		return nil
 	}
 	imSem.UserGroups = syntax.Rendering{}
-	imSem.GlobalUserGroups = map[string]bool{}
 	for _, u := range imSyn.UserGroups {
-		if g, ok := getGlobalUserGroup(u, userGroupMapping, globalUserGroups); !ok {
-			return &SetLogicError{fmt.Sprintf("Unknown user group: %s", u)}
-		} else {
-			imSem.GlobalUserGroups[g] = true
+		if rendering, ok := parent.UserGroups[u]; !ok {
+			return &PolicyError{fmt.Sprintf("Interface should not have user group '%s' that product does not have", u)}
 		}
-		imSem.UserGroups[u] = u
-	}
-	for u, r := range imSyn.UserGroupRendering {
-		imSem.UserGroups[u] = r
-	}
-	if parent != nil {
-		// interfaces should have a subset of global user groups with regard to parent product
-		for u := range imSem.GlobalUserGroups {
-			if _, ok := parent.GlobalUserGroups[u]; !ok {
-				return &PolicyError{fmt.Sprintf("Interface should not have global user group '%s' that product does not have", u)}
-			}
-		}
-		// if parent product has user groups, interface should also have a at least one
-		if len(parent.GlobalUserGroups) > 0 && len(imSem.GlobalUserGroups) == 0 {
-			return &PolicyError{fmt.Sprintf("Product has global user groups, so interface should have at least one also", u)}
-		}
-	}
-	return nil
-}
-
-func (imSem *InterfaceMetadata) setExposeDTAPs(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata,
-	dtaps syntax.Rendering) error {
-	if imSyn.ExposeDTAPs == nil {
-		if parent != nil {
-			imSem.ExposeDTAPs = parent.ExposeDTAPs
-		}
-		return nil
-	}
-	imSem.ExposeDTAPs = make(map[string]bool, len(dtaps))
-	for _, d := range imSyn.ExposeDTAPs {
-		if _, ok := imSem.ExposeDTAPs[d]; ok {
-			return &syntax.FormattingError{fmt.Sprintf("ExposeDTAPs: duplicate dtap '%s'", d)}
-		}
-		if _, ok := dtaps[d]; !ok {
-			return &SetLogicError{fmt.Sprintf("ExposeDTAPs: unknown dtap '%s'", d)}
-		}
-		imSem.ExposeDTAPs[d] = true
+		imSem.UserGroups[u] = rendering
 	}
 	return nil
 }
@@ -216,6 +183,17 @@ func equal_pointer_string(lhs *string, rhs *string) bool {
 		}
 	}
 	return true
+}
+
+func (imSem *InterfaceMetadata) GetResolveUserGroupFunc() func (string) string {
+	return func(u string) string {
+		// We panic upon error, because this method is only intended
+		// for calling after initialisation, when things should be okay, really
+		if r, err := imSem.resolveUserGroup(u); err != nil {
+			panic("unknown user group")
+		}
+		return r
+	}
 }
 
 func (lhs InterfaceMetadata) Equal(rhs InterfaceMetadata) bool {

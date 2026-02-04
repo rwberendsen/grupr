@@ -107,6 +107,7 @@ func (g Grupin) allConsumedOk() error {
 			}
 
 			// Check DTAP mapping
+			// TODO: add hide_dtaps to interface metadata, and union product level and interface level, and check here that hidden dtaps are not consumed.
 			for dtapSelf, dtapSource := range dtapMapping {
 				if !pSource.DTAPs.HasDTAP(dtapSource) {
 					return &SetLogicError{fmt.Sprintf("product '%s': consumed interface '%s': dtap '%s': dtap not found", p.ID, iid, dtapSource)}

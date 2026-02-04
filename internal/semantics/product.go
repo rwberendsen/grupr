@@ -8,13 +8,14 @@ import (
 )
 
 type Product struct {
-	ID               string
-	DTAPs            DTAPSpec
-	UserGroupMapping string
+	ID			string
+	DTAPs			DTAPSpec
+	UserGroupMappingID	string
+	UserGroupRendering	syntax.Rendering
+	UserGroupColumn		ColMatcher
 	InterfaceMetadata
-	UserGroupColumn ColMatcher
-	Consumes        map[syntax.InterfaceID]map[string]string
-	Interfaces      map[string]InterfaceMetadata
+	Consumes		map[syntax.InterfaceID]map[string]string
+	Interfaces		map[string]InterfaceMetadata
 }
 
 func newProduct(cnf *Config, pSyn syntax.Product, classes map[string]syntax.Class, globalUserGroups map[string]bool,
@@ -25,23 +26,48 @@ func newProduct(cnf *Config, pSyn syntax.Product, classes map[string]syntax.Clas
 		DTAPs:      newDTAPSpec(pSyn.DTAPs, pSyn.DTAPRendering),
 		Interfaces: map[string]InterfaceMetadata{},
 	}
-	// Set UsergroupMapping
-	if pSyn.UserGroupMapping != "" {
-		if _, ok := userGroupMappings[pSyn.UserGroupMapping]; !ok {
-			return &SetLogicError{fmt.Sprintf("Unknown user group mapping: '%s'", pSyn.UserGroupMapping)}
+
+	// Set UsergroupMappingID
+	if pSyn.UserGroupMappingID != "" {
+		if _, ok := userGroupMappings[pSyn.UserGroupMappingID]; !ok {
+			return &SetLogicError{fmt.Sprintf("unknown user group mapping id: '%s'", pSyn.UserGroupMappingID)}
 		}
 	}
-	pSem.UserGroupMapping = pSyn.UserGroupMapping
-	// Set InterfaceMetadata
-	if im, err := newInterfaceMetadata(cnf, pSyn.InterfaceMetadata, classes, globalUserGroups, userGroupMappings[pSem.UserGroupMapping], pSem.DTAPs.DTAPRendering, nil); err != nil {
+	pSem.UserGroupMappingID = pSyn.UserGroupMappingID
+
+	// Set UserGroupRendering
+	for k := range pSyn.UserGroupRendering {
+		if _, ok := userGroupMappings[pSem.UserGroupMappingID][k]; !ok {
+			return &SetLogicError{fmt.Sprintf("unknown user group in rendering: '%s'", k)}
+		}
+	}
+	pSem.UserGroupRendering = pSyn.UserGroupRendering
+
+	// Set InterfaceMetadata, passing it a way to resolve user groups
+	f := func(u string) (string, error) {
+		if pSem.UserGroupMapping == "" {
+			if r, ok := globalUserGroups[u]; !ok {
+				return r, &SetLogicError{fmt.Sprintf("unknown user group: '%s'", u)}
+			}
+			return r, nil
+		}
+		if r, ok := userGroupMappings[pSem.UserGroupMappingID][u]; !ok {
+			return r, &SetLogicError{fmt.Sprintf("unknown user group: '%s'", u)}
+		}
+		return r, nil
+		
+	}
+	if im, err := newInterfaceMetadata(cnf, pSyn.InterfaceMetadata, classes, f, pSem.DTAPs.DTAPRendering, pSem.UserGroupRendering, nil); err != nil {
 		return pSem, fmt.Errorf("product id %s: interface metadata: %w", pSem.ID, err)
 	} else {
 		pSem.InterfaceMetadata = im
 	}
+
 	// Set UserGroupColumn (this requires InterfaceMetadata its ObjectMatchers to be set)
 	if err := pSem.setUserGroupColumn(cnf, pSyn); err != nil {
 		return pSem, err
 	}
+
 	// Set Consumes
 	pSem.Consumes = map[syntax.InterfaceID]map[string]string{}
 	for _, cs := range pSyn.Consumes {
