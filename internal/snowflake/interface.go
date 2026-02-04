@@ -2,6 +2,7 @@ package snowflake
 
 import (
 	"context"
+	"database/sql"
 	"maps"
 	"slices"
 	"strings"
@@ -60,7 +61,7 @@ func NewInterface(dtap string, iSem semantics.InterfaceMetadata, um semantics.Us
 	return i
 }
 
-func (i *Interface) recalcObjectsFromMatched(m map[semantics.ObjExpr]*matchedAccountObjects) {
+func (i *Interface) recalcObjectsFromMatched(m map[semantics.ObjExpr]*matchedAccountObjs) {
 	// Called from the product level only
 	i.accountObjects = map[semantics.ObjExpr]AccountObjs{} // (re)set
 	for e, om := range i.ObjectMatchers {

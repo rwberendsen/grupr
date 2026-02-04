@@ -39,7 +39,7 @@ func (c *dbCache) dropSchema(k string) {
 	c.schemaExists[k] = false
 }
 
-func (c *dbCache) hasSchema(k string) {
+func (c *dbCache) hasSchema(k string) bool {
 	return c.schemaExists != nil && c.schemaExists[k]
 }
 

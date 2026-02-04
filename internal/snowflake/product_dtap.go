@@ -2,8 +2,11 @@ package snowflake
 
 import (
 	"context"
+	"database/sql"
+	"iter"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
+	"github.com/rwberendsen/grupr/internal/syntax"
 	"github.com/rwberendsen/grupr/internal/util"
 )
 
@@ -18,7 +21,7 @@ type ProductDTAP struct {
 	refreshCount          int // how many times has this ProductDTAP been refreshed: populated with Snowflake objects
 	matchedAccountObjects map[semantics.ObjExpr]*matchedAccountObjs
 	hasProductRoles       bool
-	revokeGrantsToRead    map[Grant]struct{}
+	revokeGrantsToRead    []Grant
 }
 
 func NewProductDTAP(pdID semantics.ProductDTAPID, isProd bool, pSem semantics.Product, userGroupMappings map[string]semantics.UserGroupMapping) *ProductDTAP {
@@ -29,7 +32,7 @@ func NewProductDTAP(pdID semantics.ProductDTAPID, isProd bool, pSem semantics.Pr
 		Interfaces:            map[string]Interface{},
 		Consumes:              map[syntac.InterfaceID]string{},
 		matchedAccountObjects: map[semantics.ObjExpr]*matchedAccountObjs{},
-		revokeGrantsToRead:    map[Grant]struct{}{},
+		revokeGrantsToRead:    []Grant{},
 	}
 
 	for id, iSem := range pSem.Interfaces {
@@ -207,6 +210,10 @@ func (pd *ProductDTAP) pushToDoDBRoleGrants(yield func(Grant) bool, doProd bool,
 	return true
 }
 
+func (pd *ProductDTAP) revokeGrantFromRead(g Grant) {
+	pd.revokeGrantsToRead = append(pd.revokeGrantsToRead, g)
+}
+
 func (pd *ProductDTAP) revokeFromProductRole(ctx context.Context, cnf *Config, conn *sql.DB) error {
 	// We skip errors here because this concerns relationships between
 	// products, and refreshing brings no value on top of just rerunning
@@ -214,7 +221,7 @@ func (pd *ProductDTAP) revokeFromProductRole(ctx context.Context, cnf *Config, c
 	// dropped concurrently, and this would mean the grants we thought we
 	// needed to revoke would have already been dropped server side as
 	// well.
-	return DoRevokesSkipErrors(ctx, cnf, conn, maps.Keys(pd.revokeGrantsToRead))
+	return DoRevokesSkipErrors(ctx, cnf, conn, pd.revokeGrantsToRead)
 }
 
 func (pd *ProductDTAP) refreshGrantRevoke(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{},

@@ -5,6 +5,7 @@ import (
 	"maps"
 
 	"github.com/rwberendsen/grupr/internal/syntax"
+	"github.com/rwberendsen/grupr/internal/util"
 )
 
 type InterfaceMetadata struct {
@@ -109,10 +110,10 @@ func (imSem *InterfaceMetadata) setObjectMatchers(cnf *Config, imSyn syntax.Inte
 	dtaps syntax.Rendering) error {
 	if imSyn.Objects == nil {
 		if parent != nil {
-			imSem.ObjectMatcher = parent.ObjectMatcher
+			imSem.ObjectMatchers = parent.ObjectMatchers
 			return nil
 		}
-		return &PolicyError{"ObjectMatcher is a required field"}
+		return &PolicyError{"ObjectMatcher is a required field for an interface"}
 	}
 	if m, err := newObjMatchers(cnf, imSyn.Objects, imSyn.ObjectsExclude, dtaps, imSem.UserGroups); err != nil {
 		return fmt.Errorf("ObjectMatchers: %w", err)
@@ -135,7 +136,7 @@ func (imSem *InterfaceMetadata) setHashColumns(cnf *Config, imSyn syntax.Interfa
 		}
 		return nil
 	}
-	if m, err := newColMatcher(cnf, imSyn.HashColumns, dtaps, imSem.UserGroups, imSem.ObjectMatcher); err != nil {
+	if m, err := newColMatcher(cnf, imSyn.HashColumns, dtaps, imSem.UserGroups, imSem.ObjectMatchers); err != nil {
 		return fmt.Errorf("hash_columns: %w", err)
 	} else {
 		imSem.HashColumns = m
@@ -150,7 +151,7 @@ func (imSem *InterfaceMetadata) setMaskColumns(cnf *Config, imSyn syntax.Interfa
 		}
 		return nil
 	}
-	if m, err := newColMatcher(cnf, imSyn.MaskColumns, dtaps, imSem.UserGroups, imSem.ObjectMatcher); err != nil {
+	if m, err := newColMatcher(cnf, imSyn.MaskColumns, dtaps, imSem.UserGroups, imSem.ObjectMatchers); err != nil {
 		return fmt.Errorf("mask_columns: %w", err)
 	} else {
 		imSem.MaskColumns = m
@@ -169,26 +170,12 @@ func (imSem *InterfaceMetadata) setForProduct(imSyn syntax.InterfaceMetadata, pa
 	return nil
 }
 
-func equal_pointer_string(lhs *string, rhs *string) bool {
-	// TODO: check if a simple generic exists for the three lines below, and if so, use it.
-	if lhs != rhs {
-		if lhs == nil || rhs == nil {
-			return false
-		}
-		if *lhs != *rhs {
-			return false
-		}
-	}
-	return true
-}
-
 func (lhs InterfaceMetadata) Equal(rhs InterfaceMetadata) bool {
 	return lhs.ObjectMatchers.Equal(rhs.ObjectMatchers) &&
 		lhs.Classification == rhs.Classification &&
-		maps.Equal(lhs.GlobalUserGroups, rhs.GlobalUserGroups) &&
 		lhs.UserGroups.Equal(rhs.UserGroups) &&
 		lhs.MaskColumns.Equal(rhs.MaskColumns) &&
 		lhs.HashColumns.Equal(rhs.MaskColumns) &&
-		maps.Equal(lhs.ExposeDTAPs, rhs.ExposeDTAPs) &&
-		equal_pointer_string(lhs.ForProduct, rhs.ForProduct)
+		maps.EqualFunc(lhs.ConsumedBy, rhs.ConsumedBy, func (l map[ProductDTAPID]struct{}, r map[ProductDTAPID]struct{}) bool { return maps.Equal(l, r) }) &&
+		util.EqualStrPtr(lhs.ForProduct, rhs.ForProduct)
 }

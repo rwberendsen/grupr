@@ -3,6 +3,7 @@ package snowflake
 import (
 	"context"
 	"database/sql"
+	"iter"
 	"strings"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
@@ -39,7 +40,7 @@ func NewGrupin(ctx context.Context, cnf *Config, conn *sql.DB, g semantics.Grupi
 	return r
 }
 
-func (g *Grupin) setObjects(ctx context.Context, cnf *Context, conn *sql.DB, doProd bool) error {
+func (g *Grupin) setObjects(ctx context.Context, cnf *Config, conn *sql.DB, doProd bool) error {
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(cnf.MaxProductDTAPThreads)
 	for _, pd := range g.ProductDTAPs {
@@ -50,7 +51,7 @@ func (g *Grupin) setObjects(ctx context.Context, cnf *Context, conn *sql.DB, doP
 	return eg.Wait()
 }
 
-func (g *Grupin) SetObjects(ctx context.Context, cnf *Context, conn *sql.DB) error {
+func (g *Grupin) SetObjects(ctx context.Context, cnf *Config, conn *sql.DB) error {
 	// Calculating objects can be a time-consuming activity.
 	// Since we care most about production, generally, we'll do it first.
 	if err := g.setObjects(ctx, cnf, conn, true); err != nil {
@@ -102,7 +103,7 @@ func (g *Grupin) ManageAccess(ctx context.Context, synCnf *syntax.Config, cnf *C
 	return nil
 }
 
-func (g *Grupin) setDBRoleGrants(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.db, pd ProductDTAP) error {
+func (g *Grupin) setDBRoleGrants(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, pd ProductDTAP) error {
 	// Loop over all granted grupr-managed database roles, and:
 	// - store which ones we already have been granted.
 	// - store which ones we should later revoke (when we have done a first granting loop over all products)
@@ -120,14 +121,14 @@ func (g *Grupin) setDBRoleGrants(ctx context.Context, synCnf *syntax.Config, cnf
 		// - Read database roles of interfaces that pd consumes
 		if grantedDBRole.ProductID == pd.ProductID {
 			if grantedDBRole.InterfaceID != "" {
-				pd.revokeGrantsToRead[grant] = struct{}{}
+				pd.revokeGrantFromRead(grant)
 				continue
 			}
 			// grantedDBRole.InterfaceID == ""
 			if dbObjs, ok := pd.Interface.aggAccountObjects.DBs[grant.Database]; ok {
 				dbObjs.isDBRoleGrantedToProductRead = true
 			} else if pd.Interface.ObjectMatchers.DisjointFromDB(grant.Database) {
-				pd.revokeGrantsToRead[grant] = struct{}{}
+				pd.revokeGrantFromRead(grant)
 			}
 			continue // leave this grant be, it is correct, even if it is unexpected that it exists
 		}
@@ -135,7 +136,7 @@ func (g *Grupin) setDBRoleGrants(ctx context.Context, synCnf *syntax.Config, cnf
 		// grantedDBRole.ProductID != pd.ProductID
 		if grantedDBRole.InterfaceID == "" {
 			// we have no business with the product level interface of another product
-			pd.revokeGrantsToRead[grant] = struct{}{}
+			pd.revokeGrantFromRead(grant)
 			continue
 		}
 
@@ -143,12 +144,12 @@ func (g *Grupin) setDBRoleGrants(ctx context.Context, synCnf *syntax.Config, cnf
 		sourceDTAP, ok := pd.Consumes[syntax.InterfaceID{ID: grantedDBRole.InterfaceID, ProductID: grantedDBRole.ProductID}]
 		if !ok {
 			// we do not consume that interface from that product
-			pd.revokeGrantsToRead[grant] = struct{}{}
+			pd.revokeGrantFromRead(grant)
 			continue
 		}
 		if sourceDTAP != grantedDBRole.DTAP {
 			// we do consume that interface from that product, but not that dtap though
-			pd.revokeGrantsToRead[grant] = struct{}{}
+			pd.revokeGrantFromRead(grant)
 			continue
 		}
 		// sourceDTAP == grantedDBRole.DTAP
@@ -159,7 +160,7 @@ func (g *Grupin) setDBRoleGrants(ctx context.Context, synCnf *syntax.Config, cnf
 
 		// But, is it true that the database in which the granted role was created still has objects that belong to that interface?
 		if sourceI.ObjectMatchers.DisjointFromDB(grantedDBRole.Database) {
-			pd.revokeGrantsToRead[grant] = struct{}{}
+			pd.revokeGrantFromRead(grant)
 			continue
 		}
 
@@ -189,7 +190,7 @@ func (g *Grupin) doToDoDBRoleGrants(ctx context.Context, cnf *Config, conn *sql.
 	return eg.Wait()
 }
 
-func (g *Grupin) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.db, doProd bool) error {
+func (g *Grupin) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, doProd bool) error {
 	// The bulk of the grants are granting objects to roles, we do it concurrently per product-dtap
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(cnf.MaxProductDTAPThreads)
@@ -220,7 +221,7 @@ func (g *Grupin) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, 
 	return g.doToDoDBRoleGrants(ctx, cnf, conn, doProd)
 }
 
-func (g *Grupin) revoke(ctx context.context, synCnf *syntax.Config, cnf *Config, conn *sql.db, doProd bool) error {
+func (g *Grupin) revoke(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, doProd bool) error {
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(cnf.MaxProductDTAPThreads)
 	for _, pd := range g.ProdDTAPs {

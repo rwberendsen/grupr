@@ -1,7 +1,10 @@
 package snowflake
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
+	"iter"
 )
 
 type Obj struct {

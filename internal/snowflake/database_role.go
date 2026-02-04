@@ -1,8 +1,10 @@
 package snowflake
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+	"iter"
 	"strings"
 
 	"github.com/rwberendsen/grupr/internal/syntax"

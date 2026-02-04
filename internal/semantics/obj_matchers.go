@@ -31,7 +31,7 @@ func newObjMatchers(cnf *Config, include []string, exclude []string, dtaps synta
 	}
 	// For each rendered exclude expression, assign it to the correct rendered include expression
 	for _, expr := range exclude {
-		objExprs, err := newObjExprs(expr, dtaps, userGroups)
+		objExprs, err := newObjExprs(cnf, expr, dtaps, userGroups)
 		if err != nil {
 			return oms, fmt.Errorf("parsing obj expr: %s", err)
 		}
@@ -42,7 +42,7 @@ func newObjMatchers(cnf *Config, include []string, exclude []string, dtaps synta
 					if _, ok := om.Exclude[e]; ok {
 						return oms, fmt.Errorf("duplicate exclude expr")
 					}
-					om.Exlude[e] = struct{}{}
+					om.Exclude[e] = struct{}{}
 					hasStrictSuperset = true
 				}
 			}
@@ -52,8 +52,8 @@ func newObjMatchers(cnf *Config, include []string, exclude []string, dtaps synta
 		}
 	}
 	// Check, after adding each exclude ObjExpr to the correct include ObjExpr, that each include has disjoint excludes
-	for _, objMatcher := range oms {
-		if err := allDisjointObjExprs(maps.Keys(oms.Exclude)); err != nil {
+	for _, om := range oms {
+		if err := allDisjointObjExprs(maps.Keys(om.Exclude)); err != nil {
 			return oms, fmt.Errorf("exclude exprs: %w", err)
 		}
 	}
@@ -64,7 +64,7 @@ func (lhs ObjMatchers) validateExprAttrAgainst(rhs ObjMatchers) error {
 	// Caller must ensure lhs is a subset of rhs
 	for _, om_lhs := range lhs {
 		for _, om_rhs := range rhs {
-			if om_lhs.subsetOf(om.rhs) {
+			if om_lhs.subsetOf(om_rhs) {
 				if err := om_lhs.validateExprAttrAgainst(om_rhs); err != nil {
 					return err
 				}
@@ -121,8 +121,8 @@ func (lhs ObjMatchers) setSubsetOf(rhs ObjMatchers) ObjMatchers {
 }
 
 func (lhs ObjMatchers) DisjointFromDB(db string) bool {
-	for _, om := range oms {
-		if !om.DisjointFromDB(db, schema) {
+	for _, om := range lhs {
+		if !om.DisjointFromDB(db) {
 			return false
 		}
 	}

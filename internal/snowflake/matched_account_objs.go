@@ -2,6 +2,7 @@ package snowflake
 
 import (
 	"fmt"
+	"iter"
 )
 
 type matchedAccountObjs struct {

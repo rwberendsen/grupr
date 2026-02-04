@@ -25,7 +25,7 @@ func (o AggSchemaObjs) hasObject(k string) bool {
 	return ok
 }
 
-func (o AggSchemaObjs) setFutureGrantTo(m Mode, grantedOn ObjType, p privilege) AggSchemaObjs {
+func (o AggSchemaObjs) setFutureGrantTo(m Mode, grantedOn ObjType, p Privilege) AggSchemaObjs {
 	fObjTp := func(ot ObjType) int {
 		if ot == ObjTpTable {
 			return 0
@@ -87,7 +87,7 @@ func (o AggSchemaObjs) hasGrantTo(m Mode, p Privilege) {
 	return m == ModeRead && p == PrvUsage && o.isUsageGranted
 }
 
-func (o AggDBObjs) pushToDoFutureGrants(yield func(FutureGrant) bool, dbRole DatabaseRole, schema string) bool {
+func (o AggSchemaObjs) pushToDoFutureGrants(yield func(FutureGrant) bool, dbRole DatabaseRole, schema string) bool {
 	if o.MatchAllObjects {
 		for _, ot := range [2]ObjType{ObjTpTable, ObjTpView} {
 			prvs := []PrivilegeComplete{}

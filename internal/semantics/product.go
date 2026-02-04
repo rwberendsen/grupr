@@ -12,8 +12,8 @@ type Product struct {
 	DTAPs              DTAPSpec
 	UserGroupMappingID string
 	UserGroupRendering syntax.Rendering
-	UserGroupColumn    ColMatcher
 	InterfaceMetadata
+	UserGroupColumn    ColMatcher
 	Consumes   map[syntax.InterfaceID]map[string]string
 	Interfaces map[string]InterfaceMetadata
 }
@@ -23,14 +23,14 @@ func newProduct(cnf *Config, pSyn syntax.Product, classes map[string]syntax.Clas
 	// Initialize
 	pSem := Product{
 		ID:         pSyn.ID,
-		DTAPs:      newDTAPSpec(pSyn.DTAPs, pSyn.DTAPRendering),
+		DTAPs:      newDTAPSpec(cnf, pSyn.DTAPs, pSyn.DTAPRendering),
 		Interfaces: map[string]InterfaceMetadata{},
 	}
 
 	// Set UsergroupMappingID
 	if pSyn.UserGroupMappingID != "" {
 		if _, ok := userGroupMappings[pSyn.UserGroupMappingID]; !ok {
-			return &SetLogicError{fmt.Sprintf("unknown user group mapping id: '%s'", pSyn.UserGroupMappingID)}
+			return pSem, &SetLogicError{fmt.Sprintf("unknown user group mapping id: '%s'", pSyn.UserGroupMappingID)}
 		}
 	}
 	pSem.UserGroupMappingID = pSyn.UserGroupMappingID
@@ -38,7 +38,7 @@ func newProduct(cnf *Config, pSyn syntax.Product, classes map[string]syntax.Clas
 	// Set UserGroupRendering
 	for k := range pSyn.UserGroupRendering {
 		if _, ok := userGroupMappings[pSem.UserGroupMappingID][k]; !ok {
-			return &SetLogicError{fmt.Sprintf("unknown user group in rendering: '%s'", k)}
+			return pSem, &SetLogicError{fmt.Sprintf("unknown user group in rendering: '%s'", k)}
 		}
 	}
 	pSem.UserGroupRendering = pSyn.UserGroupRendering
@@ -88,7 +88,7 @@ func newProduct(cnf *Config, pSyn syntax.Product, classes map[string]syntax.Clas
 	return pSem, nil
 }
 
-func (pSem *Product) setUserGroupColumn(cnf *Config, pSyn syntax.Product, dtaps syntax.Rendering) error {
+func (pSem *Product) setUserGroupColumn(cnf *Config, pSyn syntax.Product) error {
 	if pSyn.UserGroupColumn == "" {
 		return nil
 	}
@@ -107,6 +107,7 @@ func (pSem *Product) validateExprAttr() error {
 			return fmt.Errorf("interface '%s': %w", id, err)
 		}
 	}
+	return nil
 }
 
 func (lhs Product) disjoint(rhs Product) bool {
@@ -120,7 +121,10 @@ func (lhs Product) Equal(rhs Product) bool {
 	if !lhs.DTAPs.Equal(rhs.DTAPs) {
 		return false
 	}
-	if lhs.UserGroupMapping != rhs.UserGroupMapping {
+	if lhs.UserGroupMappingID != rhs.UserGroupMappingID {
+		return false
+	}
+	if !lhs.UserGroupRendering.Equal(rhs.UserGroupRendering) {
 		return false
 	}
 	if !lhs.InterfaceMetadata.Equal(rhs.InterfaceMetadata) {

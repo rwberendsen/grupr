@@ -103,7 +103,7 @@ func (lhs ObjExpr) subsetOfObjExprs(rhs iter.Seq[ObjExpr]) bool {
 }
 
 func allDisjointObjExprs(i iter.Seq[ObjExpr]) error {
-	l = slices.Collect(i)
+	l := slices.Collect(i)
 	if len(l) < 2 {
 		return nil
 	}
@@ -117,7 +117,7 @@ func allDisjointObjExprs(i iter.Seq[ObjExpr]) error {
 	return nil
 }
 
-func (e ObjExpr) MatchesAllObjectsInAnySchemaInDB(db string) {
+func (e ObjExpr) MatchesAllObjectsInAnySchemaInDB(db string) bool {
 	if !e[Database].Match(db) {
 		return false
 	}

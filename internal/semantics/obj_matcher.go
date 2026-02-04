@@ -3,8 +3,6 @@ package semantics
 import (
 	"fmt"
 	"maps"
-
-	"github.com/rwberendsen/grupr/internal/syntax"
 )
 
 type ObjMatcher struct {
@@ -62,11 +60,12 @@ func (lhs ObjMatcher) subsetOf(rhs ObjMatcher) bool {
 	return true
 }
 
-func (lhs ObjMatcher) validateExprAgainst(rhs ObjMatcher) error {
+func (lhs ObjMatcher) validateExprAttrAgainst(rhs ObjMatcher) error {
 	// Caller must ensure lhs is subset of rhs
 	if lhs.ObjExprAttr != rhs.ObjExprAttr {
 		return fmt.Errorf("mismatch in ObjExprAttr")
 	}
+	return nil
 }
 
 func (lhs ObjMatcher) DisjointFromDB(db string) bool {

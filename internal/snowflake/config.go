@@ -6,6 +6,7 @@ import (
 
 	"github.com/rwberendsen/grupr/internal/semantics"
 	"github.com/rwberendsen/grupr/internal/syntax"
+	"github.com/rwberendsen/grupr/internal/util"
 )
 
 type Config struct {
@@ -176,7 +177,7 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 		GrantTemplate{
 			Privilege:                   PrvUsage,
 			GrantedOn:                   ObjTpDatabaseRole,
-			GrantedRoleStartsWithPrefix: newTrue(),
+			GrantedRoleStartsWithPrefix: util.NewTrue(),
 		}: {},
 	}
 }

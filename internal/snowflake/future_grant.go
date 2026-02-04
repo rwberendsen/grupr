@@ -138,58 +138,6 @@ func QueryFutureGrantsToRoleFilteredLimit(ctx context.Context, conn *sql.DB, rol
 	return queryFutureGrantsToRole(ctx, conn, "", role, match, notMatch, limit)
 }
 
-func (g FutureGrant) buildSQLFilter(g GrantTemplate) (string, int) {
-	// zero values
-	var privilege Privilege
-	var createObjectType ObjType
-	var grantedOn ObjType
-
-	clauses := []string{}
-	if g.Privilege != privilege {
-		clauses = append(clauses, fmt.Sprintf("privilege = '%v'", g.Privilege))
-		if g.Privilege == PrvCreate && g.CreateObjectType != createObjectType {
-			clauses = append(clauses, fmt.Sprintf("create_object_type = '%v'", g.CreateObjectType))
-		}
-	}
-	if g.GrantedOn != grantedOn {
-		clauses = append(clauses, fmt.Sprintf("granted_on = '%v'", g.GrantedOn))
-	}
-	return strings.Join(clauses, " AND "), len(clauses)
-}
-
-func buildSQLGrants(grants map[GrantTemplate]struct{}) (string, int) {
-	clauses = []string{}
-	for g := range grants {
-		s, l := buildSQLFilter(g)
-		if l > 0 {
-			clauses = append(clauses, s)
-		}
-	}
-	return strings.Join(clauses, " OR\n"), len(clauses)
-}
-
-func buildSLQMatch(match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}) (string, int) {
-	clauses := []string{}
-	if match != nil {
-		s, l := buildSQLGrants(match)
-		if l > 0 {
-			clauses = append(clauses, s)
-		}
-	}
-	if notMatch != nil {
-		s, l := buildSQLGrants(notMatch)
-		if l > 0 {
-			clauses = append(clauses, fmt.Sprintf("NOT (%s)", s))
-		}
-	}
-	if len(clauses) == 2 {
-		for i, clause := range clauses {
-			clauses[i] = fmt.Sprintf("(%s)", clause)
-		}
-	}
-	return strings.Join(clauses, "\nAND\n"), len(clauses)
-}
-
 func buildSQLQueryFutureGrants(db string, role string, match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}, limit int) string {
 	// fetch grants for DATABASE ROLE if needed, rather than ROLE
 	var dbClause string
@@ -201,7 +149,7 @@ func buildSQLQueryFutureGrants(db string, role string, match map[GrantTemplate]s
 	}
 
 	var whereClause string
-	clauseStr, nClauses := buildSQLMatch(match, notMatch)
+	clauseStr, nClauses := buildSQLMatchNotMatchGrantTemplates(match, notMatch)
 	if nClauses > 0 {
 		whereClause = fmt.Sprintf("\nWHERE\n  %s", strings.ReplaceAll(clauseStr, "\n", "\n  "))
 	}

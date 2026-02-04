@@ -11,7 +11,7 @@ type matchedDBObjs struct {
 	schemaExists map[string]bool
 }
 
-func (o *matchedObjs) addSchema(k string) {
+func (o *matchedDBObjs) addSchema(k string) {
 	if o.schemas == nil {
 		o.schemas = map[string]*matchedSchemaObjs{}
 		o.schemaExists = map[string]bool{}

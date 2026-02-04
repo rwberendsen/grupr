@@ -2,7 +2,6 @@ package semantics
 
 import (
 	"fmt"
-	"maps"
 	"strings"
 
 	"github.com/rwberendsen/grupr/internal/syntax"
@@ -11,7 +10,7 @@ import (
 type objExprs map[ObjExpr]ObjExprAttr
 
 func newObjExprs(cnf *Config, s string, dtaps syntax.Rendering, userGroups syntax.Rendering) (objExprs, error) {
-	exprs := ObjExprs{}
+	exprs := objExprs{}
 	if strings.ContainsRune(s, '\n') {
 		return exprs, fmt.Errorf("object expression has newline")
 	}

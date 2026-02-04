@@ -1,5 +1,9 @@
 package snowflake
 
+import (
+	"github.com/rwberendsen/grupr/internal/semantics"
+)
+
 type SchemaObjs struct {
 	Objects         map[string]ObjAttr
 	MatchAllObjects bool

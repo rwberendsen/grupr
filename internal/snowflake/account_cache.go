@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"iter"
 	"log"
 	"strings"
 	"sync"
@@ -33,7 +34,7 @@ func escapeString(s string) string {
 
 func (c *accountCache) match(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, om semantics.ObjMatcher, o *matchedAccountObjs) error {
 	// will modify both c and o
-	err := c.matchDBs(ctx, synCnf, cnf, om, o)
+	err := c.matchDBs(ctx, synCnf, cnf, conn, om, o)
 	if err != nil {
 		return err
 	}
@@ -49,6 +50,7 @@ func (c *accountCache) match(ctx context.Context, synCnf *syntax.Config, cnf *Co
 			}
 		}
 	}
+	return nil
 }
 
 func (c *accountCache) matchDBs(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, om semantics.ObjMatcher, o *matchedAccountObjs) error {
@@ -68,7 +70,7 @@ func (c *accountCache) matchDBs(ctx context.Context, synCnf *syntax.Config, cnf 
 		}
 	}
 	for k := range c.getDBs() {
-		if !om.DisjointFromDB(k.Name) {
+		if !om.DisjointFromDB(k) {
 			o.addDB(k)
 		}
 	}
@@ -91,7 +93,7 @@ func (c *accountCache) matchSchemas(ctx context.Context, conn *sql.DB, db string
 	defer c.dbs[db].mu.Unlock()
 	if o.version == c.dbs[db].version {
 		// cache entry is stale
-		err := c.dbs[db].refreshSchemas(ctx, conn, db.Name)
+		err := c.dbs[db].refreshSchemas(ctx, conn, db)
 		if err != nil {
 			return err
 		}
@@ -103,11 +105,11 @@ func (c *accountCache) matchSchemas(ctx context.Context, conn *sql.DB, db string
 		}
 	}
 	for k := range c.dbs[db].getSchemas() {
-		if !om.DisjointFromSchema(db.Name, k) {
+		if !om.DisjointFromSchema(db, k) {
 			o.addSchema(k)
 		}
 	}
-	return false, nil
+	return nil
 }
 
 func (c *accountCache) matchObjects(ctx context.Context, conn *sql.DB, db string, schema string, om semantics.ObjMatcher, o *matchedSchemaObjs) error {
@@ -138,7 +140,7 @@ func (c *accountCache) matchObjects(ctx context.Context, conn *sql.DB, db string
 			o.objects[k] = v
 		}
 	}
-	return false, nil
+	return nil
 }
 
 func (c *accountCache) refreshDBs(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB) error {

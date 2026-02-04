@@ -1,7 +1,11 @@
 package snowflake
 
 import (
+	"context"
+	"database/sql"
+
 	"github.com/rwberendsen/grupr/internal/semantics"
+	"github.com/rwberendsen/grupr/internal/syntax"
 )
 
 type AggDBObjs struct {
@@ -12,8 +16,8 @@ type AggDBObjs struct {
 	// set when (future) grants are set
 	dbRole                        DatabaseRole
 	isDBRoleNew                   bool // if true, then no need to query grants
-	revokeFutureGrantsToRead      map[FutureGrant]struct{}
-	revokeGrantsToRead            map[Grant]struct{}
+	revokeFutureGrantsToRead      []FutureGrant
+	revokeGrantsToRead            []Grant
 	isUsageGrantedToRead          bool
 	isUsageGrantedToFutureSchemas bool
 	isDBRoleGrantedToProductRead  bool
@@ -72,7 +76,7 @@ func (_ AggDBObjs) getPrivilegeIdx(ot ObjType) int {
 	}
 }
 
-func (o AggDBObjs) setFutureGrantTo(_ Mode, grantedOn ObjType, p privilege) AggDBObjs {
+func (o AggDBObjs) setFutureGrantTo(_ Mode, grantedOn ObjType, p Privilege) AggDBObjs {
 	switch grantedOn {
 	case ObjTpSchema:
 		switch p {
@@ -106,6 +110,14 @@ func (o AggDBObjs) hasFutureGrantTo(m Mode, grantedOn ObjType, p Privilege) bool
 	return false
 }
 
+func (o AggDBObjs) setRevokeFutureGrantTo(m Mode, g FutureGrant) AggDBObjs {
+	if m != ModeRead {
+		panic("not implemented")
+	}
+	o.revokeFutureGrantsToRead = append(o.revokeFutureGrantsToRead, g)
+	return o
+}
+
 func (o AggDBObjs) setGrantTo(m Mode, p Privilege) AggDBObjs {
 	if m != ModeRead || p != PrvUsage {
 		panic("not implemented")
@@ -118,11 +130,11 @@ func (o AggDBObjs) hasGrantTo(m Mode, p Privilege) bool {
 	return m == ModeRead && p == PrvUsage && o.isUsageGrantedToRead
 }
 
-func (o AggDBObjs) setRevokeGrantTo(m Mode, g GrantToRole) AggDBObjs {
+func (o AggDBObjs) setRevokeGrantTo(m Mode, g Grant) AggDBObjs {
 	if m != ModeRead {
 		panic("not implemented")
 	}
-	o.revokeGrantsToRead[g] = struct{}{}
+	o.revokeGrantsToRead = append(o.revokeGrantsToRead, g)
 	return o
 }
 
@@ -148,7 +160,7 @@ func (o AggDBObjs) setFutureGrants(ctx context.Context, synCnf *syntax.Config, c
 	if err != nil {
 		return o, err
 	}
-	o.revokeFutureGrantsToRead = map[FutureGrant]struct{}{}
+	o.revokeFutureGrantsToRead = []FutureGrant{}
 	if !o.isDBRoleNew {
 		for g, err := range QueryFutureGrantsToDBRoleFiltered(ctx, conn, db, o.dBRole.Name, cnf.DatabaseRolePrivileges[ModeRead], nil) {
 			if err != nil {
@@ -205,7 +217,7 @@ func (o AggDBObjs) setFutureGrants(ctx context.Context, synCnf *syntax.Config, c
 }
 
 func (o AggDBObjs) setGrants(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, db string, oms semantics.ObjMatchers) (AggDBObjs, error) {
-	o.revokeGrantsToRead = map[Grant]struct{}{}
+	o.revokeGrantsToRead = []Grant{}
 	if !o.isDBRoleNew {
 		for g, err := range QueryGrantsToDBRoleFiltered(ctx, cnf, conn, db, o.dBRole.Name, cnf.DatabaseRolePrivileges[ModeRead], nil) {
 			if err != nil {
@@ -322,7 +334,7 @@ func (o AggDBObjs) pushToDoGrants(yield func(Grant) bool) bool {
 }
 
 func (o AggDBObjs) pushToDoFutureRevokes(yield func(FutureGrant) bool) bool {
-	for g := range o.revokeFutureGrantsToRead {
+	for _, g := range o.revokeFutureGrantsToRead {
 		if !yield(g) {
 			return false
 		}
@@ -330,7 +342,7 @@ func (o AggDBObjs) pushToDoFutureRevokes(yield func(FutureGrant) bool) bool {
 }
 
 func (o AggDBObjs) pushToDoRevokes(yield func(Grant) bool) bool {
-	for g := range o.revokeGrantsToRead {
+	for _, g := range o.revokeGrantsToRead {
 		if !yield(g) {
 			return false
 		}
