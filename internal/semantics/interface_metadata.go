@@ -8,16 +8,16 @@ import (
 )
 
 type InterfaceMetadata struct {
-	ObjectMatchers   ObjMatchers
-	Classification   Classification
-	UserGroups       syntax.Rendering
-	MaskColumns      ColMatcher
-	HashColumns      ColMatcher
-	ConsumedBy       map[string]map[ProductDTAPID]struct{} // will be populated by Grupin.allConsumedOK
-	ForProduct       *string
+	ObjectMatchers ObjMatchers
+	Classification Classification
+	UserGroups     syntax.Rendering
+	MaskColumns    ColMatcher
+	HashColumns    ColMatcher
+	ConsumedBy     map[string]map[ProductDTAPID]struct{} // will be populated by Grupin.allConsumedOK
+	ForProduct     *string
 
 	// Used to resolve user groups to global user groups
-	resolveUserGroup	func(string) (string, error)
+	resolveUserGroup func(string) (string, error)
 }
 
 func newInterfaceMetadata(cnf *Config, imSyn syntax.InterfaceMetadata, classes map[string]syntax.Class, resolveUserGroup func(string) (string, error),
@@ -185,7 +185,7 @@ func equal_pointer_string(lhs *string, rhs *string) bool {
 	return true
 }
 
-func (imSem *InterfaceMetadata) GetResolveUserGroupFunc() func (string) string {
+func (imSem *InterfaceMetadata) GetResolveUserGroupFunc() func(string) string {
 	return func(u string) string {
 		// We panic upon error, because this method is only intended
 		// for calling after initialisation, when things should be okay, really

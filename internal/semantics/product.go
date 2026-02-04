@@ -8,14 +8,14 @@ import (
 )
 
 type Product struct {
-	ID			string
-	DTAPs			DTAPSpec
-	UserGroupMappingID	string
-	UserGroupRendering	syntax.Rendering
-	UserGroupColumn		ColMatcher
+	ID                 string
+	DTAPs              DTAPSpec
+	UserGroupMappingID string
+	UserGroupRendering syntax.Rendering
+	UserGroupColumn    ColMatcher
 	InterfaceMetadata
-	Consumes		map[syntax.InterfaceID]map[string]string
-	Interfaces		map[string]InterfaceMetadata
+	Consumes   map[syntax.InterfaceID]map[string]string
+	Interfaces map[string]InterfaceMetadata
 }
 
 func newProduct(cnf *Config, pSyn syntax.Product, classes map[string]syntax.Class, globalUserGroups map[string]bool,
@@ -55,7 +55,7 @@ func newProduct(cnf *Config, pSyn syntax.Product, classes map[string]syntax.Clas
 			return r, &SetLogicError{fmt.Sprintf("unknown user group: '%s'", u)}
 		}
 		return r, nil
-		
+
 	}
 	if im, err := newInterfaceMetadata(cnf, pSyn.InterfaceMetadata, classes, f, pSem.DTAPs.DTAPRendering, pSem.UserGroupRendering, nil); err != nil {
 		return pSem, fmt.Errorf("product id %s: interface metadata: %w", pSem.ID, err)

@@ -9,7 +9,7 @@ type Product struct {
 	ID                 string            `yaml:"id"`
 	DTAPs              *DTAPSpec         `yaml:"dtaps,flow,omitempty"`
 	DTAPRendering      Rendering         `yaml:"dtap_rendering,omitempty"`
-	UserGroupMappingID   string            `yaml:"user_group_mapping,omitempty"`
+	UserGroupMappingID string            `yaml:"user_group_mapping,omitempty"`
 	UserGroupColumn    string            `yaml:"user_group_column,omitempty"`
 	UserGroupRendering Rendering         `yaml:"user_group_rendering,omitempty"`
 	Consumes           []ConsumptionSpec `yaml:"consumption_spec",omitempty"`

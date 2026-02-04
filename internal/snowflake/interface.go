@@ -11,9 +11,9 @@ import (
 )
 
 type Interface struct {
-	ObjectMatchers semantics.ObjMatchers
+	ObjectMatchers   semantics.ObjMatchers
 	GlobalUserGroups map[string]struct{}
-	ConsumedBy     map[semantics.ProductDTAPID]struct{}
+	ConsumedBy       map[semantics.ProductDTAPID]struct{}
 
 	// Granular accountObjects by ObjExpr; will be discarded after aggregate() is called
 	accountObjects map[semantics.ObjExpr]AccountObjs
@@ -28,12 +28,12 @@ type Interface struct {
 	globalUserGroupsStr string
 
 	// To resolve user groups to global ones
-	func resolveUserGroup(string) string
+	resolveUserGroup func(string) string
 }
 
 func NewInterface(dtap string, iSem semantics.InterfaceMetadata) *Interface {
 	i := &Interface{
-		ObjectMatchers: semantics.ObjMatchers{},
+		ObjectMatchers:   semantics.ObjMatchers{},
 		resolveUserGroup: iSem.GetResolveUserGroupFunc(),
 	}
 	// Just take what you need from own DTAP
@@ -45,7 +45,7 @@ func NewInterface(dtap string, iSem semantics.InterfaceMetadata) *Interface {
 	// Set Global user groups and userGroupStr
 	if iSem.UserGroups != nil {
 		i.GlobalUserGroups = map[string]struct{}{}
-		for u := iSem.UserGroups {
+		for u := range iSem.UserGroups {
 			i.GlobalUserGroups[i.resolveUserGroup(u)] = struct{}{}
 		}
 		i.globalUserGroupStr = strings.Join(slices.Sorted(maps.Keys(i.GlobalUserGroups)), ",")
