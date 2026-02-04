@@ -11,24 +11,22 @@ type InterfaceMetadata struct {
 	ObjectMatchers ObjMatchers
 	Classification Classification
 	UserGroups     syntax.Rendering
+	UserGroupMappingOnGlobal UserGroupMappingOnGlobal
 	MaskColumns    ColMatcher
 	HashColumns    ColMatcher
 	ConsumedBy     map[string]map[ProductDTAPID]struct{} // will be populated by Grupin.allConsumedOK
 	ForProduct     *string
-
-	// Used to resolve user groups to global user groups
-	resolveUserGroup func(string) (string, error)
 }
 
-func newInterfaceMetadata(cnf *Config, imSyn syntax.InterfaceMetadata, classes map[string]syntax.Class, resolveUserGroup func(string) (string, error),
-	dtaps syntax.Rendering, userGroupRendering syntax.Rendering, parent *InterfaceMetadata) (InterfaceMetadata, error) {
+func newInterfaceMetadata(cnf *Config, imSyn syntax.InterfaceMetadata, classes map[string]syntax.Class, dtaps syntax.Rendering, userGroupMapping UserGroupMapping,
+	userGroupRendering syntax.Rendering, parent *InterfaceMetadata) (InterfaceMetadata, error) {
 	imSem := InterfaceMetadata{
 		resolveUserGroup: resolveUserGroup,
 	}
 	if err := imSem.setClassification(imSyn, parent, classes); err != nil {
 		return imSem, err
 	}
-	if err := imSem.setUserGroups(imSyn, parent, globalUserGroups, userGroupMapping); err != nil {
+	if err := imSem.setUserGroups(imSyn, parent, userGroupMapping, userGroupRendering); err != nil {
 		return imSem, err
 	}
 	if err := imSem.setObjectMatchers(cnf, imSyn, parent, dtaps); err != nil {
@@ -72,7 +70,8 @@ func (imSem *InterfaceMetadata) setClassification(imSyn syntax.InterfaceMetadata
 	return nil
 }
 
-func (imSem *InterfaceMetadata) setUserGroups(imSyn syntax.InterfaceMetadata, userGroupRendering syntax.Rendering, parent *InterfaceMetadata) error {
+func (imSem *InterfaceMetadata) setUserGroups(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata, userGroupMapping UserGroupMapping,
+	userGroupRendering syntax.Rendering) error {
 	if parent == nil {
 		// this is a product-level interface
 		if imSyn.UserGroups == nil {
@@ -80,8 +79,8 @@ func (imSem *InterfaceMetadata) setUserGroups(imSyn syntax.InterfaceMetadata, us
 		}
 		imSem.UserGroups = syntax.Rendering{}
 		for _, u := range imSyn.UserGroups {
-			if _, err := imSem.resolveUserGroup(u); err != nil {
-				return err
+			if _, ok := userGroupMapping[u]; !ok {
+				return &SetLogicError{fmt.Sprintf("unknown user group: '%s'", u)}
 			}
 			// this is a valid user group
 			if rendering, ok := userGroupRendering[u]; ok {
@@ -183,17 +182,6 @@ func equal_pointer_string(lhs *string, rhs *string) bool {
 		}
 	}
 	return true
-}
-
-func (imSem *InterfaceMetadata) GetResolveUserGroupFunc() func(string) string {
-	return func(u string) string {
-		// We panic upon error, because this method is only intended
-		// for calling after initialisation, when things should be okay, really
-		if r, err := imSem.resolveUserGroup(u); err != nil {
-			panic("unknown user group")
-		}
-		return r
-	}
 }
 
 func (lhs InterfaceMetadata) Equal(rhs InterfaceMetadata) bool {

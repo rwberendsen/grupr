@@ -21,11 +21,11 @@ type ProductDTAP struct {
 	revokeGrantsToRead    map[Grant]struct{}
 }
 
-func NewProductDTAP(pdID semantics.ProductDTAPID, isProd bool, pSem semantics.Product) *ProductDTAP {
+func NewProductDTAP(pdID semantics.ProductDTAPID, isProd bool, pSem semantics.Product, userGroupMappings map[string]semantics.UserGroupMapping) *ProductDTAP {
 	pd := &ProductDTAP{
 		ProductDTAPID:         pdID,
 		IsProd:                isProd,
-		Interface:             NewInterface(dtap, pSem.InterfaceMetadata),
+		Interface:             NewInterface(dtap, pSem.InterfaceMetadata, userGroupMappings[pSem.UserGroupMappingID]),
 		Interfaces:            map[string]Interface{},
 		Consumes:              map[syntac.InterfaceID]string{},
 		matchedAccountObjects: map[semantics.ObjExpr]*matchedAccountObjs{},
@@ -33,7 +33,7 @@ func NewProductDTAP(pdID semantics.ProductDTAPID, isProd bool, pSem semantics.Pr
 	}
 
 	for id, iSem := range pSem.Interfaces {
-		pd.Interfaces[id] = NewInterface(dtap, iSem)
+		pd.Interfaces[id] = NewInterface(dtap, iSem, userGroupMappings[pSem.UserGroupMappingID])
 	}
 
 	for iid, dtapMapping := range pSem.Consumes {
@@ -82,9 +82,9 @@ func (pd *ProductDTAP) recalcObjects() {
 	pd.Interface.recalcObjectsFromMatched(pd.matchedAccountObjects)
 	for _, v := range pd.Interfaces {
 		v.recalcObjects(pd.accountObjects)
-		v.agggregate() // this will free memory held by AccountObjs by ObjExpr
+		v.aggregate() // this will free memory held by AccountObjs by ObjExpr
 	}
-	pd.Interface.agggregate() // we needed to hold on to AccountObjs by ObjExpr until we derived all interface objects
+	pd.Interface.aggregate() // we needed to hold on to AccountObjs by ObjExpr until we derived all interface objects
 }
 
 func (pd *ProductDTAP) createProductRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config,

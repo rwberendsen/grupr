@@ -30,6 +30,11 @@ func NewGrupin(cnf *Config, gSyn syntax.Grupin) (Grupin, error) {
 		Products:          map[string]Product{},
 	}
 	// Validate user group mappings
+	// Add identity mapping for ease of reference
+	gSem.UserGroupMappings[""] = UserGroupMapping{}
+	for k, _ := range gSem.GlobalUserGroups {
+		gSem.UserGroupMappings[""][k] = k
+	}
 	for k, v := range gSyn.UserGroupMappings {
 		if ugm, err := newUserGroupMapping(v, gSem.GlobalUserGroups); err != nil {
 			return gSem, err
@@ -51,8 +56,9 @@ func NewGrupin(cnf *Config, gSyn syntax.Grupin) (Grupin, error) {
 			return gSem, err
 		}
 		dtaps := gSem.Products[iid.ProductID].DTAPs.DTAPRendering
+		userGroupRendering := gSem.Products[iid.ProductID].UserGroupRendering
 		parent := gSem.Products[iid.ProductID].InterfaceMetadata
-		if im, err := newInterfaceMetadata(cnf, v.InterfaceMetadata, gSem.Classes, gSem.GlobalUserGroups, gSem.UserGroupMappings[parent.UserGroupMapping], dtaps, &parent); err != nil {
+		if im, err := newInterfaceMetadata(cnf, v.InterfaceMetadata, gSem.Classes, dtaps, gSem.UserGroupMappings[parent.UserGroupMappingID], userGroupRendering, &parent); err != nil {
 			return gSem, fmt.Errorf("interface '%s': %w", iid, err)
 		} else {
 			gSem.Products[iid.ProductID].Interfaces[iid.ID] = im

@@ -13,6 +13,7 @@ import (
 
 type Grupin struct {
 	ProductDTAPs map[semantics.ProductDTAPID]*ProductDTAP
+	UserGroupMappings map[string]semantics.UserGroupMapping
 
 	// Some fetch-one time reference data on objects that exist in Snowflake already
 	productRoles       map[ProductRole]struct{}
@@ -24,15 +25,15 @@ type Grupin struct {
 
 func NewGrupin(ctx context.Context, cnf *Config, conn *sql.DB, g semantics.Grupin) *Grupin {
 	r := &Grupin{
-		Prod:         map[string]*ProductDTAP{},
-		NonProd:      map[string]map[string]*ProductDTAP{},
+		ProductDTAPs: map[semantics.ProductDTAPID]*ProductDTAP,
+		UserGroupMappings: g.UserGroupMappings,
 		accountCache: &accountCache{},
 	}
 
 	for pID, pSem := range g.Products {
 		for dtap, isProd := range pSem.DTAPs.All() {
 			pdID := semantics.ProductDTAPID{ProductID: pID, DTAP: dtap}
-			pd.ProductDTAPs[pdID] = NewProductDTAP(pdID, isProd, pSem)
+			pd.ProductDTAPs[pdID] = NewProductDTAP(pdID, isProd, pSem, r.UserGroupMappings)
 		}
 	}
 	return r

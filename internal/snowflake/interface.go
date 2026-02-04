@@ -13,28 +13,26 @@ import (
 type Interface struct {
 	ObjectMatchers   semantics.ObjMatchers
 	GlobalUserGroups map[string]struct{}
+	UserGroupMapping semantics.UserGroupMapping
 	ConsumedBy       map[semantics.ProductDTAPID]struct{}
 
 	// Granular accountObjects by ObjExpr; will be discarded after aggregate() is called
 	accountObjects map[semantics.ObjExpr]AccountObjs
 
 	// Computed by aggregate()
-	objectCountsByUserGroup map[string]map[ObjType]int
+	objectCountsByUserGroup map[string]map[ObjType]int // "" means shared by usergroups of interface, if any
 
 	// Computed by aggregate()
 	aggAccountObjects AggAccountObjs
 
 	// For use in pushObjectCounts
 	globalUserGroupsStr string
-
-	// To resolve user groups to global ones
-	resolveUserGroup func(string) string
 }
 
-func NewInterface(dtap string, iSem semantics.InterfaceMetadata) *Interface {
+func NewInterface(dtap string, iSem semantics.InterfaceMetadata, um semantics.UserGroupMapping) *Interface {
 	i := &Interface{
 		ObjectMatchers:   semantics.ObjMatchers{},
-		resolveUserGroup: iSem.GetResolveUserGroupFunc(),
+		UserGroupMapping: um,
 	}
 	// Just take what you need from own DTAP
 	for e, om := range iSem.ObjectMatchers {
@@ -46,7 +44,7 @@ func NewInterface(dtap string, iSem semantics.InterfaceMetadata) *Interface {
 	if iSem.UserGroups != nil {
 		i.GlobalUserGroups = map[string]struct{}{}
 		for u := range iSem.UserGroups {
-			i.GlobalUserGroups[i.resolveUserGroup(u)] = struct{}{}
+			i.GlobalUserGroups[i.UserGroupMapping[u]] = struct{}{}
 		}
 		i.globalUserGroupStr = strings.Join(slices.Sorted(maps.Keys(i.GlobalUserGroups)), ",")
 	}
@@ -90,12 +88,12 @@ func (i *Interface) setCountsByUserGroup() {
 		if i.objectCountsByUserGroup[om.UserGroup] == nil {
 			i.objectCountsByUserGroup[om.UserGroup] = map[ObjType]int{}
 		}
-		var resolvedUserGroup string
+		var globalUserGroup string
 		if om.UserGroup != "" {
-			resolvedUserGroup = i.resolveUserGroup(om.UserGroup)
+			globalUserGroup = i.UserGroupMapping[om.UserGroup]
 		}
-		i.objectCountsByUserGroup[resolvedUserGroup][ObjTpTable] += i.accountObjects[e].countByObjType(ObjTpTable)
-		i.objectCountsByUserGroup[resolvedUserGroup][ObjTpView] += i.accountObjects[e].countByObjType(ObjTpView)
+		i.objectCountsByUserGroup[globalUserGroup][ObjTpTable] += i.accountObjects[e].countByObjType(ObjTpTable)
+		i.objectCountsByUserGroup[globalUserGroup][ObjTpView] += i.accountObjects[e].countByObjType(ObjTpView)
 	}
 }
 

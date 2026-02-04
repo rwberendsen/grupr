@@ -43,21 +43,8 @@ func newProduct(cnf *Config, pSyn syntax.Product, classes map[string]syntax.Clas
 	}
 	pSem.UserGroupRendering = pSyn.UserGroupRendering
 
-	// Set InterfaceMetadata, passing it a way to resolve user groups
-	f := func(u string) (string, error) {
-		if pSem.UserGroupMapping == "" {
-			if r, ok := globalUserGroups[u]; !ok {
-				return r, &SetLogicError{fmt.Sprintf("unknown user group: '%s'", u)}
-			}
-			return r, nil
-		}
-		if r, ok := userGroupMappings[pSem.UserGroupMappingID][u]; !ok {
-			return r, &SetLogicError{fmt.Sprintf("unknown user group: '%s'", u)}
-		}
-		return r, nil
-
-	}
-	if im, err := newInterfaceMetadata(cnf, pSyn.InterfaceMetadata, classes, f, pSem.DTAPs.DTAPRendering, pSem.UserGroupRendering, nil); err != nil {
+	// Set InterfaceMetadata
+	if im, err := newInterfaceMetadata(cnf, pSyn.InterfaceMetadata, classes, ,pSem.DTAPs.DTAPRendering, userGroupMappings[pSem.UserGroupMappingID], pSem.UserGroupRendering, nil); err != nil {
 		return pSem, fmt.Errorf("product id %s: interface metadata: %w", pSem.ID, err)
 	} else {
 		pSem.InterfaceMetadata = im
