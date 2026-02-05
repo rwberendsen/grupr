@@ -37,3 +37,14 @@ func (p Privilege) String() string {
 		PrvUsage:      "USAGE",
 	}[p]
 }
+
+func (p Privilege) getIdxObjectLevel() int {
+	switch p {
+	case PrvSelect:
+		return 0
+	case PrvReferences:
+		return 1
+	default:
+		panic("not an object level privilege or not yet implemented")
+	}
+}

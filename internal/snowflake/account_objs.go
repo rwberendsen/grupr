@@ -20,7 +20,7 @@ func newAccountObjs(o *AccountObjs, om semantics.ObjMatcher) AccountObjs {
 }
 
 func newAccountObjsFromMatched(m *matchedAccountObjs) AccountObjs {
-	r := AccountObjs{DBS: map[string]DBObjs{}}
+	r := AccountObjs{DBs: map[string]DBObjs{}}
 	for k, v := range m.getDBs() {
 		r.DBs[k] = newDBObjsFromMatched(v)
 	}

@@ -17,7 +17,7 @@ import (
 
 // caching objects in Snowflake locally
 type accountCache struct {
-	mu       sync.RWMutex // guards dbs, dbExists, and version
+	mu       *sync.RWMutex // guards dbs, dbExists, and version
 	version  int
 	dbs      map[string]*dbCache // nil: never requested; empty: none found
 	dbExists map[string]bool
@@ -123,11 +123,11 @@ func (c *accountCache) matchObjects(ctx context.Context, conn *sql.DB, db string
 	if !c.dbs[db].hasSchema(schema) {
 		return ErrObjectNotExistOrAuthorized
 	}
-	c.dbs[db].schemas[schema].mu.Lock() // get a write lock on this schema
+	c.dbs[db].schemas[schema].mu.Lock() // get a (write) lock on this schema
 	defer c.dbs[db].schemas[schema].mu.Unlock()
 	if o.version == c.dbs[db].schemas[schema].version {
 		// cache entry is stale
-		err := c.refreshObjects(ctx, conn, db.Name, schema)
+		err := c.dbs[db].schemas[schema].refreshObjects(ctx, conn, db, schema)
 		if err != nil {
 			return err
 		}
@@ -136,7 +136,7 @@ func (c *accountCache) matchObjects(ctx context.Context, conn *sql.DB, db string
 	// Next, we overwrite whatever objects o may have had; but note that we would have set it to nil to save memory; see schema_objs.go
 	o.objects = map[string]ObjAttr{}
 	for k, v := range c.dbs[db].schemas[schema].objects {
-		if !om.DisjointFromObject(db.Name, schema, k) {
+		if !om.DisjointFromObject(db, schema, k) {
 			o.objects[k] = v
 		}
 	}
@@ -150,7 +150,7 @@ func (c *accountCache) refreshDBs(ctx context.Context, synCnf *syntax.Config, cn
 	if err != nil {
 		return err
 	}
-	for k, v := range c.getDBs() {
+	for k, _ := range c.getDBs() {
 		if _, ok := dbs[k]; !ok {
 			c.dropDB(k)
 		}

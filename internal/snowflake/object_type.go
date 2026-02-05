@@ -34,3 +34,14 @@ func (ot ObjType) String() string {
 		View:         "VIEW",
 	}[ot]
 }
+
+func (ot ObjType) getIdxObjectLevel() int {
+	switch ot {
+	case ObjTpTable:
+		return 0
+	case ObjTpView:
+		return 1
+	default:
+		panic("not an object living within a schema or not yet implemented")
+	}
+}

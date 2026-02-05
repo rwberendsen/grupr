@@ -10,7 +10,7 @@ import (
 )
 
 type schemaCache struct {
-	mu      sync.Mutex // guards objects and version
+	mu      *sync.Mutex // guards objects and version
 	version int
 	objects map[string]ObjAttr // nil: never requested; empty: none present;
 }

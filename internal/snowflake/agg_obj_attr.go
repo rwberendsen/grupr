@@ -14,10 +14,10 @@ type AggObjAttr struct {
 	isReferencesGrantedToRead bool
 }
 
-func (o AggObjAttr) setGrantTo(m Mode, p Privilege) AggObjAttr {
+func (o AggObjAttr) setGrantTo(m Mode, g Grant) AggObjAttr {
 	switch m {
 	case ModeRead:
-		switch p {
+		switch g.Privileges[0].Privilege {
 		case PrvSelect:
 			o.isSelectGrantedToRead = true
 		case PrvReferences:

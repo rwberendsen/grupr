@@ -25,24 +25,12 @@ func (o AggSchemaObjs) hasObject(k string) bool {
 	return ok
 }
 
-func (o AggSchemaObjs) setFutureGrantTo(m Mode, grantedOn ObjType, p Privilege) AggSchemaObjs {
-	fObjTp := func(ot ObjType) int {
-		if ot == ObjTpTable {
-			return 0
-		}
-		return 1
-	}
-	fPrv := func(p Privilege) int {
-		if p == PrvSelect {
-			return 0
-		}
-		return 1
-	}
-	switch grantedOn {
+func (o AggSchemaObjs) setFutureGrantTo(m Mode, g FutureGrant) AggSchemaObjs {
+	switch g.GrantedOn {
 	case ObjTpTable, ObjTpView:
-		switch p {
+		switch g.Privileges[0].Privilege {
 		case PrvSelect, PrvReferences:
-			o.isPrivilegeGrantedToFutureObject[fObjTp(grantedOn)][fPrv(privilege)] = true
+			o.isPrivilegeGrantedToFutureObject[g.GrantedOn.getIdxObjectLevel()][g.Privileges[0].Privilege.getIdxObjectLevel()] = true
 		default:
 			panic("unsupported privilege on table or view")
 		}
@@ -53,18 +41,6 @@ func (o AggSchemaObjs) setFutureGrantTo(m Mode, grantedOn ObjType, p Privilege) 
 }
 
 func (o AggSchemaObjs) hasFutureGrantTo(m Mode, grantedOn ObjType, p Privilege) bool {
-	fObjTp := func(ot ObjType) int {
-		if ot == ObjTpTable {
-			return 0
-		}
-		return 1
-	}
-	fPrv := func(p Privilege) int {
-		if p == PrvSelect {
-			return 0
-		}
-		return 1
-	}
 	switch grantedOn {
 	case ObjTpTable, ObjTpView:
 		switch p {
@@ -75,8 +51,8 @@ func (o AggSchemaObjs) hasFutureGrantTo(m Mode, grantedOn ObjType, p Privilege) 
 	return false
 }
 
-func (o AggSchemaObjs) setGrantTo(m Mode, p Privilege) AggSchemaObjs {
-	if m != ModeRead || p != PrvUsage {
+func (o AggSchemaObjs) setGrantTo(m Mode, g Grant) AggSchemaObjs {
+	if m != ModeRead || g.Privileges[0].Privilege != PrvUsage {
 		panic("not implemented")
 	}
 	o.isUsageGrantedToRead = true

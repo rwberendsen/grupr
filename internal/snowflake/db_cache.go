@@ -14,7 +14,7 @@ import (
 )
 
 type dbCache struct {
-	mu           sync.Mutex // guards schemas, schemaExists, and version
+	mu           *sync.RWMutex // guards schemas, schemaExists, and version
 	version      int
 	schemas      map[string]*schemaCache // nil: never requested; empty: none found
 	schemaExists map[string]bool
