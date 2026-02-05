@@ -16,12 +16,12 @@ type InterfaceMetadata struct {
 
 func (i InterfaceMetadata) validate(cnf *Config) error {
 	if i.Classification != "" {
-		if err := validateID(i.Classification); err != nil {
+		if err := ValidateID(i.Classification); err != nil {
 			return fmt.Errorf("classification: %w", err)
 		}
 	}
 	for _, u := range i.UserGroups {
-		if err := validateIDPart(cnf, u); err != nil {
+		if err := ValidateIDPart(cnf, u); err != nil {
 			return fmt.Errorf("UserGroup %s: %w", u, err)
 		}
 		if err := hasUniqueStrings(i.UserGroups); err != nil {
@@ -32,7 +32,7 @@ func (i InterfaceMetadata) validate(cnf *Config) error {
 		return fmt.Errorf("no objects specified, but objects to exclude were specified")
 	}
 	if i.ForProduct != nil {
-		if err := validateIDPart(cnf, *i.ForProduct); err != nil {
+		if err := ValidateIDPart(cnf, *i.ForProduct); err != nil {
 			return fmt.Errorf("ForProduct: %w", err)
 		}
 	}

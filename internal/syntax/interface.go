@@ -11,10 +11,10 @@ type Interface struct {
 }
 
 func (i *Interface) validate(cnf *Config) error {
-	if err := validateIDPart(cnf, i.ID); err != nil {
+	if err := ValidateIDPart(cnf, i.ID); err != nil {
 		return err
 	}
-	if err := validateIDPart(cnf, i.ProductID); err != nil {
+	if err := ValidateIDPart(cnf, i.ProductID); err != nil {
 		return err
 	}
 	if err := i.InterfaceMetadata.validate(cnf); err != nil {

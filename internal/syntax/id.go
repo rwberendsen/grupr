@@ -8,15 +8,15 @@ import (
 
 var validID *regexp.Regexp = regexp.MustCompile(`^[a-z0-9_]+$`)
 
-func validateID(i string) error {
+func ValidateID(i string) error {
 	if !validID.MatchString(i) {
 		return &FormattingError{fmt.Sprintf("invalid ID: '%s'", i)}
 	}
 	return nil
 }
 
-func validateIDPart(cnf *Config, s string) error {
-	if err := validateID(s); err != nil {
+func ValidateIDPart(cnf *Config, s string) error {
+	if err := ValidateID(s); err != nil {
 		return err
 	}
 	/*

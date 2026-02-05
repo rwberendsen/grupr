@@ -1,5 +1,9 @@
 package snowflake
 
+import (
+	"fmt"
+)
+
 type GruprSnowflakeError struct {
 	Number int
 }

@@ -10,14 +10,14 @@ type UserGroupMapping struct {
 }
 
 func (m UserGroupMapping) validate() error {
-	if err := validateID(m.ID); err != nil {
+	if err := ValidateID(m.ID); err != nil {
 		return fmt.Errorf("user_group_mapping: %w", err)
 	}
 	for k, v := range m.Mapping {
-		if err := validateID(k); err != nil {
+		if err := ValidateID(k); err != nil {
 			return fmt.Errorf("user_group_mapping '%s': %w", m.ID, err)
 		}
-		if err := validateID(v); err != nil {
+		if err := ValidateID(v); err != nil {
 			return fmt.Errorf("user_group_mapping '%s': %w", m.ID, err)
 		}
 	}

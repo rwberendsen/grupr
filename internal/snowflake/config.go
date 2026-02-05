@@ -1,7 +1,9 @@
 package snowflake
 
 import (
+	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
@@ -37,7 +39,7 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 		MaxProductDTAPThreads:   4,
 		StmtBatchSize:           100,
 		MaxProductDTAPRefreshes: 4,
-		Modes:                   [1]Mode{Read},
+		Modes:                   [1]Mode{ModeRead},
 		DryRun:                  true,
 	}
 
@@ -85,17 +87,18 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 
 	if useSQLOpen, ok := os.LookupEnv("GRUPR_SNOWFLAKE_USE_SQL_OPEN"); ok {
 		if b, err := strconv.ParseBool(useSQLOpen); err != nil {
-			return fmt.Errorf("GRUPR_SNOWFLAKE_USE_SQL_OPEN: %w", err)
+			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_USE_SQL_OPEN: %w", err)
+		} else {
+			cnf.UseSQLOpen = b
 		}
-		cnf.UseSQLOpen = b
 	}
 
 	if rsaKeyPath, ok := os.LookupEnv("GRUPR_SNOWFLAKE_RSA_KEY_PATH"); ok {
-		cnf.RsaKeyPath = rsaKeyPath
+		cnf.RSAKeyPath = rsaKeyPath
 	}
 
 	if objectPrefix, ok := os.LookupEnv("GRUPR_SNOWFLAKE_OBJECT_PREFIX"); ok {
-		if err := !syntax.validateID(objectPrefix); err != nil {
+		if err := syntax.ValidateID(objectPrefix); err != nil {
 			return nil, fmt.Errorf("invalid value for GRUPR_SNOWFLAKE_OBJECT_PREFIX")
 		}
 		cnf.ObjectPrefix = strings.ToUpper(objectPrefix)
@@ -121,7 +124,7 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 		if i, err := strconv.Atoi(maxProductThreads); err != nil {
 			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_MAX_PRODUCT_DTAP_THREADS: %w", err)
 		} else {
-			if i < cnf.MaxOpenConnections {
+			if i < cnf.MaxOpenConns {
 				return nil, fmt.Errorf("GRUPR_SNOWFLAKE_MAX_PRODUCT_DTAP_THREADS should be >= GRUPR_SNOWFLAKE_MAX_OPEN_CONNECTIONS")
 			}
 			cnf.MaxProductDTAPThreads = i
@@ -147,27 +150,27 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 	cnf.DatabaseRolePrivileges = map[Mode]map[GrantTemplate]struct{}{}
 	cnf.DatabaseRolePrivileges[ModeRead] = map[GrantTemplate]struct{}{
 		GrantTemplate{
-			Privilege:     PrvUsage,
-			GrantTemplate: ObjTpDatabase,
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvUsage},
+			GrantedOn: ObjTpDatabase,
 		}: {},
 		GrantTemplate{
-			Privilege: PrvUsage,
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvUsage},
 			GrantedOn: ObjTpSchema,
 		}: {},
 		GrantTemplate{
-			Privilege: PrvSelect,
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvSelect},
 			GrantedOn: ObjTpTable,
 		}: {},
 		GrantTemplate{
-			Privilege: PrvSelect,
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvSelect},
 			GrantedOn: ObjTpView,
 		}: {},
 		GrantTemplate{
-			Privilege: PrvReferences,
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvReferences},
 			GrantedOn: ObjTpTable,
 		}: {},
 		GrantTemplate{
-			Privilege: PrvReferences,
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvReferences},
 			GrantedOn: ObjTpView,
 		}: {},
 	}
@@ -175,9 +178,11 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 	cnf.ProductRolePrivileges = map[Mode]map[GrantTemplate]struct{}{}
 	cnf.ProductRolePrivileges[ModeRead] = map[GrantTemplate]struct{}{
 		GrantTemplate{
-			Privilege:                   PrvUsage,
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvUsage},
 			GrantedOn:                   ObjTpDatabaseRole,
 			GrantedRoleStartsWithPrefix: util.NewTrue(),
 		}: {},
 	}
+
+	return cnf, nil
 }

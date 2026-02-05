@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"iter"
+	"log"
 	"strings"
 
 	"github.com/rwberendsen/grupr/internal/syntax"
@@ -25,13 +26,13 @@ func NewDatabaseRole(synCnf *syntax.Config, cnf *Config, productID string, dtap 
 		ProductID:   productID,
 		DTAP:        dtap,
 		InterfaceID: interfaceID,
-		mode:        mode,
+		Mode:        mode,
 		Database:    db,
 	}
 	if interfaceID == "" {
-		r.Name = strings.ToUpper(fmt.Sprintf("%s%s%s%s%s%v", synCnf.Prefix, productID, cnf.Infix, dtap, cnf.Infix, mode))
+		r.Name = strings.ToUpper(fmt.Sprintf("%s%s%s%s%s%v", cnf.ObjectPrefix, productID, synCnf.Infix, dtap, synCnf.Infix, mode))
 	} else {
-		r.Name = strings.ToUpper(fmt.Sprintf("%s%s%s%s%s%s%s%v", synCnf.Prefix, productID, cnf.Infix, dtap, cnf.Infix, interfaceID, cnf.Infix, mode))
+		r.Name = strings.ToUpper(fmt.Sprintf("%s%s%s%s%s%s%s%v", cnf.ObjectPrefix, productID, synCnf.Infix, dtap, synCnf.Infix, interfaceID, synCnf.Infix, mode))
 	}
 	r.FQN = fmt.Sprintf(`%s.%s`, quoteIdentifier(r.Database), r.Name)
 	return r
@@ -39,10 +40,10 @@ func NewDatabaseRole(synCnf *syntax.Config, cnf *Config, productID string, dtap 
 
 func newDatabaseRoleFromString(synCnf *syntax.Config, cnf *Config, db string, role string) (DatabaseRole, error) {
 	r := DatabaseRole{Name: role, Database: db}
-	if !role.HasPrefix(cnf.Prefix) {
+	if !strings.HasPrefix(r.Name, cnf.ObjectPrefix) {
 		return r, fmt.Errorf("role does not start with Grupr prefix: '%s'", r.Name)
 	}
-	role = strings.TrimPrefix(role, cnf.Prefix)
+	role = strings.TrimPrefix(role, cnf.ObjectPrefix)
 	parts := strings.Split(role, synCnf.Infix)
 	if len(parts) != 3 && len(parts) != 4 {
 		return r, fmt.Errorf("role does not have three or four parts: '%s'", r.Name)
@@ -54,10 +55,9 @@ func newDatabaseRoleFromString(synCnf *syntax.Config, cnf *Config, db string, ro
 		r.InterfaceID = strings.ToLower(parts[2])
 		posMode += 1
 	}
-	if mode, err := parseMode(strings.ToLower(parts[posMode])); err != nil {
+	if mode, err := ParseMode(strings.ToLower(parts[posMode])); err != nil {
 		return r, fmt.Errorf("invalid role: '%s': %w", r.Name, err)
-	}
-	if mode != Read {
+	} else if mode != ModeRead {
 		return r, fmt.Errorf("unimplemented mode '%s' for role '%s'", mode, role)
 	}
 	return r, nil
@@ -97,7 +97,7 @@ func QueryDatabaseRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config,
 }
 
 func GrantCreateDatabaseRoleToSelf(ctx context.Context, cnf *Config, conn *sql.DB, db string) error {
-	return runSQL(ctx, conn, `GRANT CREATE DATABASE ROLE ON DATABASE IDENTIFIER(?) TO ROLE (?)`, quoteIdentfier(db), cnf.Role)
+	return runSQL(ctx, cnf, conn, `GRANT CREATE DATABASE ROLE ON DATABASE IDENTIFIER(?) TO ROLE (?)`, quoteIdentifier(db), cnf.Role)
 }
 
 func (r DatabaseRole) Create(ctx context.Context, cnf *Config, conn *sql.DB) error {
@@ -105,11 +105,11 @@ func (r DatabaseRole) Create(ctx context.Context, cnf *Config, conn *sql.DB) err
 }
 
 func (r DatabaseRole) hasUnmanagedPrivileges(ctx context.Context, cnf *Config, conn *sql.DB) (bool, error) {
-	for grant, err := range QueryGrantsToRoleFilteredLimit(ctx, conn, r.ID, nil, cnf.DatabaseRolePrivileges[r.Mode], 1) {
+	for _, err := range QueryGrantsToDBRoleFilteredLimit(ctx, cnf, conn, r.Database, r.Name, true, nil, cnf.DatabaseRolePrivileges[r.Mode], 1) {
 		if err != nil {
 			return true, err
 		}
-		return true, nil
+		return true, nil // there was an unmanaged grant, it does not matter what it was
 	}
 	return false, nil
 }

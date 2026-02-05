@@ -11,7 +11,7 @@ type AggSchemaObjs struct {
 
 func newAggSchemaObjs(o SchemaObjs) AggSchemaObjs {
 	r := AggSchemaObjs{
-		Objects:         make(map[string]ObjAttr, len(o.Objects)),
+		Objects:         make(map[string]AggObjAttr, len(o.Objects)),
 		MatchAllObjects: o.MatchAllObjects,
 	}
 	for k, v := range o.Objects {
@@ -45,7 +45,7 @@ func (o AggSchemaObjs) hasFutureGrantTo(m Mode, grantedOn ObjType, p Privilege) 
 	case ObjTpTable, ObjTpView:
 		switch p {
 		case PrvSelect, PrvReferences:
-			return o.isPrivilegeGrantedToFutureObject[fObjTp(grantedOn)][fPrv(privilege)]
+			return o.isPrivilegeGrantedToFutureObject[grantedOn.getIdxObjectLevel()][p.getIdxObjectLevel()]
 		}
 	}
 	return false
@@ -59,8 +59,8 @@ func (o AggSchemaObjs) setGrantTo(m Mode, g Grant) AggSchemaObjs {
 	return o
 }
 
-func (o AggSchemaObjs) hasGrantTo(m Mode, p Privilege) {
-	return m == ModeRead && p == PrvUsage && o.isUsageGranted
+func (o AggSchemaObjs) hasGrantTo(m Mode, p Privilege) bool {
+	return m == ModeRead && p == PrvUsage && o.isUsageGrantedToRead
 }
 
 func (o AggSchemaObjs) pushToDoFutureGrants(yield func(FutureGrant) bool, dbRole DatabaseRole, schema string) bool {

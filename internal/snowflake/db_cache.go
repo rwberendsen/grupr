@@ -40,13 +40,13 @@ func (c *dbCache) dropSchema(k string) {
 }
 
 func (c *dbCache) hasSchema(k string) bool {
-	return c.schemaExists != nil && c.schemaExists[k]
+	return c.schemaExists[k]
 }
 
 func (c *dbCache) getSchemas() iter.Seq2[string, *schemaCache] {
 	return func(yield func(string, *schemaCache) bool) {
 		for k, v := range c.schemas {
-			if c.schemaExists(k) {
+			if c.schemaExists[k] {
 				if !yield(k, v) {
 					return
 				}
@@ -82,7 +82,7 @@ func (c *dbCache) refreshDBRoles(ctx context.Context, synCnf *syntax.Config, cnf
 		if err != nil {
 			return err
 		}
-		c.dbRoles[DatabaseRole] = struct{}{}
+		c.dbRoles[r] = struct{}{}
 	}
 	return nil
 }

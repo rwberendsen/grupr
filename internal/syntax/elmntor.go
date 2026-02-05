@@ -20,7 +20,7 @@ func (e ElmntOr) validateAndAdd(cnf *Config, g *Grupin) error {
 		}
 		n_elements += 1
 		for k, v := range e.Classes {
-			if err := validateID(k); err != nil {
+			if err := ValidateID(k); err != nil {
 				return fmt.Errorf("classes: invalid class id: '%s'", k)
 			}
 			if err := v.validate(); err != nil {

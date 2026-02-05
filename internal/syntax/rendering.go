@@ -15,7 +15,7 @@ type Rendering map[string]string
 func (r Rendering) validate() error {
 	renderings := make(map[string]bool, len(r))
 	for k, v := range r {
-		if err := validateID(k); err != nil {
+		if err := ValidateID(k); err != nil {
 			return err
 		}
 		if !validRendering.MatchString(v) {

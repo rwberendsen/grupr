@@ -10,10 +10,10 @@ func (cs ConsumptionSpec) validate(cnf *Config) error {
 		return err
 	}
 	for k, v := range cs.DTAPMapping {
-		if err := validateID(k); err != nil {
+		if err := ValidateID(k); err != nil {
 			return err
 		}
-		if err := validateID(v); err != nil {
+		if err := ValidateID(v); err != nil {
 			return err
 		}
 	}

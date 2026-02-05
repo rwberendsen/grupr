@@ -203,13 +203,13 @@ func (o AggDBObjs) setFutureGrants(ctx context.Context, synCnf *syntax.Config, c
 			}
 		}
 	}
-	return o
+	return o, nil
 }
 
 func (o AggDBObjs) setGrants(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, db string, oms semantics.ObjMatchers) (AggDBObjs, error) {
 	o.revokeGrantsToRead = []Grant{}
 	if !o.isDBRoleNew {
-		for g, err := range QueryGrantsToDBRoleFiltered(ctx, cnf, conn, db, o.dbRole.Name, cnf.DatabaseRolePrivileges[ModeRead], nil) {
+		for g, err := range QueryGrantsToDBRoleFiltered(ctx, cnf, conn, db, o.dbRole.Name, true, cnf.DatabaseRolePrivileges[ModeRead], nil) {
 			if err != nil {
 				return o, err
 			}
@@ -245,6 +245,7 @@ func (o AggDBObjs) setGrants(ctx context.Context, synCnf *syntax.Config, cnf *Co
 			}
 		}
 	}
+	return o, nil
 }
 
 func (o AggDBObjs) setConsumedByGranted(pdID semantics.ProductDTAPID) AggDBObjs {
@@ -329,6 +330,7 @@ func (o AggDBObjs) pushToDoFutureRevokes(yield func(FutureGrant) bool) bool {
 			return false
 		}
 	}
+	return true
 }
 
 func (o AggDBObjs) pushToDoRevokes(yield func(Grant) bool) bool {
@@ -337,4 +339,5 @@ func (o AggDBObjs) pushToDoRevokes(yield func(Grant) bool) bool {
 			return false
 		}
 	}
+	return true
 }

@@ -12,19 +12,20 @@ import (
 	"github.com/snowflakedb/gosnowflake"
 )
 
-func GetDB(ctx *context.Context, snowCnf *Config) (*sql.DB, error) {
-	var db *sql.DB
+func GetDB(ctx context.Context, snowCnf *Config) (*sql.DB, error) {
+	var conn *sql.DB
 	var rsaKey *rsa.PrivateKey
 	if snowCnf.UseSQLOpen {
 		dsn := snowCnf.User + "@" + snowCnf.Account + "/" + snowCnf.Database + "?authenticator=" + gosnowflake.AuthTypeExternalBrowser.String()
 		log.Printf("dsn: %v", dsn)
-		db, err := sql.Open("snowflake", dsn)
+		var err error
+		conn, err = sql.Open("snowflake", dsn)
 		if err != nil {
 			return nil, err
 		}
 	} else {
 		var cnf *gosnowflake.Config
-		if cnf.RSAKeyPath == "" {
+		if snowCnf.RSAKeyPath == "" {
 			cnf = &gosnowflake.Config{
 				Account:       snowCnf.Account,
 				User:          snowCnf.User,
@@ -35,7 +36,7 @@ func GetDB(ctx *context.Context, snowCnf *Config) (*sql.DB, error) {
 			}
 		} else {
 			var err error
-			rsaKey, err = getPrivateRSAKey(keyPath)
+			rsaKey, err = getPrivateRSAKey(snowCnf.RSAKeyPath)
 			if err != nil {
 				return nil, err
 			}
@@ -50,18 +51,18 @@ func GetDB(ctx *context.Context, snowCnf *Config) (*sql.DB, error) {
 			}
 		}
 		connector := gosnowflake.NewConnector(gosnowflake.SnowflakeDriver{}, *cnf)
-		db = sql.OpenDB(connector)
+		conn = sql.OpenDB(connector)
 	}
-	db.setMaxOpenConns(snowCnf.MaxOpenConns)
-	db.setMaxIdleConns(snowCnf.MaxIdleConns)
-	err := db.PingContext(ctx)
+	conn.SetMaxOpenConns(snowCnf.MaxOpenConns)
+	conn.SetMaxIdleConns(snowCnf.MaxIdleConns)
+	err := conn.PingContext(ctx)
 	if err != nil {
 		if rsaKey != nil {
 			log.Printf("please make sure public key is registered in Snowflake:")
 			pubKeyByte, _ := x509.MarshalPKIXPublicKey(rsaKey.Public())
 			log.Print(base64.StdEncoding.EncodeToString(pubKeyByte))
 		}
-		return db, err
+		return conn, err
 	}
-	return db, nil
+	return conn, nil
 }

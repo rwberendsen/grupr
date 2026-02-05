@@ -17,7 +17,7 @@ type Product struct {
 }
 
 func (p *Product) validate(cnf *Config) error {
-	if err := validateIDPart(cnf, p.ID); err != nil {
+	if err := ValidateIDPart(cnf, p.ID); err != nil {
 		return err
 	}
 	if p.DTAPs != nil {
@@ -38,7 +38,7 @@ func (p *Product) validate(cnf *Config) error {
 		}
 	}
 	if p.UserGroupMappingID != "" {
-		if err := validateIDPart(cnf, p.UserGroupMappingID); err != nil {
+		if err := ValidateIDPart(cnf, p.UserGroupMappingID); err != nil {
 			return fmt.Errorf("user_group_mapping: %w", err)
 		}
 	}
@@ -46,7 +46,7 @@ func (p *Product) validate(cnf *Config) error {
 		if len(p.UserGroups) == 0 {
 			return fmt.Errorf("UserGroupColumn specified but not UserGroups")
 		}
-		if err := validateIDPart(cnf, p.UserGroupColumn); err != nil {
+		if err := ValidateIDPart(cnf, p.UserGroupColumn); err != nil {
 			return fmt.Errorf("user_group_column: %w", err)
 		}
 	}

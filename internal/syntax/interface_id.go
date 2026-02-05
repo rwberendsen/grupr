@@ -10,10 +10,10 @@ type InterfaceID struct {
 }
 
 func (iid InterfaceID) validate(cnf *Config) error {
-	if err := validateIDPart(cnf, iid.ID); err != nil {
+	if err := ValidateIDPart(cnf, iid.ID); err != nil {
 		return fmt.Errorf("ID: %w", err)
 	}
-	if err := validateIDPart(cnf, iid.ProductID); err != nil {
+	if err := ValidateIDPart(cnf, iid.ProductID); err != nil {
 		return fmt.Errorf("ProductID: %w", err)
 	}
 	return nil
