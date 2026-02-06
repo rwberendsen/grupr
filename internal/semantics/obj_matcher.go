@@ -60,6 +60,14 @@ func (lhs ObjMatcher) subsetOf(rhs ObjMatcher) bool {
 	return true
 }
 
+func (om ObjMatcher) addExclude(e ObjExpr) ObjMatcher {
+	if om.Exclude == nil {
+		om.Exclude = map[ObjExpr]struct{}{}
+	}
+	om.Exclude[e] = struct{}{}
+	return om
+}
+
 func (lhs ObjMatcher) validateExprAttrAgainst(rhs ObjMatcher) error {
 	// Caller must ensure lhs is subset of rhs
 	if lhs.ObjExprAttr != rhs.ObjExprAttr {

@@ -15,8 +15,8 @@ func (d DTAPSpec) validate(cnf *Config) error {
 		if err := ValidateIDPart(cnf, *d.Prod); err != nil {
 			return fmt.Errorf("prod DTAP id: %w", err)
 		}
+		dtaps[*d.Prod] = true
 	}
-	dtaps[*d.Prod] = true
 	for _, i := range d.NonProd {
 		if err := ValidateIDPart(cnf, i); err != nil {
 			return fmt.Errorf("non prod DTAP id: %w", err)

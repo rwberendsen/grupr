@@ -42,7 +42,7 @@ func newObjMatchers(cnf *Config, include []string, exclude []string, dtaps synta
 					if _, ok := om.Exclude[e]; ok {
 						return oms, fmt.Errorf("duplicate exclude expr")
 					}
-					om.Exclude[e] = struct{}{}
+					oms[i] = om.addExclude(e)
 					hasStrictSuperset = true
 				}
 			}

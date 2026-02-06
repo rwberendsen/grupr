@@ -12,7 +12,7 @@ type Product struct {
 	UserGroupMappingID string            `yaml:"user_group_mapping,omitempty"`
 	UserGroupColumn    string            `yaml:"user_group_column,omitempty"`
 	UserGroupRendering Rendering         `yaml:"user_group_rendering,omitempty"`
-	Consumes           []ConsumptionSpec `yaml:"consumption_spec",omitempty"`
+	Consumes           []ConsumptionSpec `yaml:"consumes",omitempty"`
 	InterfaceMetadata  `yaml:",inline"`
 }
 
