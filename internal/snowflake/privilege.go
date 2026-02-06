@@ -13,8 +13,8 @@ const (
 	PrvUsage
 )
 
-func ParsePrivilege(p string) (Privilege, error) {
-	m := map[string]Privilege{
+func ParsePrivilege(p string) Privilege {
+	return map[string]Privilege{
 		"CREATE":     PrvCreate,
 		"MONITOR":    PrvMonitor,
 		"OPERATE":    PrvOperate,

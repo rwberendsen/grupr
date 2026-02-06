@@ -22,27 +22,28 @@ func newProductRole(synCnf *syntax.Config, cnf *Config, productID string, dtap s
 		ProductID: productID,
 		DTAP:      dtap,
 		Mode:      mode,
-		ID:        strings.ToUpper(synCnf.Prefix + productID + cnf.Infix + dtap + cnf.Infix + mode),
+		ID:        strings.ToUpper(fmt.Sprintf("%s%s%s%s%s%s", cnf.ObjectPrefix, productID, synCnf.Infix, dtap, synCnf.Infix, mode)),
 	}
 }
 
 func newProductRoleFromString(synCnf *syntax.Config, cnf *Config, role string) (ProductRole, error) {
 	r := ProductRole{ID: role}
-	if !role.HasPrefix(cnf.Prefix) {
+	if !strings.HasPrefix(r.ID, cnf.ObjectPrefix) {
 		return r, fmt.Errorf("role does not start with Grupr prefix: '%s'", r.ID)
 	}
-	role = strings.TrimPrefix(role, cnf.Prefix)
+	role = strings.TrimPrefix(role, cnf.ObjectPrefix)
 	parts := strings.Split(role, synCnf.Infix)
 	if len(parts) != 3 {
 		return r, fmt.Errorf("role does not have three parts: '%s'", r.ID)
 	}
 	r.ProductID = strings.ToLower(parts[0])
 	r.DTAP = strings.ToLower(parts[1])
-	if r.Mode, err := parseMode(strings.ToLower(parts[2])); err != nil {
+	if mode, err := ParseMode(strings.ToLower(parts[2])); err != nil {
 		return r, fmt.Errorf("invalid role: '%s': %w", r.ID, err)
-	}
-	if mode != Read {
+	} else if mode != ModeRead {
 		return r, fmt.Errorf("unimplemented mode '%s' for role '%s'", mode, role)
+	} else {
+		r.Mode = mode
 	}
 	return r, nil
 }
@@ -58,11 +59,11 @@ func (r ProductRole) Create(ctx context.Context, cnf *Config, conn *sql.DB) erro
 }
 
 func (r ProductRole) hasUnmanagedPrivileges(ctx context.Context, cnf *Config, conn *sql.DB) (bool, error) {
-	for grant, err := range QueryGrantsToRoleFilteredLimit(ctx, conn, r.ID, nil, cnf.ProductRolePrivileges[r.Mode], 1) {
+	for _, err := range QueryGrantsToRoleFilteredLimit(ctx, cnf, conn, r.ID, true, nil, cnf.ProductRolePrivileges[r.Mode], 1) {
 		if err != nil {
 			return true, err
 		}
-		return true, nil
+		return true, nil // there was an unmanaged grant, it does not matter what it was
 	}
 	return false, nil
 }

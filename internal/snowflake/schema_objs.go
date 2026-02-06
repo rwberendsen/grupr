@@ -11,9 +11,9 @@ type SchemaObjs struct {
 
 func newSchemaObjs(db string, schema string, o SchemaObjs, om semantics.ObjMatcher) SchemaObjs {
 	r := SchemaObjs{Objects: map[string]ObjAttr{}}
-	r = r.setMatchAllObjects(db, om)
+	r = r.setMatchAllObjects(db, schema, om)
 	for k, v := range o.Objects {
-		if !om.DisjointFromObject(db.Name, schema, k) {
+		if !om.DisjointFromObject(db, schema, k) {
 			r.Objects[k] = v
 		}
 	}
@@ -29,7 +29,7 @@ func newSchemaObjsFromMatched(m *matchedSchemaObjs) SchemaObjs {
 }
 
 func (o SchemaObjs) setMatchAllObjects(db string, schema string, om semantics.ObjMatcher) SchemaObjs {
-	if om.SupersetOfSchema(db.Name, schema) {
+	if om.SupersetOfSchema(db, schema) {
 		o.MatchAllObjects = true
 	}
 	return o
@@ -43,7 +43,7 @@ func (o SchemaObjs) hasObject(k string) bool {
 func (o SchemaObjs) countByObjType(t ObjType) int {
 	r := 0
 	for _, v := range o.Objects {
-		if o.ObjectType == t {
+		if v.ObjectType == t {
 			r += 1
 		}
 	}

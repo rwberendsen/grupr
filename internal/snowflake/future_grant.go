@@ -7,8 +7,6 @@ import (
 	"io"
 	"fmt"
 	"iter"
-	"maps"
-	"slices"
 	"strings"
 
 	"github.com/rwberendsen/grupr/internal/util"
@@ -222,15 +220,15 @@ func queryFutureGrantsToRole(ctx context.Context, conn *sql.DB, db string, role 
 	}
 }
 
-func DoFutureGrants(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq2[FutureGrant, error]) error {
+func DoFutureGrants(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[FutureGrant]) error {
 	return doFutureGrants(ctx, cnf, conn, grants, false)
 }
 
-func DoFutureRevokes(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq2[FutureGrant, error]) error {
+func DoFutureRevokes(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[FutureGrant]) error {
 	return doFutureGrants(ctx, cnf, conn, grants, true)
 }
 
-func doFutureGrants(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq2[FutureGrant, error], revoke bool) error {
+func doFutureGrants(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[FutureGrant], revoke bool) error {
 	// Runs grant statements in batches
 	buf := make([]string, cnf.StmtBatchSize)
 	i := 0

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"iter"
+	"strings"
 )
 
 type Obj struct {
@@ -36,7 +37,7 @@ SELECT
   , '' AS kind
   , '' AS owner
 FROM $1
-`, limit, fromClause), quoteIdentifier(dbName)+"."+quoteIdentifier(schemaName), ObjTpTable.String(), ObjTpView.String())
+`, limit, fromClause), quoteIdentifier(db)+"."+quoteIdentifier(schema), ObjTpTable.String(), ObjTpView.String())
 			if err != nil {
 				if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
 					err = ErrObjectNotExistOrAuthorized
@@ -52,11 +53,11 @@ FROM $1
 				var owner string
 				if err = rows.Scan(&n, &name, &kind, &owner); err != nil {
 					err = fmt.Errorf("QueryObjs: error scanning row: %w", err)
-					yield(Obj, err)
+					yield(Obj{}, err)
 					return
 				}
 				if n != nil { // this is the last row holding the count
-					if n < limit {
+					if *n < limit {
 						mayHaveMore = false
 					} else {
 						fromClause = fmt.Sprintf(" FROM '%s'", lastName)

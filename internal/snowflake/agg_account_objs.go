@@ -1,9 +1,5 @@
 package snowflake
 
-import (
-	"github.com/rwberendsen/grupr/internal/semantics"
-)
-
 // AccountObjs aggregated to (product, dtap, interface) level, with fields to store granted privileges on them
 type AggAccountObjs struct {
 	DBs map[string]AggDBObjs

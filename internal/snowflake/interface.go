@@ -52,9 +52,11 @@ func NewInterface(dtap string, iSem semantics.InterfaceMetadata, um semantics.Us
 	if iSem.ConsumedBy != nil {
 		// this is an interface (not a product-level one)
 		i.ConsumedBy = map[semantics.ProductDTAPID]struct{}{}
-		for dtapSem, pdID := range iSem.ConsumedBy {
+		for dtapSem, pdIDs := range iSem.ConsumedBy {
 			if dtapSem == dtap {
-				i.ConsumedBy[pdID] = struct{}{}
+				for pdID := range pdIDs {
+					i.ConsumedBy[pdID] = struct{}{}
+				}
 			}
 		}
 	}
@@ -65,16 +67,16 @@ func (i *Interface) recalcObjectsFromMatched(m map[semantics.ObjExpr]*matchedAcc
 	// Called from the product level only
 	i.accountObjects = map[semantics.ObjExpr]AccountObjs{} // (re)set
 	for e, om := range i.ObjectMatchers {
-		tmpAccountObjs = newAccountObjsFromMatched(m[e])
-		i.accountObjects[e] = newAccountObjects(tmpAccountObjs, om)
+		tmpAccountObjs := newAccountObjsFromMatched(m[e])
+		i.accountObjects[e] = newAccountObjs(tmpAccountObjs, om)
 	}
 }
 
 func (i *Interface) recalcObjects(m map[semantics.ObjExpr]AccountObjs) {
 	// Called from the interface level, work with SubsetOf here
 	i.accountObjects = map[semantics.ObjExpr]AccountObjs{} // (re)set
-	for _, om := range i.ObjectMatchers {
-		i.accountObjects[e] = newAccountObjects(m[om.SubsetOf], om)
+	for e, om := range i.ObjectMatchers {
+		i.accountObjects[e] = newAccountObjs(m[om.SubsetOf], om)
 	}
 }
 
@@ -84,7 +86,7 @@ func (i *Interface) aggregate() {
 }
 
 func (i *Interface) setCountsByUserGroup() {
-	i.objectCountsByUserGroup = map[string]map[ObjType]int
+	i.objectCountsByUserGroup = map[string]map[ObjType]int{}
 	for e, om := range i.ObjectMatchers {
 		if i.objectCountsByUserGroup[om.UserGroup] == nil {
 			i.objectCountsByUserGroup[om.UserGroup] = map[ObjType]int{}
@@ -100,7 +102,7 @@ func (i *Interface) setCountsByUserGroup() {
 
 func (i *Interface) setAggAccountObjects() {
 	sum := AccountObjs{}
-	for _, o := range maps.Values(i.accountObjects) {
+	for _, o := range i.accountObjects {
 		sum.add(o)
 	}
 	i.aggAccountObjects = newAggAccountObjs(sum)
@@ -119,6 +121,7 @@ func (i *Interface) setFutureGrants(ctx context.Context, synCnf *syntax.Config, 
 		}
 		i.aggAccountObjects.DBs[db] = dbObjs
 	}
+	return nil
 }
 
 func (i *Interface) setGrants(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, c *accountCache) error {
@@ -132,6 +135,7 @@ func (i *Interface) setGrants(ctx context.Context, synCnf *syntax.Config, cnf *C
 		}
 		i.aggAccountObjects.DBs[db] = dbObjs
 	}
+	return nil
 }
 
 func (i *Interface) pushToDoFutureGrants(yield func(FutureGrant) bool) bool {
@@ -156,12 +160,12 @@ func (i *Interface) pushToDoDBRoleGrants(yield func(Grant) bool, doProd bool, m 
 	for db, dbObjs := range i.aggAccountObjects.DBs {
 		for pdID := range i.ConsumedBy {
 			if doProd == m[pdID].IsProd {
-				if !dbObjs.consumedByGranted[pd] {
+				if !dbObjs.consumedByGranted[pdID] {
 					if !yield(Grant{
 						Privileges:    []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage}},
 						GrantedOn:     ObjTpDatabaseRole,
 						Database:      db,
-						GrantedRole:   dbObjs.dbRole,
+						GrantedRole:   dbObjs.dbRole.Name,
 						GrantedTo:     ObjTpRole,
 						GrantedToRole: m[pdID].ReadRole.ID,
 					}) {

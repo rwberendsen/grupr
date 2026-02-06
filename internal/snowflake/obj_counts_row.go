@@ -21,8 +21,8 @@ func StoreObjCountsRows(ctx context.Context, cnf *Config, conn *sql.DB, rows ite
 	var interfaceIDs []string
 	var dtaps []string
 	var userGroups []string
-	var tableCounts []string
-	var viewCounts []string
+	var tableCounts []int
+	var viewCounts []int
 
 	for r := range rows {
 		productIDs = append(productIDs, r.ProductID)
@@ -43,7 +43,7 @@ CREATE OR REPLACE TABLE %v.%v.%vbasic_stats (
 	view_count integer,
 )
 `,
-		cnf.Database, cnf.Schema, cnf.Prefix)
+		cnf.Database, cnf.Schema, cnf.ObjectPrefix)
 	if err := runSQL(ctx, cnf, conn, sql); err != nil {
 		return fmt.Errorf("create table: %v", err)
 	}
@@ -59,7 +59,7 @@ INSERT INTO %v.%v.%vobject_counts (
 )
 VALUES (?, ?, ?, ?, ?, ?)
 `,
-		cnf.Database, cnf.Schema, cnf.Prefix)
+		cnf.Database, cnf.Schema, cnf.ObjectPrefix)
 	if err := runSQL(ctx, cnf, conn, sql, productIDs, interfaceIDs, dtaps, userGroups, tableCounts, viewCounts); err != nil {
 		return fmt.Errorf("insert stats: %v", err)
 	}

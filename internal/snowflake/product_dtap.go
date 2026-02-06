@@ -3,7 +3,9 @@ package snowflake
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"iter"
+	"slices"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
 	"github.com/rwberendsen/grupr/internal/syntax"
@@ -28,15 +30,15 @@ func NewProductDTAP(pdID semantics.ProductDTAPID, isProd bool, pSem semantics.Pr
 	pd := &ProductDTAP{
 		ProductDTAPID:         pdID,
 		IsProd:                isProd,
-		Interface:             NewInterface(dtap, pSem.InterfaceMetadata, userGroupMappings[pSem.UserGroupMappingID]),
-		Interfaces:            map[string]Interface{},
-		Consumes:              map[syntac.InterfaceID]string{},
+		Interface:             NewInterface(pdID.DTAP, pSem.InterfaceMetadata, userGroupMappings[pSem.UserGroupMappingID]),
+		Interfaces:            map[string]*Interface{},
+		Consumes:              map[syntax.InterfaceID]string{},
 		matchedAccountObjects: map[semantics.ObjExpr]*matchedAccountObjs{},
 		revokeGrantsToRead:    []Grant{},
 	}
 
 	for id, iSem := range pSem.Interfaces {
-		pd.Interfaces[id] = NewInterface(dtap, iSem, userGroupMappings[pSem.UserGroupMappingID])
+		pd.Interfaces[id] = NewInterface(pd.DTAP, iSem, userGroupMappings[pSem.UserGroupMappingID])
 	}
 
 	for iid, dtapMapping := range pSem.Consumes {
@@ -46,35 +48,36 @@ func NewProductDTAP(pdID semantics.ProductDTAPID, isProd bool, pSem semantics.Pr
 	}
 
 	for k := range pd.Interface.ObjectMatchers {
-		pd.matchedAccountObjects[k] = &matchedAccountObjects{}
+		pd.matchedAccountObjects[k] = &matchedAccountObjs{}
 	}
 
 	return pd
 }
 
-func (pd *ProductDTAP) refresh(ctx context.Context, cnf *Config, conn *sql.DB, c *accountCache) error {
-	if err := pd.refresh_(ctx, cnf, conn, c); err != nil {
+func (pd *ProductDTAP) refresh(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, c *accountCache) error {
+	if err := pd.refresh_(ctx, synCnf, cnf, conn, c); err != nil {
 		return err
 	}
 	pd.recalcObjects()
+	return nil
 }
 
-func (pd *ProductDTAP) refresh_(ctx context.Context, cnf *Config, conn *sql.DB, c *accountCache) error {
+func (pd *ProductDTAP) refresh_(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, c *accountCache) error {
 	for {
 		pd.refreshCount += 1
-		if pd.refreshCount > cnf.MaxProductRefreshCount {
+		if pd.refreshCount > cnf.MaxProductDTAPRefreshes {
 			return fmt.Errorf("Max product refresh count reached")
 		}
 		util.SleepContext(ctx, 1<<pd.refreshCount-1) // exponential backoff
-		if err := pd.refreshObjExprs(ctx, conn, c); err != ErrObjectNotExistOrAuthorized {
+		if err := pd.refreshObjExprs(ctx, synCnf, cnf, conn, c); err != ErrObjectNotExistOrAuthorized {
 			return err
 		}
 	}
 }
 
-func (pd *ProductDTAP) refreshObjExprs(ctx context.Context, conn *sql.DB, c *accountCache) error {
-	for e, om := range p.ObjectMatchers {
-		if err := c.match(ctx, conn, om, pd.matchedAccountObjects[e]); err != nil {
+func (pd *ProductDTAP) refreshObjExprs(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, c *accountCache) error {
+	for e, om := range pd.ObjectMatchers {
+		if err := c.match(ctx, synCnf, cnf, conn, om, pd.matchedAccountObjects[e]); err != nil {
 			return err
 		}
 	}
@@ -96,8 +99,8 @@ func (pd *ProductDTAP) createProductRoles(ctx context.Context, synCnf *syntax.Co
 		return nil
 	}
 	pd.ReadRole = newProductRole(synCnf, cnf, pd.ProductID, pd.DTAP, ModeRead)
-	if _, ok := productRoles[productRole]; !ok {
-		if err := productRole.create(ctx, cnf, conn); err != nil {
+	if _, ok := productRoles[pd.ReadRole]; !ok {
+		if err := pd.ReadRole.Create(ctx, cnf, conn); err != nil {
 			return err
 		}
 	}
@@ -117,7 +120,7 @@ func (pd *ProductDTAP) grant(ctx context.Context, synCnf *syntax.Config, cnf *Co
 
 func (pd *ProductDTAP) grant_(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{},
 	createDBRoleGrants map[string]struct{}, c *accountCache) error {
-	if err := pd.refresh(ctx, cnf, conn, c); err != nil {
+	if err := pd.refresh(ctx, synCnf, cnf, conn, c); err != nil {
 		return err
 	}
 	if err := pd.createProductRoles(ctx, synCnf, cnf, conn, productRoles); err != nil {
@@ -141,12 +144,12 @@ func (pd *ProductDTAP) grant_(ctx context.Context, synCnf *syntax.Config, cnf *C
 	if err := pd.Interface.setGrants(ctx, synCnf, cnf, conn, c); err != nil {
 		return err
 	}
-	for iid, i := range pd.Interfaces {
+	for _, i := range pd.Interfaces {
 		if err := i.setGrants(ctx, synCnf, cnf, conn, c); err != nil {
 			return err
 		}
 	}
-	if err := DoGrants(ctx, cnf, conn, pd.getToDoGrants(), false); err != nil {
+	if err := DoGrants(ctx, cnf, conn, pd.getToDoGrants()); err != nil {
 		return err
 	}
 
@@ -181,7 +184,7 @@ func (pd *ProductDTAP) getToDoGrants() iter.Seq[Grant] {
 
 func (pd *ProductDTAP) getToDoDBRoleGrants(doProd bool, m map[semantics.ProductDTAPID]*ProductDTAP) iter.Seq[Grant] {
 	return func(yield func(Grant) bool) {
-		return pd.pushToDoDBRoleGrants(yield, doProd, m)
+		pd.pushToDoDBRoleGrants(yield, doProd, m)
 	}
 }
 
@@ -193,7 +196,7 @@ func (pd *ProductDTAP) pushToDoDBRoleGrants(yield func(Grant) bool, doProd bool,
 				Privileges:    []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage}},
 				GrantedOn:     ObjTpDatabaseRole,
 				Database:      db,
-				GrantedRole:   dbObjs.dbRole,
+				GrantedRole:   dbObjs.dbRole.Name,
 				GrantedTo:     ObjTpRole,
 				GrantedToRole: pd.ReadRole.ID,
 			}) {
@@ -203,7 +206,7 @@ func (pd *ProductDTAP) pushToDoDBRoleGrants(yield func(Grant) bool, doProd bool,
 	}
 	// Next, grant database roles of interfaces to consumers (prod / non-prod)
 	for _, i := range pd.Interfaces {
-		if !i.pushToDoDBRoleGrants(yield, doProd, isProd) {
+		if !i.pushToDoDBRoleGrants(yield, doProd, m) {
 			return false
 		}
 	}
@@ -221,7 +224,7 @@ func (pd *ProductDTAP) revokeFromProductRole(ctx context.Context, cnf *Config, c
 	// dropped concurrently, and this would mean the grants we thought we
 	// needed to revoke would have already been dropped server side as
 	// well.
-	return DoRevokesSkipErrors(ctx, cnf, conn, pd.revokeGrantsToRead)
+	return DoRevokesSkipErrors(ctx, cnf, conn, slices.Values(pd.revokeGrantsToRead))
 }
 
 func (pd *ProductDTAP) refreshGrantRevoke(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{},
@@ -232,9 +235,10 @@ func (pd *ProductDTAP) refreshGrantRevoke(ctx context.Context, synCnf *syntax.Co
 	if err := pd.revoke(ctx, synCnf, cnf, conn, productRoles, createDBRoleGrants, c); err != nil {
 		return err
 	}
+	return nil
 }
 
-func (pd *ProductDTAP) getToDoFutureRevokes() iter.Seq[Grant] {
+func (pd *ProductDTAP) getToDoFutureRevokes() iter.Seq[FutureGrant] {
 	return func(yield func(FutureGrant) bool) {
 		if !pd.Interface.pushToDoFutureRevokes(yield) {
 			return
@@ -285,8 +289,8 @@ func (pd *ProductDTAP) revoke(ctx context.Context, synCnf *syntax.Config, cnf *C
 	//   we would need to grant now. Rather than ignoring that signal and wait for the
 	//   next entire Grupr run, it can save our DBAs some time if we act immediately and
 	//   refresh just this single data product-dtap.
-	if err := revoke_(ctx, cnf, conn); err == ErrObjectNotExistOrAuthorized {
-		return pd.refreshGrantRevoke(ctx, synCnf, cnf, conn, productRoles, createDBROleGrants, c)
+	if err := pd.revoke_(ctx, cnf, conn); err == ErrObjectNotExistOrAuthorized {
+		return pd.refreshGrantRevoke(ctx, synCnf, cnf, conn, productRoles, createDBRoleGrants, c)
 	} else {
 		return err
 	}

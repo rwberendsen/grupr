@@ -4,12 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"iter"
-	"strings"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
 	"github.com/rwberendsen/grupr/internal/syntax"
 	"golang.org/x/sync/errgroup"
-	"gopkg.in/yaml.v3"
 )
 
 type Grupin struct {
@@ -40,24 +38,24 @@ func NewGrupin(ctx context.Context, cnf *Config, conn *sql.DB, g semantics.Grupi
 	return r
 }
 
-func (g *Grupin) setObjects(ctx context.Context, cnf *Config, conn *sql.DB, doProd bool) error {
+func (g *Grupin) setObjects(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, doProd bool) error {
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(cnf.MaxProductDTAPThreads)
 	for _, pd := range g.ProductDTAPs {
 		if doProd == pd.IsProd {
-			eg.Go(func() error { return pd.refresh(ctx, cnf, conn, g.accountCache) })
+			eg.Go(func() error { return pd.refresh(ctx, synCnf, cnf, conn, g.accountCache) })
 		}
 	}
 	return eg.Wait()
 }
 
-func (g *Grupin) SetObjects(ctx context.Context, cnf *Config, conn *sql.DB) error {
+func (g *Grupin) SetObjects(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB) error {
 	// Calculating objects can be a time-consuming activity.
 	// Since we care most about production, generally, we'll do it first.
-	if err := g.setObjects(ctx, cnf, conn, true); err != nil {
+	if err := g.setObjects(ctx, synCnf, cnf, conn, true); err != nil {
 		return err
 	}
-	if err := g.setObjects(ctx, cnf, conn, false); err != nil {
+	if err := g.setObjects(ctx, synCnf, cnf, conn, false); err != nil {
 		return err
 	}
 	return nil

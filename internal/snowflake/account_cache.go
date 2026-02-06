@@ -12,7 +12,6 @@ import (
 
 	"github.com/rwberendsen/grupr/internal/semantics"
 	"github.com/rwberendsen/grupr/internal/syntax"
-	"github.com/snowflakedb/gosnowflake"
 )
 
 // caching objects in Snowflake locally

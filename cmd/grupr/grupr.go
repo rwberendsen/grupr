@@ -5,12 +5,13 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
 	"github.com/rwberendsen/grupr/internal/snowflake"
-	"github.com/rwberendsen/grupr/internal/util"
+	"github.com/rwberendsen/grupr/internal/syntax"
 )
 
 func main() {
@@ -40,7 +41,7 @@ func main() {
 	// operation. So, yeah, most likely this would work.
 	synCnf := syntax.GetConfig()
 	semCnf := semantics.GetConfig()
-	newGrupin, err := util.GetGrupinFromPath(synCnf, semCnf, flag.Arg(0))
+	newGrupin, err := getGrupinFromPath(synCnf, semCnf, flag.Arg(0))
 	if err != nil {
 		log.Fatalf("get new grupin: %v", err)
 	}
@@ -63,9 +64,9 @@ func main() {
 	*/
 
 	// Set up catching signals and context before we do network requests
-	sigs := make(chan signal.Signal, 1)
-	signals.Notify(sigs, syscall.SIGTERM)
-	ctx, cancel := context.WithCancel()
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGTERM)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() {
 		<-sigs   // block until we receive Signal
@@ -81,22 +82,20 @@ func main() {
 	}
 
 	// Create Snowflake Grupin object, which will hold relevant account objects per data product
-	snowflakeNewGrupin, err := snowflake.NewGrupin(ctx, snowCnf, conn, newGrupin)
-	if err != nil {
-		log.Fatalf("making Snowflake grupin: %v", err)
-	}
+	snowflakeNewGrupin := snowflake.NewGrupin(ctx, snowCnf, conn, newGrupin)
 
 	// Use it now to manage access
-	if err := snowflakeGrupin.ManageAccess(ctx, synCnf, snowCnf, conn); err != nil {
+	if err := snowflakeNewGrupin.ManageAccess(ctx, synCnf, snowCnf, conn); err != nil {
 		log.Fatalf("ManageAccess: %v", err)
+	}
+
+	// And, after managing access, which may have resulted in numerous refreshes of which objects exist,
+	// let's store the latest object counts
+	if err := snowflake.StoreObjCountsRows(ctx, snowCnf, conn, snowflakeNewGrupin.GetObjCountsRows()); err != nil {
+		log.Fatalf("StoreObjectCounts: %v", err)
 	}
 
 	// TODO: also think about how to guard against an error scenario in which someone triggers an old grupr run in CI/CD, e.g., we could store a UUID, or even a git hash
 	// in the Grupr schema of the currently running run; the last thing Grupr would always try before crashing is to wipe that one; but, it'd mean from time to time ops may have
 	// to come in and delete that one; but imagine the bewilderment if two grupr processes are concurrently trying to make two different yamls the reality...
-
-	basicStats := snowflake.NewBasicStats(newGrupin, snowflakeNewGrupin)
-	if err := StoreObjCounts(ctx, snowCnf, conn, snowflakeNewGrupin.GetObjCountsRows()); err != nil {
-		log.Fatalf("storing object counts: %v", err)
-	}
 }

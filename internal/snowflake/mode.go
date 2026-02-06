@@ -15,9 +15,10 @@ const (
 func ParseMode(s string) (Mode, error) {
 	m := map[string]Mode{"r": ModeRead, "w": ModeWrite, "o": ModeOperate}
 	if mode, ok := m[s]; !ok {
-		return Read, fmt.Errorf("invalid mode: '%s'", s)
+		return ModeRead, fmt.Errorf("invalid mode: '%s'", s)
+	} else {
+		return mode, nil
 	}
-	return mode, nil
 }
 
 func (m Mode) String() string {

@@ -1,10 +1,5 @@
 package snowflake
 
-import (
-	"context"
-	"database/sql"
-)
-
 type AggObjAttr struct {
 	ObjectType ObjType
 	Owner      string

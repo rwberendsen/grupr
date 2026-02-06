@@ -21,7 +21,7 @@ func ParseObjType(s string) ObjType {
 		"ROLE":          ObjTpRole,
 		"SCHEMA":        ObjTpSchema,
 		"TABLE":         ObjTpTable,
-		"VIEW":          ObkTpView,
+		"VIEW":          ObjTpView,
 	}[s]
 }
 

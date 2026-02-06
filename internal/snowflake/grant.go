@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"iter"
-	"maps"
 	"strings"
 
 	"github.com/rwberendsen/grupr/internal/util"

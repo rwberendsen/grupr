@@ -1,5 +1,9 @@
 package snowflake
 
+import (
+	"fmt"
+)
+
 type PrivilegeComplete struct {
 	Privilege        Privilege
 	CreateObjectType ObjType
@@ -13,8 +17,8 @@ func ParsePrivilegeComplete(p string, cot string) PrivilegeComplete {
 }
 
 func (p PrivilegeComplete) String() string {
-	if Privilege == PrvCreate {
-		return p.Privilege.String() + ' ' + p.CreateObjectType.String()
+	if p.Privilege == PrvCreate && p.CreateObjectType != ObjTpOther {
+		return fmt.Sprintf("%s %s", p.Privilege, p.CreateObjectType)
 	}
-	return p.Privilege.String()
+	return fmt.Sprintf("%s", p.Privilege)
 }

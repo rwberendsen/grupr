@@ -7,7 +7,6 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"log"
-	"os"
 
 	"github.com/snowflakedb/gosnowflake"
 )

@@ -29,14 +29,14 @@ func (o *matchedDBObjs) dropSchema(k string) {
 	o.schemaExists[k] = false
 }
 
-func (o *matchedDBObjs) hasSchema(k string) {
-	return o.schemaExists != nil && o.schemaExists[k]
+func (o *matchedDBObjs) hasSchema(k string) bool {
+	return o.schemaExists[k]
 }
 
 func (o *matchedDBObjs) getSchemas() iter.Seq2[string, *matchedSchemaObjs] {
 	return func(yield func(string, *matchedSchemaObjs) bool) {
 		for k, v := range o.schemas {
-			if o.schemaExists(k) {
+			if o.hasSchema(k) {
 				if !yield(k, v) {
 					return
 				}

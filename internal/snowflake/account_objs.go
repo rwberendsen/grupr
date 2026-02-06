@@ -9,7 +9,7 @@ type AccountObjs struct {
 	DBs map[string]DBObjs
 }
 
-func newAccountObjs(o *AccountObjs, om semantics.ObjMatcher) AccountObjs {
+func newAccountObjs(o AccountObjs, om semantics.ObjMatcher) AccountObjs {
 	r := AccountObjs{DBs: map[string]DBObjs{}}
 	for db, dbObjects := range o.DBs {
 		if !om.DisjointFromDB(db) {
