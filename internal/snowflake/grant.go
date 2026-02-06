@@ -5,9 +5,12 @@ import (
 	"database/sql"
 	"encoding/csv"
 	"fmt"
+	"io"
 	"iter"
 	"maps"
 	"strings"
+
+	"github.com/rwberendsen/grupr/internal/util"
 )
 
 type Grant struct {
@@ -32,13 +35,13 @@ func (g Grant) buildSQLGrant(revoke bool) string {
 	preposition := `TO`
 	if revoke {
 		verb = `REVOKE`
-		prepostition = `FROM`
+		preposition = `FROM`
 	}
 	var granteeClause string
 	switch g.GrantedTo {
-	case ObjTypeRole:
+	case ObjTpRole:
 		granteeClause = fmt.Sprintf(`ROLE %s`, quoteIdentifier(g.GrantedToRole))
-	case ObjTypeDatabaseRole:
+	case ObjTpDatabaseRole:
 		granteeClause = fmt.Sprintf(`DATABASE ROLE %s.%s`, quoteIdentifier(g.GrantedToDatabase), quoteIdentifier(g.GrantedToRole))
 	default:
 		panic("Not implemented")
@@ -53,7 +56,7 @@ func (g Grant) buildSQLGrant(revoke bool) string {
 	}
 
 	// GRANT <privileges> ... TO ROLE
-	privilegeClause := strings.Join(g.Privileges, `, `)
+	privilegeClause := strings.Join(util.FmtSliceElements[PrivilegeComplete](g.Privileges), `, `)
 
 	var objectClause string
 	switch g.GrantedOn {
@@ -61,7 +64,7 @@ func (g Grant) buildSQLGrant(revoke bool) string {
 		objectClause = fmt.Sprintf(`%v %s`, g.GrantedOn, quoteIdentifier(g.Database))
 	case ObjTpSchema:
 		objectClause = fmt.Sprintf(`%v %s.%s`, g.GrantedOn, quoteIdentifier(g.Database), quoteIdentifier(g.Schema))
-	case ObjTpTable, ObjTypeView:
+	case ObjTpTable, ObjTpView:
 		objectClause = fmt.Sprintf(`%v %s.%s.%s`, g.GrantedOn, quoteIdentifier(g.Database), quoteIdentifier(g.Schema), quoteIdentifier(g.Object))
 	default:
 		panic("Not implemented")
@@ -166,8 +169,7 @@ func buildSQLQueryGrants(db string, role string, match map[GrantTemplate]struct{
 		whereClause = fmt.Sprintf("\nWHERE\n  %s", strings.ReplaceAll(clauseStr, "\n", "\n  "))
 	}
 
-	var sql string
-	sql := fmt.Sprintf(`SHOW GRANTS TO %sROLE IDENTIFIER('%s')
+	query := fmt.Sprintf(`SHOW GRANTS TO %sROLE IDENTIFIER('%s')
 ->> SELECT
   , CASE
     WHEN STARTSWITH("privilege", 'CREATE ')
@@ -191,23 +193,23 @@ func buildSQLQueryGrants(db string, role string, match map[GrantTemplate]struct{
 FROM $1%s`, dbClause, granteeName, grantedRolePrefix, whereClause)
 
 	if limit > 0 {
-		sql += fmt.Sprintf("\nLIMIT %d", limit)
+		query += fmt.Sprintf("\nLIMIT %d", limit)
 	}
 
-	return
+	return query
 }
 
 func queryGrantsToRole(ctx context.Context, cnf *Config, conn *sql.DB, db string, role string,
-	grantedToRoleStartsWithPrefix, match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}, limit int) iter.Seq2[Grant, error] {
+	grantedToRoleStartsWithPrefix bool, match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}, limit int) iter.Seq2[Grant, error] {
 	// Note that both db and string will be quoted before going to Snowflake, so
 	// if the names in Snowflake are upper case, present them here in upper case, too.
 	grantedTo := ObjTpRole
 	if db != "" {
 		grantedTo = ObjTpDatabaseRole
 	}
-	sql := buildSQLQueryGrants(db, role, match, notMatch, cnf.ObjectPrefix, limit)
+	query := buildSQLQueryGrants(db, role, match, notMatch, cnf.ObjectPrefix, limit)
 	return func(yield func(Grant, error) bool) {
-		rows, err := conn.QueryContext(ctx, sql, param)
+		rows, err := conn.QueryContext(ctx, query)
 		defer rows.Close()
 		if err != nil {
 			if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
@@ -266,16 +268,16 @@ func doGrants(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[Gr
 	i := 0
 	for g := range grants {
 		if i == cnf.StmtBatchSize {
-			if err := runMultipleSQL(ctx, cnf, conn, slices.Join(buf, ";"), i); err != nil {
+			if err := runMultipleSQL(ctx, cnf, conn, strings.Join(buf, ";"), i); err != nil {
 				return err
 			}
 			i = 0
 		}
-		buf[i] := g.buildSQLGrant(revoke)
+		buf[i] = g.buildSQLGrant(revoke)
 		i++
 	}
 	if i > 0 {
-		if err := runMultipleSQL(ctx, cnf, conn, slices.Join(buf[0:i], ";"), i); err != nil {
+		if err := runMultipleSQL(ctx, cnf, conn, strings.Join(buf[0:i], ";"), i); err != nil {
 			return err
 		}
 	}
@@ -284,7 +286,7 @@ func doGrants(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[Gr
 
 func doGrantsSkipErrors(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[Grant], revoke bool) error {
 	for g := range grants {
-		if err := runMultipleSQL(ctx, cnf, conn, g.buildSQLGrant(revoke)); err != nil && err != ErrObjectNotExistOrAuthorized {
+		if err := runSQL(ctx, cnf, conn, g.buildSQLGrant(revoke)); err != nil && err != ErrObjectNotExistOrAuthorized {
 			return err
 		}
 	}

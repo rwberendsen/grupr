@@ -4,10 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"encoding/csv"
+	"io"
 	"fmt"
 	"iter"
 	"maps"
+	"slices"
 	"strings"
+
+	"github.com/rwberendsen/grupr/internal/util"
 )
 
 type FutureGrant struct {
@@ -16,6 +20,7 @@ type FutureGrant struct {
 	GrantedIn         ObjType
 	Database          string
 	Schema            string
+	Object            string
 	GrantedTo         ObjType
 	GrantedToDatabase string
 	GrantedToRole     string
@@ -32,29 +37,26 @@ func (g FutureGrant) buildSQLGrant(revoke bool) string {
 
 	var granteeClause string
 	switch g.GrantedTo {
-	case ObjTypeRole:
+	case ObjTpRole:
 		granteeClause = fmt.Sprintf(`%s ROLE %s`, preposition, quoteIdentifier(g.GrantedToRole))
-	case ObjTypeDatabaseRole:
+	case ObjTpDatabaseRole:
 		granteeClause = fmt.Sprintf(`%s DATABASE ROLE %s.%s`, preposition, quoteIdentifier(g.GrantedToDatabase), quoteIdentifier(g.GrantedToRole))
 	default:
 		panic("Not implemented")
 	}
 
-	privilegeClause := strings.Join(g.Privileges, `, `)
+	privilegeClause := strings.Join(util.FmtSliceElements[PrivilegeComplete](g.Privileges), `, `)
 
 	onClause := `ON FUTURE `
 	inClause := `IN `
 	switch g.GrantedOn {
 	case ObjTpSchema:
 		// Only supported IN DATABASE, only USAGE supported
-		if g.GrantedIn != ObjTpDatabase || g.Privilege != PrvUsage {
+		if g.GrantedIn != ObjTpDatabase {
 			panic("Not implemented")
 		}
 		inClause += fmt.Sprintf(`%v %s`, g.GrantedIn, quoteIdentifier(g.Database))
 	case ObjTpTable, ObjTpView:
-		if g.Privilege != PrvSelect && g.Privilege != PrvReferences {
-			panic("Not implemented yet")
-		}
 		switch g.GrantedIn {
 		case ObjTpDatabase:
 			inClause += fmt.Sprintf(`%v %s`, g.GrantedIn, quoteIdentifier(g.Database))
@@ -154,8 +156,7 @@ func buildSQLQueryFutureGrants(db string, role string, match map[GrantTemplate]s
 		whereClause = fmt.Sprintf("\nWHERE\n  %s", strings.ReplaceAll(clauseStr, "\n", "\n  "))
 	}
 
-	var sql string
-	sql := fmt.Sprintf(`SHOW FUTURE GRANTS TO %sROLE IDENTIFIER('%s')
+	query := fmt.Sprintf(`SHOW FUTURE GRANTS TO %sROLE IDENTIFIER('%s')
 ->> SELECT
   , CASE
     WHEN STARTSWITH("privilege", 'CREATE ') THEN 'CREATE'
@@ -171,10 +172,10 @@ func buildSQLQueryFutureGrants(db string, role string, match map[GrantTemplate]s
 FROM $1%s`, dbClause, granteeName, whereClause)
 
 	if limit > 0 {
-		sql += fmt.Sprintf("\nLIMIT %d", limit)
+		query += fmt.Sprintf("\nLIMIT %d", limit)
 	}
 
-	return
+	return query
 }
 
 func queryFutureGrantsToRole(ctx context.Context, conn *sql.DB, db string, role string,
@@ -185,9 +186,9 @@ func queryFutureGrantsToRole(ctx context.Context, conn *sql.DB, db string, role 
 	if db != "" {
 		grantedTo = ObjTpDatabaseRole
 	}
-	sql := buildSQLQueryFutureGrants(db, role, match, notMatch, limit)
+	query := buildSQLQueryFutureGrants(db, role, match, notMatch, limit)
 	return func(yield func(FutureGrant, error) bool) {
-		rows, err := conn.QueryContext(ctx, sql, param)
+		rows, err := conn.QueryContext(ctx, query)
 		defer rows.Close()
 		if err != nil {
 			if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
@@ -235,16 +236,16 @@ func doFutureGrants(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.
 	i := 0
 	for g := range grants {
 		if i == cnf.StmtBatchSize {
-			if err := runMultipleSQL(ctx, cnf, conn, slices.Join(buf, ";"), i); err != nil {
+			if err := runMultipleSQL(ctx, cnf, conn, strings.Join(buf, ";"), i); err != nil {
 				return err
 			}
 			i = 0
 		}
-		buf[i] := g.buildSQLGrant(revoke)
+		buf[i] = g.buildSQLGrant(revoke)
 		i++
 	}
 	if i > 0 {
-		if err := runMultipleSQL(ctx, cnf, conn, slices.Join(buf[0:i], ";"), i); err != nil {
+		if err := runMultipleSQL(ctx, cnf, conn, strings.Join(buf[0:i], ";"), i); err != nil {
 			return err
 		}
 	}

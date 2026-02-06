@@ -1,5 +1,10 @@
 package snowflake
 
+import (
+	"fmt"
+	"strings"
+)
+
 type GrantTemplate struct {
 	PrivilegeComplete
 	GrantedOn                   ObjType
@@ -24,7 +29,7 @@ func (g GrantTemplate) buildSQLFilter() (string, int) {
 }
 
 func buildSQLMatchGrantTemplates(grants map[GrantTemplate]struct{}) (string, int) {
-	clauses = []string{}
+	clauses := []string{}
 	for g := range grants {
 		s, l := g.buildSQLFilter()
 		if l > 0 {

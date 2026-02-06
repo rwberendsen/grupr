@@ -37,7 +37,7 @@ func NewInterface(dtap string, iSem semantics.InterfaceMetadata, um semantics.Us
 	}
 	// Just take what you need from own DTAP
 	for e, om := range iSem.ObjectMatchers {
-		if e.DTAP == dtap {
+		if om.DTAP == dtap {
 			i.ObjectMatchers[e] = om
 		}
 	}
@@ -47,7 +47,7 @@ func NewInterface(dtap string, iSem semantics.InterfaceMetadata, um semantics.Us
 		for u := range iSem.UserGroups {
 			i.GlobalUserGroups[i.UserGroupMapping[u]] = struct{}{}
 		}
-		i.globalUserGroupStr = strings.Join(slices.Sorted(maps.Keys(i.GlobalUserGroups)), ",")
+		i.globalUserGroupsStr = strings.Join(slices.Sorted(maps.Keys(i.GlobalUserGroups)), ",")
 	}
 	if iSem.ConsumedBy != nil {
 		// this is an interface (not a product-level one)
