@@ -11,6 +11,32 @@ type Product struct {
 	ID                 string
 	DTAPs              DTAPSpec
 	UserGroupMappingID string
+	// TODO: allow the user to specify multiple, named user group renderings, like so:
+	//
+	// user_group_renderings:
+        //   - four:
+        //       ug1: abcd
+        //       ug2: abef
+        //   - two:
+        //       ug1: cd
+        //       ug2: ef
+	//
+        // Do the same with DTAP renderings.
+	//
+        // Then, use go templates instead of [dtap] and [usergroup] in the expressions.
+        // Render (execute) the templates with variables dtap and usergroup in scope.
+	// Only after rendering do all the regular expressions checks on whether the expression is correct or not,
+	// as well as all the subsetting logic (that we already do after rendering anyway).
+	// make sure also the user group and dtap renderings are in scope, then folks can use expressions like
+	//
+	// mydb.{{index .UGs four .UG}}_myproject.{{index .uGS two .UG}}_*
+        //
+        // Yes, it's a bit more verbose, but, people do weird things when they name objects, and this does provide
+        // a bit more flexibility.
+	// 
+	// Because go templates are so expressive and powerful, any and all reasoning about correctness of
+	// expressions should be done after rendering.
+	// This will make the syntax package a bit lighter, and that's fine.
 	UserGroupRendering syntax.Rendering
 	InterfaceMetadata
 	UserGroupColumn    ColMatcher
