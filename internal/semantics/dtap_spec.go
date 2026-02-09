@@ -5,39 +5,44 @@ import (
 	"maps"
 
 	"github.com/rwberendsen/grupr/internal/syntax"
+	"github.com/rwberendsen/grupr/internal/util"
 )
 
 type DTAPSpec struct {
 	Prod          *string
 	NonProd       map[string]struct{}
-	DTAPRendering syntax.Rendering
+	DTAPRenderings map[string]syntax.Rendering
 }
 
-func newDTAPSpec(cnf *Config, dsSyn *syntax.DTAPSpec, dtapRendering syntax.Rendering) DTAPSpec {
+func newDTAPSpec(cnf *Config, dsSyn *syntax.DTAPSpec, dtapRenderings map[string]syntax.Rendering) (DTAPSpec, error) {
+	var dsSem DTAPSpec
 	if dsSyn == nil {
 		// Not specifying any DTAP info means you will get a default DTAP spec, which has only a production DTAP
-		return DTAPSpec{
-			Prod: &cnf.DefaultProdDTAPName,
+		dsSem.Prod = &cnf.DefaultProdDTAPName,
+	} else {
+		dsSem.Prod = dsSyn.Prod
+		if dsSyn.Prod != nil {
+			dsSem.Prod = dsSyn.Prod 
+		}
+		dsSem.NonProd = make(map[string]struct{}, len(dsSyn.NonProd))
+		for _, d := range dsSyn.NonProd {
+			dsSem.NonProd[d] = struct{}{}
 		}
 	}
-	dsSem := DTAPSpec{
-		Prod:          dsSyn.Prod,
-		NonProd:       make(map[string]struct{}, len(dsSyn.NonProd)),
-		DTAPRendering: make(syntax.Rendering, len(dsSyn.NonProd)+1),
+	dsSem.DTAPRenderings = make(map[string]syntax.Rendering, len(dtapRenderings))
+	for k, r := range dtapRenderings {
+		dsSem.DTAPRenderings[k] = syntax.Rendering{}
+		for dtap := range dsSem.All() {
+			dsSem.DTAPRenderings[k][dtap] = dtap // default value	
+		}
+		for dtap, v := range r {
+			if !dsSem.HasDTAP(dtap) {
+				return dsSem, &SetLogicError{fmt.Sprintf("dtap_rendering '%s': unknown dtap '%s'", k, dtap)}
+			}
+			dsSem.DTAPRenderings[k][dtap] = v
+		}
 	}
-	if dsSyn.Prod != nil {
-		s := *dsSyn.Prod
-		dsSem.Prod = &s            // s will escape, but, if we had assigned dsSyn.Prod directly, then dsSyn would not be garbage collected.
-		dsSem.DTAPRendering[s] = s // default value when not in dtapRendering
-	}
-	for _, d := range dsSyn.NonProd {
-		dsSem.NonProd[d] = struct{}{}
-		dsSem.DTAPRendering[d] = d // default value when not in dtapRendering
-	}
-	for d, r := range dtapRendering {
-		dsSem.DTAPRendering[d] = r // overwrite default value
-	}
-	return dsSem
+	return dsSem, nil
 }
 
 func (spec DTAPSpec) HasDTAP(dtap string) bool {
@@ -70,15 +75,7 @@ func (spec DTAPSpec) All() iter.Seq2[string, bool] {
 }
 
 func (lhs DTAPSpec) Equal(rhs DTAPSpec) bool {
-	if lhs.Prod == nil && rhs.Prod != nil {
-		return false
-	}
-	if lhs.Prod != nil && rhs.Prod == nil {
-		return false
-	}
-	if lhs.Prod != nil && rhs.Prod != nil && *lhs.Prod != *rhs.Prod {
-		return false
-	}
-	return maps.Equal(lhs.NonProd, rhs.NonProd) &&
-		maps.Equal(lhs.DTAPRendering, rhs.DTAPRendering)
+	return util.EqualStrPtr(lhs.Prod, rhs.Prod) && 
+	       maps.Equal(lhs.NonProd, rhs.NonProd) &&
+	       maps.EqualFunc(lhs.DTAPRenderings, rhs.DTAPRenderings, syntax.Rendering.Equal)
 }

@@ -18,16 +18,16 @@ type InterfaceMetadata struct {
 	ForProduct               *string
 }
 
-func newInterfaceMetadata(cnf *Config, imSyn syntax.InterfaceMetadata, classes map[string]syntax.Class, dtaps syntax.Rendering, userGroupMapping UserGroupMapping,
-	userGroupRendering syntax.Rendering, parent *InterfaceMetadata) (InterfaceMetadata, error) {
+func newInterfaceMetadata(cnf *Config, imSyn syntax.InterfaceMetadata, classes map[string]syntax.Class, ds DTAPSpec, userGroupMapping UserGroupMapping,
+	userGroupRenderings map[string]syntax.Rendering, parent *InterfaceMetadata) (InterfaceMetadata, error) {
 	imSem := InterfaceMetadata{}
 	if err := imSem.setClassification(imSyn, parent, classes); err != nil {
 		return imSem, err
 	}
-	if err := imSem.setUserGroups(imSyn, parent, userGroupMapping, userGroupRendering); err != nil {
+	if err := imSem.setUserGroups(imSyn, parent, userGroupMapping, userGroupRenderings); err != nil {
 		return imSem, err
 	}
-	if err := imSem.setObjectMatchers(cnf, imSyn, parent, dtaps); err != nil {
+	if err := imSem.setObjectMatchers(cnf, imSyn, parent, ds); err != nil {
 		return imSem, err
 	}
 	if err := imSem.setMaskColumns(cnf, imSyn, parent, dtaps); err != nil {
@@ -129,14 +129,14 @@ func (imSem *InterfaceMetadata) setObjectMatchers(cnf *Config, imSyn syntax.Inte
 	return nil
 }
 
-func (imSem *InterfaceMetadata) setHashColumns(cnf *Config, imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata, dtaps syntax.Rendering) error {
+func (imSem *InterfaceMetadata) setHashColumns(cnf *Config, imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata, ds DTAPSpec) error {
 	if imSyn.MaskColumns == nil {
 		if parent != nil {
 			imSem.HashColumns = parent.HashColumns
 		}
 		return nil
 	}
-	if m, err := newColMatcher(cnf, imSyn.HashColumns, dtaps, imSem.UserGroups, imSem.ObjectMatchers); err != nil {
+	if m, err := newColMatcher(cnf, imSyn.HashColumns, ds, imSem.UserGroups, imSem.ObjectMatchers); err != nil {
 		return fmt.Errorf("hash_columns: %w", err)
 	} else {
 		imSem.HashColumns = m
@@ -144,14 +144,14 @@ func (imSem *InterfaceMetadata) setHashColumns(cnf *Config, imSyn syntax.Interfa
 	return nil
 }
 
-func (imSem *InterfaceMetadata) setMaskColumns(cnf *Config, imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata, dtaps syntax.Rendering) error {
+func (imSem *InterfaceMetadata) setMaskColumns(cnf *Config, imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata, ds DTAPSpec) error {
 	if imSyn.MaskColumns == nil {
 		if parent != nil {
 			imSem.MaskColumns = parent.MaskColumns
 		}
 		return nil
 	}
-	if m, err := newColMatcher(cnf, imSyn.MaskColumns, dtaps, imSem.UserGroups, imSem.ObjectMatchers); err != nil {
+	if m, err := newColMatcher(cnf, imSyn.MaskColumns, ds, imSem.UserGroups, imSem.ObjectMatchers); err != nil {
 		return fmt.Errorf("mask_columns: %w", err)
 	} else {
 		imSem.MaskColumns = m
@@ -159,7 +159,7 @@ func (imSem *InterfaceMetadata) setMaskColumns(cnf *Config, imSyn syntax.Interfa
 	return nil
 }
 
-func (imSem *InterfaceMetadata) setForProduct(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata, dtaps syntax.Rendering) error {
+func (imSem *InterfaceMetadata) setForProduct(imSyn syntax.InterfaceMetadata, parent *InterfaceMetadata) error {
 	if imSyn.ForProduct == nil {
 		if parent != nil {
 			imSem.ForProduct = parent.ForProduct

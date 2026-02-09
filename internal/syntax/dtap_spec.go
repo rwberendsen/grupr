@@ -9,7 +9,8 @@ type DTAPSpec struct {
 	Prod    *string  `yaml:",omitempty"`
 }
 
-func (d DTAPSpec) validate(cnf *Config) error {
+func (d *DTAPSpec) validate(cnf *Config) error {
+	if d == nil { return nil }
 	dtaps := map[string]bool{}
 	if d.Prod != nil {
 		if err := ValidateIDPart(cnf, *d.Prod); err != nil {

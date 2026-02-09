@@ -10,50 +10,80 @@ import (
 
 type ColExprs map[ColExpr]ColExprAttr
 
-func newColExprs(cnf *Config, s string, dtaps syntax.Rendering, userGroups syntax.Rendering) (ColExprs, error) {
-	exprs := ColExprs{}
-	if strings.ContainsRune(s, '\n') {
-		return exprs, &syntax.FormattingError{"object expression has newline"}
+func newColExprs(cnf *Config, s string, dtaps map[string]struct{}, userGroups map[string]struct{}, dtapRenderings map[string]syntax.Rendering, userGroupRenderings map[string]syntax.Rendering) (ColExprs, error) {
+	if len(userGroups) == 0 {
+		return newColExprsWithoutUserGroups(cnf, s, dtaps, dtapRenderings)
 	}
-	dtapExpanded := map[string]ColExprAttr{}
-	if strings.Contains(s, cnf.DTAPTemplate) {
-		// If object exists only in, say, a dev env, that's okay. Cause it's okay if the production rendition of the object does not match any existing objects.
-		// What counts is that if they would exist, then they would be matched.
-		if len(dtaps) == 0 {
-			return exprs, &SetLogicError{fmt.Sprintf("expanding dtaps in '%s': no dtaps found", s)}
-		}
-		for d, renderedDTAP := range dtaps {
-			dtapExpanded[strings.ReplaceAll(s, cnf.DTAPTemplate, renderedDTAP)] = ColExprAttr{DTAP: d}
-		}
-	} else {
-		// In a column matcher expression it is okay to omit a DTAP expansion, the column expressions are evaluated per DTAP,
-		// for overlap with the object expressions. So, the column expression is just associated with all DTAPs
-		dtapExpanded[s] = ColExprAttr{}
-	}
-	userGroupExpanded := map[string]ColExprAttr{}
-	for k, v := range dtapExpanded {
-		if strings.Contains(k, cnf.UserGroupTemplate) {
-			// If object only actually exists for, say, one particular user group, that's okay.
-			// Cause it's okay if the rendition of the object for other user groups does not match any existing objects.
-			// What counts is that if they would exist, then they would be matched.
-			if len(userGroups) == 0 {
-				return exprs, fmt.Errorf("expanding user groups in '%s': no user groups found", k)
-			}
-			for u, renderedUserGroup := range userGroups {
-				userGroupExpanded[strings.ReplaceAll(k, cnf.UserGroupTemplate, renderedUserGroup)] =
-					ColExprAttr{DTAP: v.DTAP, UserGroup: u}
-			}
-		} else {
-			// Objects matched by expression are shared between user groups
-			userGroupExpanded[k] = ColExprAttr{DTAP: v.DTAP}
-		}
-	}
-	for k, v := range userGroupExpanded {
-		expr, err := newColExpr(k, cnf.ValidQuotedExpr, cnf.ValidUnquotedExpr)
+	return newColExprsWithUserGroups(cnf, s, dtaps, userGroups, dtapRenderings, userGroupRenderings)
+}
+
+func newColExprsWithoutUserGroups(cnf *Config, s string, dtaps map[string]struct{}, dtapRenderings map[string]syntax.Rendering) (ColExprs, error) {
+	exprs := objExprs{}
+	for dtap := range dtaps {
+		data := TmplData{DTAP: dtap, DTAPs: dtapRenderings}
+		tmpl, err := template.New("expr").Parse(s)
 		if err != nil {
 			return exprs, err
 		}
-		exprs[expr] = v
+		var res strings.Builder
+		if err = tmpl.Execute(res, data); err != nil {
+			return exprs, err
+		}
+		expr, err := newColExpr(res, cnf.ValidQuotedExpr, cnf.ValidUnquotedExpr)
+		if err != nil {
+			return exprs, err
+		}
+		exprs[expr] = ColExprAttr{DTAP: dtap}
+	}
+	if len(exprs) != len(dtaps) {
+		if len(exprs) != 1 {
+			return exprs, &syntax.FormattingError{fmt.Sprintf("'%s': number of unique ColExpr objects does not equal number of dtaps and is not one", s)}
+		}
+		for expr, v := range exprs {
+			exprs[expr] = ColExprAttr{DTAP: ""}
+		}
+		// it is fine to not expand dtaps at all in a col expr, it is checked per dtap if they have overlap with object expressions
+	}
+	return exprs, nil
+}
+
+func newColExprsWithUserGroups(cnf *Config, s string, dtaps map[string]struct{}, userGroups map[string]struct{}, dtapRenderings map[string]syntax.Rendering, userGroupRenderings map[string]syntax.Rendering) (ColExprs, error) {
+	exprs := ColExprs{}
+	expected := 0
+	for dtap := range dtaps {
+		dtapExprs := ColExprs{}
+		for ug := range userGroups {
+			data := TmplDataUG{DTAP: dtap, DTAPs: dtapRenderings, UG: ug, UGs: userGroupRenderings}
+			tmpl, err := template.New("expr").Parse(s)
+			if err != nil {
+				return exprs, err
+			}
+			var res strings.Builder
+			if err = tmpl.Execute(res, data); err != nil {
+				return exprs, err
+			}
+			expr, err := newColExpr(res, cnf.ValidQuotedExpr, cnf.ValidUnquotedExpr)
+			dtapExprs[expr] = ColExprAttr{DTAP: dtap, UserGroup: ug}
+		}
+		if len(dtapExprs) != len(userGroups) {
+			if len(dtapExprs) != 1 {
+				return exprs, &syntax.FormattingError{fmt.Sprintf("'%s': number of unique ColExpr objects does not equal number of usergroups and is not one", s)}
+			}
+			expected += 1
+			for expr, v := range dtapExprs {
+				// Objects matched by this expression are shared between usergroup(s) in interface
+				exprs[expr] = ColExprAttr{DTAP: v.DTAP, UserGroup: ""} 
+			}
+		} else {
+			expected += len(userGroups)
+			for expr, v := range dtapExprs {
+				exprs[expr] = v
+			}
+		}
+	}
+	if len(exprs) != expected {
+		// WIP TODO there are four possibilities: regarding presence or absence of both dtap and usergroup rendering
+		return exprs, &syntax.FormattingError{fmt.Sprintf("'%s': unexpected number of unique ColExpr objects", s)}	
 	}
 	return exprs, nil
 }

@@ -10,37 +10,11 @@ import (
 type Product struct {
 	ID                 string
 	DTAPs              DTAPSpec
+	Consumes   map[syntax.InterfaceID]map[string]string
 	UserGroupMappingID string
-	// TODO: allow the user to specify multiple, named user group renderings, like so:
-	//
-	// user_group_renderings:
-        //   - four:
-        //       ug1: abcd
-        //       ug2: abef
-        //   - two:
-        //       ug1: cd
-        //       ug2: ef
-	//
-        // Do the same with DTAP renderings.
-	//
-        // Then, use go templates instead of [dtap] and [usergroup] in the expressions.
-        // Render (execute) the templates with variables dtap and usergroup in scope.
-	// Only after rendering do all the regular expressions checks on whether the expression is correct or not,
-	// as well as all the subsetting logic (that we already do after rendering anyway).
-	// make sure also the user group and dtap renderings are in scope, then folks can use expressions like
-	//
-	// mydb.{{index .UGs four .UG}}_myproject.{{index .uGS two .UG}}_*
-        //
-        // Yes, it's a bit more verbose, but, people do weird things when they name objects, and this does provide
-        // a bit more flexibility.
-	// 
-	// Because go templates are so expressive and powerful, any and all reasoning about correctness of
-	// expressions should be done after rendering.
-	// This will make the syntax package a bit lighter, and that's fine.
-	UserGroupRendering syntax.Rendering
+	UserGroupRenderings map[string]syntax.Rendering
 	InterfaceMetadata
 	UserGroupColumn    ColMatcher
-	Consumes   map[syntax.InterfaceID]map[string]string
 	Interfaces map[string]InterfaceMetadata
 }
 
@@ -49,36 +23,8 @@ func newProduct(cnf *Config, pSyn syntax.Product, classes map[string]syntax.Clas
 	// Initialize
 	pSem := Product{
 		ID:         pSyn.ID,
-		DTAPs:      newDTAPSpec(cnf, pSyn.DTAPs, pSyn.DTAPRendering),
+		DTAPs:      newDTAPSpec(cnf, pSyn.DTAPs, pSyn.DTAPRenderings),
 		Interfaces: map[string]InterfaceMetadata{},
-	}
-
-	// Set UsergroupMappingID
-	if pSyn.UserGroupMappingID != "" {
-		if _, ok := userGroupMappings[pSyn.UserGroupMappingID]; !ok {
-			return pSem, &SetLogicError{fmt.Sprintf("unknown user group mapping id: '%s'", pSyn.UserGroupMappingID)}
-		}
-	}
-	pSem.UserGroupMappingID = pSyn.UserGroupMappingID
-
-	// Set UserGroupRendering
-	for k := range pSyn.UserGroupRendering {
-		if _, ok := userGroupMappings[pSem.UserGroupMappingID][k]; !ok {
-			return pSem, &SetLogicError{fmt.Sprintf("unknown user group in rendering: '%s'", k)}
-		}
-	}
-	pSem.UserGroupRendering = pSyn.UserGroupRendering
-
-	// Set InterfaceMetadata
-	if im, err := newInterfaceMetadata(cnf, pSyn.InterfaceMetadata, classes, pSem.DTAPs.DTAPRendering, userGroupMappings[pSem.UserGroupMappingID], pSem.UserGroupRendering, nil); err != nil {
-		return pSem, fmt.Errorf("product id %s: interface metadata: %w", pSem.ID, err)
-	} else {
-		pSem.InterfaceMetadata = im
-	}
-
-	// Set UserGroupColumn (this requires InterfaceMetadata its ObjectMatchers to be set)
-	if err := pSem.setUserGroupColumn(cnf, pSyn); err != nil {
-		return pSem, err
 	}
 
 	// Set Consumes
@@ -111,6 +57,37 @@ func newProduct(cnf *Config, pSyn syntax.Product, classes map[string]syntax.Clas
 			}
 		}
 	}
+
+	// Set UsergroupMappingID
+	if pSyn.UserGroupMappingID != "" {
+		if _, ok := userGroupMappings[pSyn.UserGroupMappingID]; !ok {
+			return pSem, &SetLogicError{fmt.Sprintf("unknown user group mapping id: '%s'", pSyn.UserGroupMappingID)}
+		}
+	}
+	pSem.UserGroupMappingID = pSyn.UserGroupMappingID
+
+	// Set UserGroupRenderings
+	for k, r := range pSyn.UserGroupRenderings {
+		for ug := range r {
+			if _, ok := userGroupMappings[pSem.UserGroupMappingID][ug]; !ok {
+				return pSem, &SetLogicError{fmt.Sprintf("user_group_rendering '%s', unknown user group: '%s'", k, ug)}
+			}
+		}
+	}
+	pSem.UserGroupRendering = pSyn.UserGroupRendering
+
+	// Set InterfaceMetadata
+	if im, err := newInterfaceMetadata(cnf, pSyn.InterfaceMetadata, classes, pSem.DTAPs, userGroupMappings[pSem.UserGroupMappingID], pSem.UserGroupRenderings, nil); err != nil {
+		return pSem, fmt.Errorf("product id %s: interface metadata: %w", pSem.ID, err)
+	} else {
+		pSem.InterfaceMetadata = im
+	}
+
+	// Set UserGroupColumn (this requires InterfaceMetadata its ObjectMatchers to be set)
+	if err := pSem.setUserGroupColumn(cnf, pSyn); err != nil {
+		return pSem, err
+	}
+
 	return pSem, nil
 }
 
@@ -147,10 +124,13 @@ func (lhs Product) Equal(rhs Product) bool {
 	if !lhs.DTAPs.Equal(rhs.DTAPs) {
 		return false
 	}
+	if !maps.EqualFunc(lhs.Consumes, rhs.Consumes, maps.Equal) {
+		return false
+	}
 	if lhs.UserGroupMappingID != rhs.UserGroupMappingID {
 		return false
 	}
-	if !lhs.UserGroupRendering.Equal(rhs.UserGroupRendering) {
+	if !maps.EqualFunc(lhs.UserGroupRenderings, rhs.UserGroupRenderings, syntax.Rendering.Equal) {
 		return false
 	}
 	if !lhs.InterfaceMetadata.Equal(rhs.InterfaceMetadata) {
@@ -158,20 +138,6 @@ func (lhs Product) Equal(rhs Product) bool {
 	}
 	if !lhs.UserGroupColumn.Equal(rhs.UserGroupColumn) {
 		return false
-	}
-	for lhsKey, lhsValue := range lhs.Consumes {
-		if rhsValue, ok := rhs.Consumes[lhsKey]; !ok {
-			return false
-		} else {
-			if !maps.Equal(lhsValue, rhsValue) {
-				return false
-			}
-		}
-	}
-	for rhsKey, _ := range rhs.Consumes {
-		if _, ok := lhs.Consumes[rhsKey]; !ok {
-			return false
-		}
 	}
 	if !maps.EqualFunc(lhs.Interfaces, rhs.Interfaces, InterfaceMetadata.Equal) {
 		return false

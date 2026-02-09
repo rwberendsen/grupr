@@ -55,11 +55,11 @@ func NewGrupin(cnf *Config, gSyn syntax.Grupin) (Grupin, error) {
 		if parentProduct, ok := gSem.Products[iid.ProductID]; !ok {
 			return gSem, &SetLogicError{fmt.Sprintf("interface id '%s': product not found", iid)}
 		} else {
-			dtaps := parentProduct.DTAPs.DTAPRendering
+			ds := parentProduct.DTAPs
 			userGroupMapping := gSem.UserGroupMappings[parentProduct.UserGroupMappingID]
-			userGroupRendering := parentProduct.UserGroupRendering
+			userGroupRenderings := parentProduct.UserGroupRenderings
 			parent := parentProduct.InterfaceMetadata
-			if im, err := newInterfaceMetadata(cnf, v.InterfaceMetadata, gSem.Classes, dtaps, userGroupMapping, userGroupRendering, &parent); err != nil {
+			if im, err := newInterfaceMetadata(cnf, v.InterfaceMetadata, gSem.Classes, ds, userGroupMapping, userGroupRenderings, &parent); err != nil {
 				return gSem, fmt.Errorf("interface '%s': %w", iid, err)
 			} else {
 				parentProduct.Interfaces[iid.ID] = im

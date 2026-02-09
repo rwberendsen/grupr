@@ -3,50 +3,80 @@ package semantics
 import (
 	"fmt"
 	"strings"
+	"text/template"
 
 	"github.com/rwberendsen/grupr/internal/syntax"
 )
 
 type objExprs map[ObjExpr]ObjExprAttr
 
-func newObjExprs(cnf *Config, s string, dtaps syntax.Rendering, userGroups syntax.Rendering) (objExprs, error) {
+func newObjExprs(cnf *Config, s string, dtaps map[string]struct{}, userGroups map[string]struct{}, dtapRenderings map[string]syntax.Rendering, userGroupRenderings map[string]syntax.Rendering) (objExprs, error) {
+	if len(userGroups) == 0 {
+		return newObjExprsWithoutUserGroups(cnf, s, dtaps, dtapRenderings)
+	}
+	return newObjExprsWithUserGroups(cnf, s, dtaps, userGroups, dtapRenderings, userGroupRenderings)
+}
+
+func newObjExprsWithoutUserGroups(cnf *Config, s string, dtaps map[string]struct{}, dtapRenderings map[string]syntax.Rendering) (objExprs, error) {
 	exprs := objExprs{}
-	if strings.ContainsRune(s, '\n') {
-		return exprs, fmt.Errorf("object expression has newline")
-	}
-	dtapExpanded := map[string]ObjExprAttr{}
-	if strings.Contains(s, cnf.DTAPTemplate) { // If object exists only in, say, a dev env, that's okay. Cause it's okay if the production rendition of the object does not match any existing objects. What counts is that if they would exist, then they would be matched.
-		if len(dtaps) == 0 {
-			return exprs, fmt.Errorf("expanding dtaps in '%s': no dtap renderings found", s)
-		}
-		for d, renderedDTAP := range dtaps {
-			dtapExpanded[strings.ReplaceAll(s, cnf.DTAPTemplate, renderedDTAP)] = ObjExprAttr{DTAP: d}
-		}
-	} else {
-		if len(dtaps) != 0 {
-			return exprs, fmt.Errorf("The product has dtap renderings, but no DTAP expansion found")
-		}
-		dtapExpanded[s] = ObjExprAttr{}
-	}
-	userGroupExpanded := map[string]ObjExprAttr{}
-	for k, v := range dtapExpanded {
-		if strings.Contains(k, cnf.UserGroupTemplate) { // If object only actually exists for, say, one particular user group, that's okay. Cause it's okay if the rendition of the object for other user groups does not match any existing objects. What counts is that if they would exist, then they would be matched.
-			if len(userGroups) == 0 {
-				return exprs, fmt.Errorf("expanding user groups in '%s': no user groups found", k)
-			}
-			for u, renderedUserGroup := range userGroups {
-				userGroupExpanded[strings.ReplaceAll(k, cnf.UserGroupTemplate, renderedUserGroup)] = ObjExprAttr{DTAP: v.DTAP, UserGroup: u}
-			}
-		} else {
-			userGroupExpanded[k] = ObjExprAttr{DTAP: v.DTAP} // Objects matched by expression are considered shared between user groups
-		}
-	}
-	for k, v := range userGroupExpanded {
-		expr, err := newObjExpr(k, cnf.ValidQuotedExpr, cnf.ValidUnquotedExpr)
+	for dtap := range dtaps {
+		data := TmplData{DTAP: dtap, DTAPs: dtapRenderings}
+		tmpl, err := template.New("expr").Parse(s)
 		if err != nil {
 			return exprs, err
 		}
-		exprs[expr] = v
+		var res strings.Builder
+		if err = tmpl.Execute(res, data); err != nil {
+			return exprs, err
+		}
+		expr, err := newObjExpr(res, cnf.ValidQuotedExpr, cnf.ValidUnquotedExpr)
+		if err != nil {
+			return exprs, err
+		}
+		exprs[expr] = ObjExprAttr{DTAP: dtap}
+	}
+	if len(exprs) != len(dtaps) {
+		return exprs, &syntax.FormattingError{fmt.Sprintf("'%s': number of unique ObjExpr objects does not equal number of dtaps", s)}	
+	}
+	return exprs, nil
+}
+
+func newObjExprsWithUserGroups(cnf *Config, s string, dtaps map[string]struct{}, userGroups map[string]struct{}, dtapRenderings map[string]syntax.Rendering, userGroupRenderings map[string]syntax.Rendering) (objExprs, error) {
+	exprs := objExprs{}
+	expected := 0
+	for dtap := range dtaps {
+		dtapExprs := objExprs{}
+		for ug := range userGroups {
+			data := TmplDataUG{DTAP: dtap, DTAPs: dtapRenderings, UG: ug, UGs: userGroupRenderings}
+			tmpl, err := template.New("expr").Parse(s)
+			if err != nil {
+				return exprs, err
+			}
+			var res strings.Builder
+			if err = tmpl.Execute(res, data); err != nil {
+				return exprs, err
+			}
+			expr, err := newObjExpr(res, cnf.ValidQuotedExpr, cnf.ValidUnquotedExpr)
+			dtapExprs[expr] = ObjExprAttr{DTAP: dtap, UserGroup: ug}
+		}
+		if len(dtapExprs) != len(userGroups) {
+			if len(dtapExprs) != 1 {
+				return exprs, &syntax.FormattingError{fmt.Sprintf("'%s': number of unique ObjExpr objects does not equal number of usergroups and is not one", s)}
+			}
+			expected += 1
+			for expr, v := range dtapExprs {
+				// Objects matched by this expression are shared between usergroup(s) in interface
+				exprs[expr] = ObjExprAttr{DTAP: v.DTAP, UserGroup: ""} 
+			}
+		} else {
+			expected += len(userGroups)
+			for expr, v := range dtapExprs {
+				exprs[expr] = v
+			}
+		}
+	}
+	if len(exprs) != expected {
+		return exprs, &syntax.FormattingError{fmt.Sprintf("'%s': unexpected number of unique ObjExpr objects", s)}	
 	}
 	return exprs, nil
 }
