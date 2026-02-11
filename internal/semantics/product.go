@@ -23,9 +23,15 @@ func newProduct(cnf *Config, pSyn syntax.Product, classes map[string]syntax.Clas
 	// Initialize
 	pSem := Product{
 		ID:         pSyn.ID,
-		DTAPs:      newDTAPSpec(cnf, pSyn.DTAPs, pSyn.DTAPRenderings),
 		Interfaces: map[string]InterfaceMetadata{},
 	}
+
+	// Set DTAPs
+	ds, err := newDTAPSpec(cnf, pSyn.DTAPs, pSyn.DTAPRenderings)
+	if err != nil {
+		return pSem, err
+	}
+	pSem.DTAPs = ds
 
 	// Set Consumes
 	pSem.Consumes = map[syntax.InterfaceID]map[string]string{}
@@ -74,7 +80,7 @@ func newProduct(cnf *Config, pSyn syntax.Product, classes map[string]syntax.Clas
 			}
 		}
 	}
-	pSem.UserGroupRendering = pSyn.UserGroupRendering
+	pSem.UserGroupRenderings = pSyn.UserGroupRenderings
 
 	// Set InterfaceMetadata
 	if im, err := newInterfaceMetadata(cnf, pSyn.InterfaceMetadata, classes, pSem.DTAPs, userGroupMappings[pSem.UserGroupMappingID], pSem.UserGroupRenderings, nil); err != nil {
@@ -95,7 +101,7 @@ func (pSem *Product) setUserGroupColumn(cnf *Config, pSyn syntax.Product) error 
 	if pSyn.UserGroupColumn == "" {
 		return nil
 	}
-	if m, err := newColMatcher(cnf, []string{pSyn.UserGroupColumn}, pSem.DTAPs.DTAPRendering, pSem.UserGroups, pSem.ObjectMatchers); err != nil {
+	if m, err := newColMatcher(cnf, []string{pSyn.UserGroupColumn}, pSem.DTAPs, pSem.UserGroups, pSem.UserGroupRenderings, pSem.ObjectMatchers); err != nil {
 		return fmt.Errorf("user_group_column: %w", err)
 	} else {
 		pSem.UserGroupColumn = m

@@ -9,10 +9,11 @@ type ColMatcher struct {
 	ColExprs ColExprs
 }
 
-func newColMatcher(cnf *Config, l []string, dtaps syntax.Rendering, userGroups syntax.Rendering, objectMatchers ObjMatchers) (ColMatcher, error) {
+func newColMatcher(cnf *Config, l []string, ds DTAPSpec, userGroups map[string]struct{}, userGroupRenderings map[string]syntax.Rendering,
+	objectMatchers ObjMatchers) (ColMatcher, error) {
 	m := ColMatcher{ColExprs{}}
 	for _, expr := range l {
-		exprs, err := newColExprs(cnf, expr, dtaps, userGroups)
+		exprs, err := newColExprs(cnf, expr, ds, userGroups, userGroupRenderings)
 		if err != nil {
 			return m, err
 		}
@@ -29,7 +30,7 @@ func newColMatcher(cnf *Config, l []string, dtaps syntax.Rendering, userGroups s
 	for e, ea := range m.ColExprs {
 		dtapsToCheck := map[string]bool{}
 		if ea.DTAP == "" {
-			for dtap := range dtaps {
+			for dtap, _ := range ds.All() {
 				dtapsToCheck[dtap] = true
 			}
 		} else {

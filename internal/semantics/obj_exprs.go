@@ -2,81 +2,74 @@ package semantics
 
 import (
 	"fmt"
-	"strings"
-	"text/template"
 
 	"github.com/rwberendsen/grupr/internal/syntax"
+	"github.com/rwberendsen/grupr/internal/util"
 )
 
 type objExprs map[ObjExpr]ObjExprAttr
 
-func newObjExprs(cnf *Config, s string, dtaps map[string]struct{}, userGroups map[string]struct{}, dtapRenderings map[string]syntax.Rendering, userGroupRenderings map[string]syntax.Rendering) (objExprs, error) {
+func newObjExprs(cnf *Config, s string, ds DTAPSpec, userGroups map[string]struct{}, userGroupRenderings map[string]syntax.Rendering) (objExprs, error) {
 	if len(userGroups) == 0 {
-		return newObjExprsWithoutUserGroups(cnf, s, dtaps, dtapRenderings)
+		return newObjExprsWithoutUserGroups(cnf, s, ds)
 	}
-	return newObjExprsWithUserGroups(cnf, s, dtaps, userGroups, dtapRenderings, userGroupRenderings)
+	return newObjExprsWithUserGroups(cnf, s, ds, userGroups, userGroupRenderings)
 }
 
-func newObjExprsWithoutUserGroups(cnf *Config, s string, dtaps map[string]struct{}, dtapRenderings map[string]syntax.Rendering) (objExprs, error) {
+func newObjExprsWithoutUserGroups(cnf *Config, s string, ds DTAPSpec) (objExprs, error) {
 	exprs := objExprs{}
-	for dtap := range dtaps {
-		data := TmplData{DTAP: dtap, DTAPs: dtapRenderings}
-		tmpl, err := template.New("expr").Parse(s)
-		if err != nil {
-			return exprs, err
-		}
-		var res strings.Builder
-		if err = tmpl.Execute(res, data); err != nil {
-			return exprs, err
-		}
-		expr, err := newObjExpr(res, cnf.ValidQuotedExpr, cnf.ValidUnquotedExpr)
-		if err != nil {
-			return exprs, err
-		}
-		exprs[expr] = ObjExprAttr{DTAP: dtap}
+	renderings, err := renderTmplDataDTAP(s, util.Seq2First(ds.All()), ds.DTAPRenderings)
+	if err != nil {
+		return exprs, err
 	}
-	if len(exprs) != len(dtaps) {
-		return exprs, &syntax.FormattingError{fmt.Sprintf("'%s': number of unique ObjExpr objects does not equal number of dtaps", s)}	
+	for r, m := range renderings {
+		if len(m) > 1 {
+			return exprs, &syntax.FormattingError{fmt.Sprintf("'%s': multiple associated dtaps")}
+		}
+		expr, err := newObjExpr(r, cnf.ValidQuotedExpr, cnf.ValidUnquotedExpr)
+		if err != nil {
+			return exprs, err
+		}
+		for ea := range m {
+			exprs[expr] = ea
+		}
 	}
 	return exprs, nil
 }
 
-func newObjExprsWithUserGroups(cnf *Config, s string, dtaps map[string]struct{}, userGroups map[string]struct{}, dtapRenderings map[string]syntax.Rendering, userGroupRenderings map[string]syntax.Rendering) (objExprs, error) {
+func newObjExprsWithUserGroups(cnf *Config, s string, ds DTAPSpec, userGroups map[string]struct{},
+	userGroupRenderings map[string]syntax.Rendering) (objExprs, error) {
 	exprs := objExprs{}
-	expected := 0
-	for dtap := range dtaps {
-		dtapExprs := objExprs{}
-		for ug := range userGroups {
-			data := TmplDataUG{DTAP: dtap, DTAPs: dtapRenderings, UG: ug, UGs: userGroupRenderings}
-			tmpl, err := template.New("expr").Parse(s)
-			if err != nil {
-				return exprs, err
-			}
-			var res strings.Builder
-			if err = tmpl.Execute(res, data); err != nil {
-				return exprs, err
-			}
-			expr, err := newObjExpr(res, cnf.ValidQuotedExpr, cnf.ValidUnquotedExpr)
-			dtapExprs[expr] = ObjExprAttr{DTAP: dtap, UserGroup: ug}
-		}
-		if len(dtapExprs) != len(userGroups) {
-			if len(dtapExprs) != 1 {
-				return exprs, &syntax.FormattingError{fmt.Sprintf("'%s': number of unique ObjExpr objects does not equal number of usergroups and is not one", s)}
-			}
-			expected += 1
-			for expr, v := range dtapExprs {
-				// Objects matched by this expression are shared between usergroup(s) in interface
-				exprs[expr] = ObjExprAttr{DTAP: v.DTAP, UserGroup: ""} 
-			}
-		} else {
-			expected += len(userGroups)
-			for expr, v := range dtapExprs {
-				exprs[expr] = v
-			}
-		}
+	renderings, err := renderTmplDataDTAPUG(s, util.Seq2First(ds.All()), ds.DTAPRenderings, userGroups, userGroupRenderings)
+	if err != nil {
+		return exprs, err
 	}
-	if len(exprs) != expected {
-		return exprs, &syntax.FormattingError{fmt.Sprintf("'%s': unexpected number of unique ObjExpr objects", s)}	
+	for r, m := range renderings {
+		var dtap string
+		if nDTAPsObjExprAttr(m) > 1 {
+			return exprs, &syntax.FormattingError{fmt.Sprintf("'%s': multiple associated dtaps")}
+		}
+		for ea := range m {
+			dtap = ea.DTAP
+		}
+
+		var ug string
+		switch nUGsObjExprAttr(m) {
+		case 1: 
+			for ea := range m {
+				ug = ea.UserGroup
+			}
+		case len(userGroups): 
+			ug = "" // template did not expand user group, object is shared between usergroups
+		default:
+			return exprs, &syntax.FormattingError{fmt.Sprintf("'%s': multiple but not all usergroups associated")}
+		}
+
+		expr, err := newObjExpr(r, cnf.ValidQuotedExpr, cnf.ValidUnquotedExpr)
+		if err != nil {
+			return exprs, err
+		}
+		exprs[expr] = ObjExprAttr{DTAP: dtap, UserGroup: ug}
 	}
 	return exprs, nil
 }

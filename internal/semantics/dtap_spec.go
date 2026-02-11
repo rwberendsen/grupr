@@ -1,6 +1,7 @@
 package semantics
 
 import (
+	"fmt"
 	"iter"
 	"maps"
 
@@ -18,7 +19,7 @@ func newDTAPSpec(cnf *Config, dsSyn *syntax.DTAPSpec, dtapRenderings map[string]
 	var dsSem DTAPSpec
 	if dsSyn == nil {
 		// Not specifying any DTAP info means you will get a default DTAP spec, which has only a production DTAP
-		dsSem.Prod = &cnf.DefaultProdDTAPName,
+		dsSem.Prod = &cnf.DefaultProdDTAPName
 	} else {
 		dsSem.Prod = dsSyn.Prod
 		if dsSyn.Prod != nil {
@@ -57,6 +58,14 @@ func (spec DTAPSpec) HasDTAP(dtap string) bool {
 
 func (spec DTAPSpec) IsProd(dtap string) bool {
 	return spec.Prod != nil && dtap == *spec.Prod
+}
+
+func (spec DTAPSpec) Count() int {
+	c := 0
+	if spec.Prod != nil {
+		c++
+	}
+	return c + len(spec.NonProd)
 }
 
 func (spec DTAPSpec) All() iter.Seq2[string, bool] {

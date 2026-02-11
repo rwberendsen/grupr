@@ -3,7 +3,6 @@ package syntax
 import (
 	"fmt"
 	"maps"
-	"regexp"
 )
 
 type Rendering map[string]string
@@ -20,7 +19,7 @@ func (r Rendering) validate() error {
 		if _, ok := r[v]; ok && k != v {
 			return &FormattingError{fmt.Sprintf("key '%s': rendering '%s' equals another key", k, v)}
 		}
-		inverse[v] = true
+		inverse[v] = struct{}{}
 	}
 	return nil
 }

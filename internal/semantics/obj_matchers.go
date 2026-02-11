@@ -9,11 +9,12 @@ import (
 
 type ObjMatchers map[ObjExpr]ObjMatcher
 
-func newObjMatchers(cnf *Config, include []string, exclude []string, dtaps syntax.Rendering, userGroups syntax.Rendering) (ObjMatchers, error) {
+func newObjMatchers(cnf *Config, include []string, exclude []string, ds DTAPSpec, userGroups map[string]struct{},
+	userGroupRenderings map[string]syntax.Rendering) (ObjMatchers, error) {
 	oms := ObjMatchers{}
 	// Create ObjMatcher objects for each include expression
 	for _, expr := range include {
-		objExprs, err := newObjExprs(cnf, expr, dtaps, userGroups)
+		objExprs, err := newObjExprs(cnf, expr, ds, userGroups, userGroupRenderings)
 		if err != nil {
 			return oms, fmt.Errorf("parsing obj expr: %s", err)
 		}
@@ -31,7 +32,7 @@ func newObjMatchers(cnf *Config, include []string, exclude []string, dtaps synta
 	}
 	// For each rendered exclude expression, assign it to the correct rendered include expression
 	for _, expr := range exclude {
-		objExprs, err := newObjExprs(cnf, expr, dtaps, userGroups)
+		objExprs, err := newObjExprs(cnf, expr, ds, userGroups, userGroupRenderings)
 		if err != nil {
 			return oms, fmt.Errorf("parsing obj expr: %s", err)
 		}
