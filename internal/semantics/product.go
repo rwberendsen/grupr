@@ -102,7 +102,7 @@ func (pSem *Product) setUserGroupColumn(cnf *Config, pSyn syntax.Product) error 
 		return nil
 	}
 	if m, err := newColMatcher(cnf, []string{pSyn.UserGroupColumn}, pSem.DTAPs, pSem.UserGroups, pSem.UserGroupRenderings, pSem.ObjectMatchers); err != nil {
-		return fmt.Errorf("user_group_column: %w", err)
+		return fmt.Errorf("product: '%s': user_group_column: %w", pSem.ID, err)
 	} else {
 		pSem.UserGroupColumn = m
 	}

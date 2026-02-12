@@ -24,7 +24,7 @@ func newObjExprsWithoutUserGroups(cnf *Config, s string, ds DTAPSpec) (objExprs,
 	}
 	for r, m := range renderings {
 		if len(m) > 1 {
-			return exprs, &syntax.FormattingError{fmt.Sprintf("'%s': multiple associated dtaps")}
+			return exprs, &syntax.FormattingError{fmt.Sprintf("'%s': multiple associated dtaps", s)}
 		}
 		expr, err := newObjExpr(r, cnf.ValidQuotedExpr, cnf.ValidUnquotedExpr)
 		if err != nil {
@@ -47,7 +47,7 @@ func newObjExprsWithUserGroups(cnf *Config, s string, ds DTAPSpec, userGroups ma
 	for r, m := range renderings {
 		var dtap string
 		if nDTAPsObjExprAttr(m) > 1 {
-			return exprs, &syntax.FormattingError{fmt.Sprintf("'%s': multiple associated dtaps")}
+			return exprs, &syntax.FormattingError{fmt.Sprintf("'%s': multiple associated dtaps", s)}
 		}
 		for ea := range m {
 			dtap = ea.DTAP
@@ -62,7 +62,7 @@ func newObjExprsWithUserGroups(cnf *Config, s string, ds DTAPSpec, userGroups ma
 		case len(userGroups): 
 			ug = "" // template did not expand user group, object is shared between usergroups
 		default:
-			return exprs, &syntax.FormattingError{fmt.Sprintf("'%s': multiple but not all usergroups associated")}
+			return exprs, &syntax.FormattingError{fmt.Sprintf("'%s': multiple but not all usergroups associated", s)}
 		}
 
 		expr, err := newObjExpr(r, cnf.ValidQuotedExpr, cnf.ValidUnquotedExpr)

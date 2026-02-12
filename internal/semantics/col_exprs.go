@@ -33,7 +33,7 @@ func newColExprsWithoutUserGroups(cnf *Config, s string, ds DTAPSpec) (ColExprs,
 		case ds.Count():
 			dtap = "" // template did not expand dtap, col expr not associated with any particular DTAP
 		default:
-			return exprs, &syntax.FormattingError{fmt.Sprintf("'%s': multiple associated dtaps, but not all")}
+			return exprs, &syntax.FormattingError{fmt.Sprintf("'%s': multiple associated dtaps, but not all", s)}
 		}
 	
 		expr, err := newColExpr(r, cnf.ValidQuotedExpr, cnf.ValidUnquotedExpr)
@@ -63,7 +63,7 @@ func newColExprsWithUserGroups(cnf *Config, s string, ds DTAPSpec, userGroups ma
 		case ds.Count():
 			dtap = "" // template did not expand dtap, col expr not associated with any particular DTAP
 		default:
-			return exprs, &syntax.FormattingError{fmt.Sprintf("'%s': multiple associated dtaps, but not all")}
+			return exprs, &syntax.FormattingError{fmt.Sprintf("'%s': multiple associated dtaps, but not all", s)}
 		}
 
 		var ug string
@@ -76,7 +76,7 @@ func newColExprsWithUserGroups(cnf *Config, s string, ds DTAPSpec, userGroups ma
 		case len(userGroups): 
 			ug = "" // template did not expand usergroup, object is shared between usergroups; or, col expr overlaps with multiple obj exprs from different usergroups, this is allowed
 		default:
-			return exprs, &syntax.FormattingError{fmt.Sprintf("'%s': multiple but not all usergroups associated")}
+			return exprs, &syntax.FormattingError{fmt.Sprintf("'%s': multiple but not all usergroups associated, have %d", s, nUGsObjExprAttr(m))}
 		}
 
 		expr, err := newColExpr(r, cnf.ValidQuotedExpr, cnf.ValidUnquotedExpr)

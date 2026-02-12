@@ -14,9 +14,9 @@ func nDTAPsObjExprAttr(m map[ObjExprAttr]struct{}) int {
 }
 
 func nUGsObjExprAttr(m map[ObjExprAttr]struct{}) int {
-	dtaps := map[string]struct{}{}
+	ugs := map[string]struct{}{}
 	for ea := range m {
-		dtaps[ea.DTAP] = struct{}{}
+		ugs[ea.UserGroup] = struct{}{}
 	}
-	return len(dtaps)
+	return len(ugs)
 }
