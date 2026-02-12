@@ -24,7 +24,7 @@ func (p *Product) validate(cnf *Config) error {
 			return fmt.Errorf("product id: %s, DTAPs: %w", p.ID, err)
 	}
 	for _, cs := range p.Consumes {
-		if err := cs.validate(cnf); err != nil {
+		if err := cs.validate(cnf, *p.DTAPs); err != nil {
 			return err
 		}
 	}

@@ -98,10 +98,6 @@ func (g Grupin) allConsumedOk() error {
 					fmt.Sprintf("product '%s': consumed interface '%s': interface not found", p.ID, iid),
 				}
 			}
-			// TODO: think: this policy is also checked when creating the product semantic object, perhaps remove check in one of these places.
-			if iid.ProductID == p.ID {
-				return &PolicyError{fmt.Sprintf("product '%s' not allowed to consume own interface '%s'", iid.ProductID, iid.ID)}
-			}
 			if p.Classification < iSource.Classification {
 				// TODO: consider removing this policy rule, possibly too strict
 				// It might be useful to keep it, if e.g., you are using masking or hashing directives in the YAML,
@@ -115,7 +111,7 @@ func (g Grupin) allConsumedOk() error {
 			}
 
 			// Check DTAP mapping
-			// TODO: add hide_dtaps to interface metadata, and union product level and interface level, and check here that hidden dtaps are not consumed.
+			// TODO: add hide_dtaps to interface metadata, union product level and interface level, and check here that hidden dtaps are not consumed.
 			for dtapSelf, dtapSource := range dtapMapping {
 				if !pSource.DTAPs.HasDTAP(dtapSource) {
 					return &SetLogicError{fmt.Sprintf("product '%s': consumed interface '%s': dtap '%s': dtap not found", p.ID, iid, dtapSource)}
