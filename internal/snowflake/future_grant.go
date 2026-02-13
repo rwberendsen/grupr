@@ -43,7 +43,7 @@ func (g FutureGrant) buildSQLGrant(revoke bool) string {
 		panic("Not implemented")
 	}
 
-	privilegeClause := strings.Join(util.FmtSliceElements[PrivilegeComplete](g.Privileges), `, `)
+	privilegeClause := strings.Join(util.FmtSliceElements[PrivilegeComplete](g.Privileges...), `, `)
 
 	onClause := `ON FUTURE `
 	inClause := `IN `
@@ -156,7 +156,7 @@ func buildSQLQueryFutureGrants(db string, role string, match map[GrantTemplate]s
 
 	query := fmt.Sprintf(`SHOW FUTURE GRANTS TO %sROLE IDENTIFIER('%s')
 ->> SELECT
-  , CASE
+    CASE
     WHEN STARTSWITH("privilege", 'CREATE ') THEN 'CREATE'
     ELSE "privilege"
     END AS privilege
@@ -187,7 +187,6 @@ func queryFutureGrantsToRole(ctx context.Context, conn *sql.DB, db string, role 
 	query := buildSQLQueryFutureGrants(db, role, match, notMatch, limit)
 	return func(yield func(FutureGrant, error) bool) {
 		rows, err := conn.QueryContext(ctx, query)
-		defer rows.Close()
 		if err != nil {
 			if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
 				err = ErrObjectNotExistOrAuthorized
@@ -195,6 +194,7 @@ func queryFutureGrantsToRole(ctx context.Context, conn *sql.DB, db string, role 
 			yield(FutureGrant{}, err)
 			return
 		}
+		defer rows.Close()
 		for rows.Next() {
 			var privilege string
 			var createObjectType string

@@ -23,13 +23,13 @@ func QueryObjs(ctx context.Context, conn *sql.DB, db string, schema string) iter
 		var fromClause string
 		limit := 10000
 		for mayHaveMore {
-			rows, err := conn.QueryContext(ctx, fmt.Sprintf(`SHOW OBJECTS IN SCHEMA IDENTIFIER(?) LIMIT %d%s ->>
+			rows, err := conn.QueryContext(ctx, fmt.Sprintf(`SHOW OBJECTS IN SCHEMA IDENTIFIER('%s') LIMIT %d%s ->>
 SELECT
     NULL AS n
   , "name" AS name
   , "kind" As kind
   , "owner" AS owner
-FROM S1 WHERE kind in (?, ?)
+FROM $1 WHERE kind in ('%s', '%s')
 UNION ALL
 SELECT
     COUNT(*)
@@ -37,7 +37,7 @@ SELECT
   , '' AS kind
   , '' AS owner
 FROM $1
-`, limit, fromClause), quoteIdentifier(db)+"."+quoteIdentifier(schema), ObjTpTable.String(), ObjTpView.String())
+`, quoteIdentifier(db)+"."+quoteIdentifier(schema), limit, fromClause, ObjTpTable.String(), ObjTpView.String()))
 			if err != nil {
 				if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
 					err = ErrObjectNotExistOrAuthorized
@@ -45,6 +45,7 @@ FROM $1
 				yield(Obj{}, err)
 				return
 			}
+			defer rows.Close()
 			var lastName string
 			for rows.Next() {
 				var n *int
@@ -75,7 +76,6 @@ FROM $1
 				yield(Obj{}, err)
 				return
 			}
-			rows.Close()
 		}
 	}
 }

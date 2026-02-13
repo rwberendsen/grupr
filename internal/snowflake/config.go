@@ -34,6 +34,7 @@ type Config struct {
 func GetConfig(semCnf *semantics.Config) (*Config, error) {
 	cnf := &Config{
 		UseSQLOpen:              false,
+		ObjectPrefix:            strings.ToUpper("_x_"),
 		MaxOpenConns:            0, // unlimited
 		MaxIdleConns:            3, // MaxProductDTAPThreads - 1 (sometimes we use only one conn before quickly fanning out again)
 		MaxProductDTAPThreads:   4,

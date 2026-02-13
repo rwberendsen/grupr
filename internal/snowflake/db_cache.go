@@ -14,7 +14,7 @@ import (
 )
 
 type dbCache struct {
-	mu           *sync.RWMutex // guards schemas, schemaExists, and version
+	mu           sync.RWMutex // guards schemas, schemaExists, and version
 	version      int
 	schemas      map[string]*schemaCache // nil: never requested; empty: none found
 	schemaExists map[string]bool
@@ -97,13 +97,14 @@ func querySchemas(ctx context.Context, conn *sql.DB, dbName string) (map[string]
 	start := time.Now()
 	log.Printf("Querying Snowflake for schema  names in DB: %s ...\n", dbName)
 	// TODO: when there are more than 10K results, paginate
-	rows, err := conn.QueryContext(ctx, `SHOW TERSE SCHEMAS IN DATABASE IDENTIFIER(?) ->> SELECT "name" FROM S1`, quoteIdentifier(dbName))
+	rows, err := conn.QueryContext(ctx, fmt.Sprintf(`SHOW TERSE SCHEMAS IN DATABASE IDENTIFIER('%s') ->> SELECT "name" FROM $1`, quoteIdentifier(dbName)))
 	if err != nil {
 		if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
 			return nil, ErrObjectNotExistOrAuthorized
 		}
 		return nil, fmt.Errorf("querySchemas error: %w", err)
 	}
+	defer rows.Close()
 	for rows.Next() {
 		var schemaName string
 		if err = rows.Scan(&schemaName); err != nil {

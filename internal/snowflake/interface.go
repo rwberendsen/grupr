@@ -88,12 +88,12 @@ func (i *Interface) aggregate() {
 func (i *Interface) setCountsByUserGroup() {
 	i.objectCountsByUserGroup = map[string]map[ObjType]int{}
 	for e, om := range i.ObjectMatchers {
-		if i.objectCountsByUserGroup[om.UserGroup] == nil {
-			i.objectCountsByUserGroup[om.UserGroup] = map[ObjType]int{}
-		}
 		var globalUserGroup string
 		if om.UserGroup != "" {
 			globalUserGroup = i.UserGroupMapping[om.UserGroup]
+		}
+		if i.objectCountsByUserGroup[globalUserGroup] == nil {
+			i.objectCountsByUserGroup[globalUserGroup] = map[ObjType]int{}
 		}
 		i.objectCountsByUserGroup[globalUserGroup][ObjTpTable] += i.accountObjects[e].countByObjType(ObjTpTable)
 		i.objectCountsByUserGroup[globalUserGroup][ObjTpView] += i.accountObjects[e].countByObjType(ObjTpView)

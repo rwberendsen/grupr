@@ -3,6 +3,7 @@ package snowflake
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"iter"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
@@ -242,10 +243,11 @@ func (g *Grupin) revoke(ctx context.Context, synCnf *syntax.Config, cnf *Config,
 func (g *Grupin) setProductRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB) error {
 	g.productRoles = map[ProductRole]struct{}{}
 	// TODO: move query to product_role.go, working in similar way like grant.go or obj.go
-	rows, err := conn.QueryContext(ctx, `SHOW TERSE ROLES LIKE ? ->> SELECT "name" FROM $1`, cnf.ObjectPrefix+"%")
+	rows, err := conn.QueryContext(ctx, fmt.Sprintf(`SHOW TERSE ROLES LIKE '%s' ->> SELECT "name" FROM $1`, cnf.ObjectPrefix+"%"))
 	if err != nil {
 		return err
 	}
+	defer rows.Close()
 	for rows.Next() {
 		var roleName string
 		if err = rows.Scan(&roleName); err != nil {

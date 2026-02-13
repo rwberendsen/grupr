@@ -16,7 +16,7 @@ import (
 
 // caching objects in Snowflake locally
 type accountCache struct {
-	mu       *sync.RWMutex // guards dbs, dbExists, and version
+	mu       sync.RWMutex // guards dbs, dbExists, and version
 	version  int
 	dbs      map[string]*dbCache // nil: never requested; empty: none found
 	dbExists map[string]bool
@@ -210,10 +210,11 @@ func queryDBs(ctx context.Context, conn *sql.DB) (map[string]struct{}, error) {
 	log.Printf("Querying Snowflake for database names...\n")
 	// TODO: Develop models (if any) for working with IMPORTED DATABASE, and APPLICATION DATABASE
 	// TODO: When there are more than 10K results, paginate
-	rows, err := conn.QueryContext(ctx, `SHOW TERSE DATABASES IN ACCOUNT ->> SELECT "name" FROM S1 WHERE "kind" = 'STANDARD'`)
+	rows, err := conn.QueryContext(ctx, `SHOW TERSE DATABASES IN ACCOUNT ->> SELECT "name" FROM $1 WHERE "kind" = 'STANDARD'`)
 	if err != nil {
 		return nil, fmt.Errorf("queryDBs error: %w", err)
 	}
+	defer rows.Close()
 	for rows.Next() {
 		var db string
 		if err = rows.Scan(&db); err != nil {

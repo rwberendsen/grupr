@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/rwberendsen/grupr/internal/util"
 	"github.com/snowflakedb/gosnowflake"
 )
 
@@ -45,8 +46,7 @@ func quoteIdentifier(s string) string {
 
 func printSQL(sql string, params ...any) {
 	fmt.Print(sql, "; ")
-	for param := range params {
-		fmt.Print(", ", param)
-	}
+	l := util.FmtSliceElements(params...)
+	fmt.Print(strings.Join(l, ", "))
 	fmt.Print("\n")
 }
