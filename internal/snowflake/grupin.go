@@ -198,12 +198,12 @@ func (g *Grupin) doToDoDBRoleGrants(ctx context.Context, cnf *Config, conn *sql.
 
 func (g *Grupin) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, doProd bool) error {
 	// The bulk of the grants are granting objects to roles, we do it concurrently per product-dtap
-	eg, ctx := errgroup.WithContext(ctx)
+	eg, egCtx := errgroup.WithContext(ctx)
 	eg.SetLimit(cnf.MaxProductDTAPThreads)
 	for _, pd := range g.ProductDTAPs {
 		if doProd == pd.IsProd {
 			eg.Go(func() error {
-				return pd.grant(ctx, synCnf, cnf, conn, g.productRoles, g.createDBRoleGrants, g.accountCache)
+				return pd.grant(egCtx, synCnf, cnf, conn, g.productRoles, g.createDBRoleGrants, g.accountCache)
 			})
 		}
 	}
@@ -217,8 +217,10 @@ func (g *Grupin) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, 
 	// We do not do this concurrently, because this concerns relationships between product dtaps, no need to overcomplicate
 	for _, pd := range g.ProductDTAPs {
 		if doProd == pd.IsProd {
-			if err := g.setDBRoleGrants(ctx, synCnf, cnf, conn, pd); err != nil {
-				return err
+			if !pd.isReadRoleNew {
+				if err := g.setDBRoleGrants(ctx, synCnf, cnf, conn, pd); err != nil {
+					return err
+				}
 			}
 		}
 	}

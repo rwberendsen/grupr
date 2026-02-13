@@ -20,6 +20,7 @@ type ProductDTAP struct {
 	Consumes   map[syntax.InterfaceID]string // value is source dtap
 	ReadRole   ProductRole
 
+	isReadRoleNew         bool
 	refreshCount          int // how many times has this ProductDTAP been refreshed: populated with Snowflake objects
 	matchedAccountObjects map[semantics.ObjExpr]*matchedAccountObjs
 	hasProductRoles       bool
@@ -96,6 +97,7 @@ func (pd *ProductDTAP) recalcObjects() {
 func (pd *ProductDTAP) createProductRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config,
 	conn *sql.DB, productRoles map[ProductRole]struct{}) error {
 	if pd.hasProductRoles {
+		pd.isReadRoleNew = false // in the mean-time, it may have acquired grants, and it is no longer correct to assume it would have none.
 		return nil
 	}
 	pd.ReadRole = newProductRole(synCnf, cnf, pd.ProductID, pd.DTAP, ModeRead)
@@ -103,6 +105,7 @@ func (pd *ProductDTAP) createProductRoles(ctx context.Context, synCnf *syntax.Co
 		if err := pd.ReadRole.Create(ctx, cnf, conn); err != nil {
 			return err
 		}
+		pd.isReadRoleNew = true
 	}
 	pd.hasProductRoles = true
 	return nil
