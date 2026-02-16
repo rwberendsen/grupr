@@ -103,7 +103,7 @@ func (i *Interface) setCountsByUserGroup() {
 func (i *Interface) setAggAccountObjects() {
 	sum := AccountObjs{}
 	for _, o := range i.accountObjects {
-		sum.add(o)
+		sum = sum.add(o)
 	}
 	i.aggAccountObjects = newAggAccountObjs(sum)
 	i.accountObjects = nil // reset, we do not need it anymore, and maps referenced inside this data structure may have been altered while summing
