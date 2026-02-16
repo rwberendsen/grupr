@@ -9,13 +9,13 @@ import (
 )
 
 type TmplDataDTAPUG struct {
-	DTAP	string
-	DTAPs	map[string]syntax.Rendering
-	UG	string
-	UGs	map[string]syntax.Rendering
+	DTAP  string
+	DTAPs map[string]syntax.Rendering
+	UG    string
+	UGs   map[string]syntax.Rendering
 }
 
-func renderTmplDataDTAPUG (s string, dtaps iter.Seq[string], dtapRenderings map[string]syntax.Rendering,
+func renderTmplDataDTAPUG(s string, dtaps iter.Seq[string], dtapRenderings map[string]syntax.Rendering,
 	userGroups map[string]struct{}, userGroupRenderings map[string]syntax.Rendering) (map[string]map[ObjExprAttr]struct{}, error) {
 	r := map[string]map[ObjExprAttr]struct{}{} // K1: rendered template
 	for dtap := range dtaps {
@@ -31,7 +31,7 @@ func renderTmplDataDTAPUG (s string, dtaps iter.Seq[string], dtapRenderings map[
 			}
 			if _, ok := r[b.String()]; !ok {
 				r[b.String()] = map[ObjExprAttr]struct{}{}
-			}	
+			}
 			r[b.String()][ObjExprAttr{DTAP: dtap, UserGroup: ug}] = struct{}{}
 		}
 	}

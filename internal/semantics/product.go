@@ -9,14 +9,14 @@ import (
 )
 
 type Product struct {
-	ID                 string
-	DTAPs              DTAPSpec
-	Consumes   map[syntax.InterfaceID]map[string]string
-	UserGroupMappingID string
+	ID                  string
+	DTAPs               DTAPSpec
+	Consumes            map[syntax.InterfaceID]map[string]string
+	UserGroupMappingID  string
 	UserGroupRenderings map[string]syntax.Rendering
 	InterfaceMetadata
-	UserGroupColumn    ColMatcher
-	Interfaces map[string]InterfaceMetadata
+	UserGroupColumn ColMatcher
+	Interfaces      map[string]InterfaceMetadata
 }
 
 func newProduct(cnf *Config, pSyn syntax.Product, classes map[string]syntax.Class, globalUserGroups map[string]bool,

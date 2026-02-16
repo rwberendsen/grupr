@@ -30,7 +30,7 @@ func (ot ObjType) String() string {
 		ObjTpOther:        "OTHER",
 		ObjTpAccount:      "ACCOUNT",
 		ObjTpDatabase:     "DATABASE",
-		ObjTpDatabaseRole: "DATABASE_ROLE", 
+		ObjTpDatabaseRole: "DATABASE_ROLE",
 		ObjTpRole:         "ROLE",
 		ObjTpSchema:       "SCHEMA",
 		ObjTpTable:        "TABLE",

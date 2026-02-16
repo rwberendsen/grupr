@@ -55,11 +55,11 @@ func newObjExprsWithUserGroups(cnf *Config, s string, ds DTAPSpec, userGroups ma
 
 		var ug string
 		switch nUGsObjExprAttr(m) {
-		case 1: 
+		case 1:
 			for ea := range m {
 				ug = ea.UserGroup
 			}
-		case len(userGroups): 
+		case len(userGroups):
 			ug = "" // template did not expand user group, object is shared between usergroups
 		default:
 			return exprs, &syntax.FormattingError{fmt.Sprintf("'%s': multiple but not all usergroups associated", s)}

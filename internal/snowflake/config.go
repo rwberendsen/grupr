@@ -152,34 +152,34 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 	cnf.DatabaseRolePrivileges[ModeRead] = map[GrantTemplate]struct{}{
 		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvUsage},
-			GrantedOn: ObjTpDatabase,
+			GrantedOn:         ObjTpDatabase,
 		}: {},
 		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvUsage},
-			GrantedOn: ObjTpSchema,
+			GrantedOn:         ObjTpSchema,
 		}: {},
 		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvSelect},
-			GrantedOn: ObjTpTable,
+			GrantedOn:         ObjTpTable,
 		}: {},
 		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvSelect},
-			GrantedOn: ObjTpView,
+			GrantedOn:         ObjTpView,
 		}: {},
 		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvReferences},
-			GrantedOn: ObjTpTable,
+			GrantedOn:         ObjTpTable,
 		}: {},
 		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvReferences},
-			GrantedOn: ObjTpView,
+			GrantedOn:         ObjTpView,
 		}: {},
 	}
 
 	cnf.ProductRolePrivileges = map[Mode]map[GrantTemplate]struct{}{}
 	cnf.ProductRolePrivileges[ModeRead] = map[GrantTemplate]struct{}{
 		GrantTemplate{
-			PrivilegeComplete: PrivilegeComplete{Privilege: PrvUsage},
+			PrivilegeComplete:           PrivilegeComplete{Privilege: PrvUsage},
 			GrantedOn:                   ObjTpDatabaseRole,
 			GrantedRoleStartsWithPrefix: util.NewTrue(),
 		}: {},

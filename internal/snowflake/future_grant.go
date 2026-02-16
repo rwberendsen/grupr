@@ -4,8 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"encoding/csv"
-	"io"
 	"fmt"
+	"io"
 	"iter"
 	"strings"
 

@@ -20,7 +20,7 @@ func newColExprs(cnf *Config, s string, ds DTAPSpec, userGroups map[string]struc
 func newColExprsWithoutUserGroups(cnf *Config, s string, ds DTAPSpec) (ColExprs, error) {
 	exprs := ColExprs{}
 	renderings, err := renderTmplDataDTAP(s, util.Seq2First(ds.All()), ds.DTAPRenderings)
-	if  err != nil {
+	if err != nil {
 		return exprs, err
 	}
 	for r, m := range renderings {
@@ -35,7 +35,7 @@ func newColExprsWithoutUserGroups(cnf *Config, s string, ds DTAPSpec) (ColExprs,
 		default:
 			return exprs, &syntax.FormattingError{fmt.Sprintf("'%s': multiple associated dtaps, but not all", s)}
 		}
-	
+
 		expr, err := newColExpr(r, cnf.ValidQuotedExpr, cnf.ValidUnquotedExpr)
 		if err != nil {
 			return exprs, err
@@ -68,12 +68,12 @@ func newColExprsWithUserGroups(cnf *Config, s string, ds DTAPSpec, userGroups ma
 
 		var ug string
 		switch nUGsObjExprAttr(m) {
-		case 1: 
+		case 1:
 			for ea := range m {
 				ug = ea.UserGroup
 				break
 			}
-		case len(userGroups): 
+		case len(userGroups):
 			ug = "" // template did not expand usergroup, object is shared between usergroups; or, col expr overlaps with multiple obj exprs from different usergroups, this is allowed
 		default:
 			return exprs, &syntax.FormattingError{fmt.Sprintf("'%s': multiple but not all usergroups associated, have %d", s, nUGsObjExprAttr(m))}

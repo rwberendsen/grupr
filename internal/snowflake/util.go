@@ -26,7 +26,7 @@ func runSQL(ctx context.Context, cnf *Config, conn *sql.DB, sql string, params .
 
 func runMultipleSQL(ctx context.Context, cnf *Config, conn *sql.DB, sql string, n int) error {
 	if cnf.DryRun {
-		fmt.Println(sql)
+		printMultipleSQL(sql)
 		return nil
 	}
 	ctx, _ = gosnowflake.WithMultiStatement(ctx, n)
@@ -49,4 +49,10 @@ func printSQL(sql string, params ...any) {
 	l := util.FmtSliceElements(params...)
 	fmt.Print(strings.Join(l, ", "))
 	fmt.Print("\n")
+}
+
+func printMultipleSQL(sql string) {
+	for _, l := range strings.Split(sql, ";") {
+		fmt.Println(l)
+	}
 }

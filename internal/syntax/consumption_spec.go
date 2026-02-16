@@ -5,9 +5,9 @@ import (
 )
 
 type ConsumptionSpec struct {
-	InterfaceID `yaml:",inline"`
-	DTAPMapping map[string]string `yaml:"dtap_mapping,omitempty"`
-	NonConsumingDTAPs []string `yaml:"non_consuming_dtaps,omitempty"`
+	InterfaceID       `yaml:",inline"`
+	DTAPMapping       map[string]string `yaml:"dtap_mapping,omitempty"`
+	NonConsumingDTAPs []string          `yaml:"non_consuming_dtaps,omitempty"`
 }
 
 func (cs ConsumptionSpec) validate(cnf *Config, ds DTAPSpec) error {
@@ -22,8 +22,8 @@ func (cs ConsumptionSpec) validate(cnf *Config, ds DTAPSpec) error {
 			return err
 		}
 	}
-        ncd := map[string]struct{}{}
-        for _, k := range cs.NonConsumingDTAPs {
+	ncd := map[string]struct{}{}
+	for _, k := range cs.NonConsumingDTAPs {
 		if !ds.HasDTAP(k) {
 			return &FormattingError{fmt.Sprintf("dtap_mapping: '%s': unknown dtap", k)}
 		}

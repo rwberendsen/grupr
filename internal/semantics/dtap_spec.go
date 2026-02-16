@@ -10,8 +10,8 @@ import (
 )
 
 type DTAPSpec struct {
-	Prod          *string
-	NonProd       map[string]struct{}
+	Prod           *string
+	NonProd        map[string]struct{}
 	DTAPRenderings map[string]syntax.Rendering
 }
 
@@ -23,7 +23,7 @@ func newDTAPSpec(cnf *Config, dsSyn *syntax.DTAPSpec, dtapRenderings map[string]
 	} else {
 		dsSem.Prod = dsSyn.Prod
 		if dsSyn.Prod != nil {
-			dsSem.Prod = dsSyn.Prod 
+			dsSem.Prod = dsSyn.Prod
 		}
 		dsSem.NonProd = make(map[string]struct{}, len(dsSyn.NonProd))
 		for _, d := range dsSyn.NonProd {
@@ -34,7 +34,7 @@ func newDTAPSpec(cnf *Config, dsSyn *syntax.DTAPSpec, dtapRenderings map[string]
 	for k, r := range dtapRenderings {
 		dsSem.DTAPRenderings[k] = syntax.Rendering{}
 		for dtap := range dsSem.All() {
-			dsSem.DTAPRenderings[k][dtap] = dtap // default value	
+			dsSem.DTAPRenderings[k][dtap] = dtap // default value
 		}
 		for dtap, v := range r {
 			if !dsSem.HasDTAP(dtap) {
@@ -84,7 +84,7 @@ func (spec DTAPSpec) All() iter.Seq2[string, bool] {
 }
 
 func (lhs DTAPSpec) Equal(rhs DTAPSpec) bool {
-	return util.EqualStrPtr(lhs.Prod, rhs.Prod) && 
-	       maps.Equal(lhs.NonProd, rhs.NonProd) &&
-	       maps.EqualFunc(lhs.DTAPRenderings, rhs.DTAPRenderings, syntax.Rendering.Equal)
+	return util.EqualStrPtr(lhs.Prod, rhs.Prod) &&
+		maps.Equal(lhs.NonProd, rhs.NonProd) &&
+		maps.EqualFunc(lhs.DTAPRenderings, rhs.DTAPRenderings, syntax.Rendering.Equal)
 }

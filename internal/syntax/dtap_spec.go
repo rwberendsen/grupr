@@ -10,7 +10,9 @@ type DTAPSpec struct {
 }
 
 func (d *DTAPSpec) validate(cnf *Config) error {
-	if d == nil { return nil }
+	if d == nil {
+		return nil
+	}
 	dtaps := map[string]bool{}
 	if d.Prod != nil {
 		if err := ValidateIDPart(cnf, *d.Prod); err != nil {

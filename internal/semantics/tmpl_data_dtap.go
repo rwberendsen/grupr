@@ -9,11 +9,11 @@ import (
 )
 
 type TmplDataDTAP struct {
-	DTAP	string
-	DTAPs	map[string]syntax.Rendering
+	DTAP  string
+	DTAPs map[string]syntax.Rendering
 }
 
-func renderTmplDataDTAP (s string, dtaps iter.Seq[string], dtapRenderings map[string]syntax.Rendering) (map[string]map[ObjExprAttr]struct{}, error) {
+func renderTmplDataDTAP(s string, dtaps iter.Seq[string], dtapRenderings map[string]syntax.Rendering) (map[string]map[ObjExprAttr]struct{}, error) {
 	r := map[string]map[ObjExprAttr]struct{}{} // K1: rendered template
 	for dtap := range dtaps {
 		data := TmplDataDTAP{DTAP: dtap, DTAPs: dtapRenderings}
@@ -27,7 +27,7 @@ func renderTmplDataDTAP (s string, dtaps iter.Seq[string], dtapRenderings map[st
 		}
 		if _, ok := r[b.String()]; !ok {
 			r[b.String()] = map[ObjExprAttr]struct{}{}
-		}	
+		}
 		r[b.String()][ObjExprAttr{DTAP: dtap}] = struct{}{}
 	}
 	return r, nil

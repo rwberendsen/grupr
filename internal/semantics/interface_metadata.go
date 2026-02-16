@@ -9,13 +9,13 @@ import (
 )
 
 type InterfaceMetadata struct {
-	ObjectMatchers           ObjMatchers
-	Classification           Classification
-	UserGroups               map[string]struct{}
-	MaskColumns              ColMatcher
-	HashColumns              ColMatcher
-	ConsumedBy               map[string]map[ProductDTAPID]struct{} // will be populated by Grupin.allConsumedOK
-	ForProduct               *string
+	ObjectMatchers ObjMatchers
+	Classification Classification
+	UserGroups     map[string]struct{}
+	MaskColumns    ColMatcher
+	HashColumns    ColMatcher
+	ConsumedBy     map[string]map[ProductDTAPID]struct{} // will be populated by Grupin.allConsumedOK
+	ForProduct     *string
 }
 
 func newInterfaceMetadata(cnf *Config, imSyn syntax.InterfaceMetadata, classes map[string]syntax.Class, ds DTAPSpec, userGroupMapping UserGroupMapping,
@@ -172,6 +172,6 @@ func (lhs InterfaceMetadata) Equal(rhs InterfaceMetadata) bool {
 		maps.Equal(lhs.UserGroups, rhs.UserGroups) &&
 		lhs.MaskColumns.Equal(rhs.MaskColumns) &&
 		lhs.HashColumns.Equal(rhs.MaskColumns) &&
-		maps.EqualFunc(lhs.ConsumedBy, rhs.ConsumedBy, func (l map[ProductDTAPID]struct{}, r map[ProductDTAPID]struct{}) bool { return maps.Equal(l, r) }) &&
+		maps.EqualFunc(lhs.ConsumedBy, rhs.ConsumedBy, func(l map[ProductDTAPID]struct{}, r map[ProductDTAPID]struct{}) bool { return maps.Equal(l, r) }) &&
 		util.EqualStrPtr(lhs.ForProduct, rhs.ForProduct)
 }

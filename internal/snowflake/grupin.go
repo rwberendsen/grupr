@@ -269,8 +269,8 @@ func (g *Grupin) setCreateDBRoleGrants(ctx context.Context, cnf *Config, conn *s
 	for grant, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, cnf.Role, false,
 		map[GrantTemplate]struct{}{
 			GrantTemplate{
-				PrivilegeComplete:        PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpDatabaseRole,},
-				GrantedOn:        ObjTpDatabase,
+				PrivilegeComplete: PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpDatabaseRole},
+				GrantedOn:         ObjTpDatabase,
 			}: {},
 		},
 		nil) {
