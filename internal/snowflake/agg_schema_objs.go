@@ -69,7 +69,7 @@ func (o AggSchemaObjs) pushToDoFutureGrants(yield func(FutureGrant) bool, dbRole
 			prvs := []PrivilegeComplete{}
 			for _, p := range [2]Privilege{PrvSelect, PrvReferences} {
 				if !o.hasFutureGrantTo(ModeRead, ot, p) {
-					prvs = append(prvs, PrivilegeComplete{Privilege: PrvUsage})
+					prvs = append(prvs, PrivilegeComplete{Privilege: p})
 				}
 			}
 			if len(prvs) > 0 {

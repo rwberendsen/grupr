@@ -49,7 +49,7 @@ func (o AggObjAttr) pushToDoGrants(yield func(Grant) bool, dbRole DatabaseRole, 
 	if len(prvs) > 0 {
 		if !yield(Grant{
 			Privileges:        prvs,
-			GrantedOn:         ObjTpSchema,
+			GrantedOn:         o.ObjectType,
 			Database:          dbRole.Database,
 			Schema:            schema,
 			Object:            obj,
