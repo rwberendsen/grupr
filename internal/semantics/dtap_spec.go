@@ -60,6 +60,10 @@ func (spec DTAPSpec) IsProd(dtap string) bool {
 	return spec.Prod != nil && dtap == *spec.Prod
 }
 
+func (spec DTAPSpec) HasProd() bool {
+	return spec.Prod != nil
+}
+
 func (spec DTAPSpec) Count() int {
 	c := 0
 	if spec.Prod != nil {

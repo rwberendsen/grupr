@@ -113,11 +113,15 @@ func (g Grupin) allConsumedOk() error {
 			// Check DTAP mapping
 			// TODO: add hide_dtaps to interface metadata, union product level and interface level, and check here that hidden dtaps are not consumed.
 			for dtapSelf, dtapSource := range dtapMapping {
-				if !pSource.DTAPs.HasDTAP(dtapSource) {
+				if p.DTAPs.IsProd(dtapSelf) {
+					if !pSource.DTAPs.HasProd() {
+						// TODO: when source has hidden dtaps, consider that here, too
+						return &PolicyError{fmt.Sprintf("product '%s': consumed interface '%s': source has no prod dtap", p.ID, iid)}
+					}
+					dtapSource = *pSource.DTAPs.Prod
+					dtapMapping[dtapSelf] = dtapSource
+				} else if !pSource.DTAPs.HasDTAP(dtapSource) {
 					return &SetLogicError{fmt.Sprintf("product '%s': consumed interface '%s': dtap '%s': dtap not found", p.ID, iid, dtapSource)}
-				}
-				if p.DTAPs.IsProd(dtapSelf) && !pSource.DTAPs.IsProd(dtapSource) {
-					return &PolicyError{fmt.Sprintf("product '%s': consumed interface '%s': prod dtap not allowed to consume interface from non-prod dtap", p.ID, iid)}
 				}
 				// Even though iSource is a copy, all copies reference the same map, initialized upon creation by NewInterface
 				// So we can reach into that map here and add an element to it

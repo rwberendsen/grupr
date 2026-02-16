@@ -47,11 +47,10 @@ func newProduct(cnf *Config, pSyn syntax.Product, classes map[string]syntax.Clas
 		}
 		pSem.Consumes[cs.InterfaceID] = map[string]string{} // dtap mapping
 		for dtap, isProd := range pSem.DTAPs.All() {
-			if isProd {
-				continue // prod always consumes from prod
-			}
 			if !slices.Contains(cs.NonConsumingDTAPs, dtap) {
-				if sourceDTAP, ok := cs.DTAPMapping[dtap]; ok {
+				if isProd {
+					pSem.Consumes[cs.InterfaceID][dtap] = "" // will be set later in grupin.AllConsumedOK
+				} else if sourceDTAP, ok := cs.DTAPMapping[dtap]; ok {
 					pSem.Consumes[cs.InterfaceID][dtap] = sourceDTAP
 				} else {
 					pSem.Consumes[cs.InterfaceID][dtap] = dtap // default

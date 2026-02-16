@@ -46,6 +46,7 @@ func NewProductDTAP(pdID semantics.ProductDTAPID, isProd bool, pSem semantics.Pr
 		if sourceDTAP, ok := dtapMapping[pd.DTAP]; ok {
 			pd.Consumes[iid] = sourceDTAP
 		}
+		// else, pd.DTAP must have been in a list of non consuming dtaps for this consumption spec, and we do not consume from pd.DTAP
 	}
 
 	for k := range pd.Interface.ObjectMatchers {
