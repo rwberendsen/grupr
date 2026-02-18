@@ -36,7 +36,7 @@ func newColExprsWithoutUserGroups(cnf *Config, s string, ds DTAPSpec) (ColExprs,
 			return exprs, &syntax.FormattingError{fmt.Sprintf("'%s': multiple associated dtaps, but not all", s)}
 		}
 
-		expr, err := newColExpr(r, cnf.ValidQuotedExpr, cnf.ValidUnquotedExpr)
+		expr, err := newColExpr(cnf, r)
 		if err != nil {
 			return exprs, err
 		}
@@ -79,7 +79,7 @@ func newColExprsWithUserGroups(cnf *Config, s string, ds DTAPSpec, userGroups ma
 			return exprs, &syntax.FormattingError{fmt.Sprintf("'%s': multiple but not all usergroups associated, have %d", s, nUGsObjExprAttr(m))}
 		}
 
-		expr, err := newColExpr(r, cnf.ValidQuotedExpr, cnf.ValidUnquotedExpr)
+		expr, err := newColExpr(cnf, r)
 		if err != nil {
 			return exprs, err
 		}

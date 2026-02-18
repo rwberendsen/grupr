@@ -76,33 +76,28 @@ func (lhs ObjMatcher) validateExprAttrAgainst(rhs ObjMatcher) error {
 	return nil
 }
 
-func (lhs ObjMatcher) DisjointFromDB(db string) bool {
-	e := ObjExpr{ExprPart{S: db, IsQuoted: true}, ExprPart{S: "*"}, ExprPart{S: "*"}}
-	rhs := ObjMatcher{Include: e}
+func (lhs ObjMatcher) DisjointFromDB(db Ident) bool {
+	rhs := ObjMatcher{Include: ObjExpr{IdentMatcher{S: db}, NewMatchAllIdentMatcher(), NewMatchAllIdentMatcher()}}
 	return lhs.disjoint(rhs)
 }
 
-func (lhs ObjMatcher) DisjointFromSchema(db string, schema string) bool {
-	e := ObjExpr{ExprPart{S: db, IsQuoted: true}, ExprPart{S: schema, IsQuoted: true}, ExprPart{S: "*"}}
-	rhs := ObjMatcher{Include: e}
+func (lhs ObjMatcher) DisjointFromSchema(db Ident, schema Ident) bool {
+	rhs := ObjMatcher{Include: ObjExpr{IdentMatcher{S: db}, IdentMatcher{S: schema}, NewMatchAllIdentMatcher()}}
 	return lhs.disjoint(rhs)
 }
 
-func (lhs ObjMatcher) DisjointFromObject(db string, schema string, object string) bool {
-	e := ObjExpr{ExprPart{S: db, IsQuoted: true}, ExprPart{S: schema, IsQuoted: true}, ExprPart{S: object, IsQuoted: true}}
-	rhs := ObjMatcher{Include: e}
+func (lhs ObjMatcher) DisjointFromObject(db Ident, schema Ident, object Ident) bool {
+	rhs := ObjMatcher{Include: ObjExpr{IdentMatcher{S: db}, IdentMatcher{S: schema}, IdentMatcher{S: object}}}
 	return lhs.disjoint(rhs)
 }
 
-func (lhs ObjMatcher) SupersetOfDB(db string) bool {
-	e := ObjExpr{ExprPart{S: db, IsQuoted: true}, ExprPart{S: "*"}, ExprPart{S: "*"}}
-	rhs := ObjMatcher{Include: e}
+func (lhs ObjMatcher) SupersetOfDB(db Ident) bool {
+	rhs := ObjMatcher{Include: ObjExpr{IdentMatcher{S: db}, NewMatchAllIdentMatcher(), NewMatchAllIdentMatcher()}}
 	return rhs.subsetOf(lhs)
 }
 
-func (lhs ObjMatcher) SupersetOfSchema(db string, schema string) bool {
-	e := ObjExpr{ExprPart{S: db, IsQuoted: true}, ExprPart{S: schema, IsQuoted: true}, ExprPart{S: "*"}}
-	rhs := ObjMatcher{Include: e}
+func (lhs ObjMatcher) SupersetOfSchema(db Ident, schema Ident) bool {
+	rhs := ObjMatcher{Include: ObjExpr{IdentMatcher{S: db}, IdentMatcher{S: schema}, NewMatchAllIdentMatcher()}}
 	return rhs.subsetOf(lhs)
 }
 

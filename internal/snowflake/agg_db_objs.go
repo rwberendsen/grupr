@@ -9,7 +9,7 @@ import (
 )
 
 type AggDBObjs struct {
-	Schemas         map[string]AggSchemaObjs
+	Schemas         map[semantics.Ident]AggSchemaObjs
 	MatchAllSchemas bool
 	MatchAllObjects bool
 
@@ -34,7 +34,7 @@ type AggDBObjs struct {
 
 func newAggDBObjs(o DBObjs) AggDBObjs {
 	r := AggDBObjs{
-		Schemas:         make(map[string]AggSchemaObjs, len(o.Schemas)),
+		Schemas:         make(map[semantics.Ident]AggSchemaObjs, len(o.Schemas)),
 		MatchAllSchemas: o.MatchAllSchemas,
 		MatchAllObjects: o.MatchAllObjects,
 	}
@@ -44,12 +44,12 @@ func newAggDBObjs(o DBObjs) AggDBObjs {
 	return r
 }
 
-func (o AggDBObjs) hasSchema(s string) bool {
+func (o AggDBObjs) hasSchema(s semantics.Ident) bool {
 	_, ok := o.Schemas[s]
 	return ok
 }
 
-func (o AggDBObjs) hasObject(s string, obj string) bool {
+func (o AggDBObjs) hasObject(s semantics.Ident, obj semantics.Ident) bool {
 	return o.hasSchema(s) && o.Schemas[s].hasObject(obj)
 }
 
@@ -128,7 +128,7 @@ func (o AggDBObjs) setRevokeGrantTo(m Mode, g Grant) AggDBObjs {
 }
 
 func (o AggDBObjs) setDatabaseRole(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, pID string, dtap string, iID string,
-	db string, createDBRoleGrants map[string]struct{}, databaseRoles map[DatabaseRole]struct{}) (AggDBObjs, error) {
+	db semantics.Ident, createDBRoleGrants map[semantics.Ident]struct{}, databaseRoles map[DatabaseRole]struct{}) (AggDBObjs, error) {
 	o.dbRole = NewDatabaseRole(synCnf, cnf, pID, dtap, iID, ModeRead, db)
 	if _, ok := databaseRoles[o.dbRole]; !ok {
 		if _, ok = createDBRoleGrants[db]; !ok {
@@ -145,7 +145,7 @@ func (o AggDBObjs) setDatabaseRole(ctx context.Context, synCnf *syntax.Config, c
 }
 
 func (o AggDBObjs) setFutureGrants(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, pID string, dtap string, iID string,
-	db string, oms semantics.ObjMatchers, createDBRoleGrants map[string]struct{}, databaseRoles map[DatabaseRole]struct{}) (AggDBObjs, error) {
+	db semantics.Ident, oms semantics.ObjMatchers, createDBRoleGrants map[semantics.Ident]struct{}, databaseRoles map[DatabaseRole]struct{}) (AggDBObjs, error) {
 	o, err := o.setDatabaseRole(ctx, synCnf, cnf, conn, pID, dtap, iID, db, createDBRoleGrants, databaseRoles)
 	if err != nil {
 		return o, err
@@ -206,7 +206,7 @@ func (o AggDBObjs) setFutureGrants(ctx context.Context, synCnf *syntax.Config, c
 	return o, nil
 }
 
-func (o AggDBObjs) setGrants(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, db string, oms semantics.ObjMatchers) (AggDBObjs, error) {
+func (o AggDBObjs) setGrants(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, db semantics.Ident, oms semantics.ObjMatchers) (AggDBObjs, error) {
 	o.revokeGrantsToRead = []Grant{}
 	if !o.isDBRoleNew {
 		for g, err := range QueryGrantsToDBRoleFiltered(ctx, cnf, conn, db, o.dbRole.Name, true, cnf.DatabaseRolePrivileges[ModeRead], nil) {

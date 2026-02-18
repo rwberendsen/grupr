@@ -5,12 +5,12 @@ import (
 )
 
 type SchemaObjs struct {
-	Objects         map[string]ObjAttr
+	Objects         map[semantics.Ident]ObjAttr
 	MatchAllObjects bool
 }
 
-func newSchemaObjs(db string, schema string, o SchemaObjs, om semantics.ObjMatcher) SchemaObjs {
-	r := SchemaObjs{Objects: map[string]ObjAttr{}}
+func newSchemaObjs(db semantics.Ident, schema semantics.Ident, o SchemaObjs, om semantics.ObjMatcher) SchemaObjs {
+	r := SchemaObjs{Objects: map[semantics.Ident]ObjAttr{}}
 	r = r.setMatchAllObjects(db, schema, om)
 	for k, v := range o.Objects {
 		if !om.DisjointFromObject(db, schema, k) {
@@ -28,14 +28,14 @@ func newSchemaObjsFromMatched(m *matchedSchemaObjs) SchemaObjs {
 	return r
 }
 
-func (o SchemaObjs) setMatchAllObjects(db string, schema string, om semantics.ObjMatcher) SchemaObjs {
+func (o SchemaObjs) setMatchAllObjects(db semantics.Ident, schema semantics.Ident, om semantics.ObjMatcher) SchemaObjs {
 	if om.SupersetOfSchema(db, schema) {
 		o.MatchAllObjects = true
 	}
 	return o
 }
 
-func (o SchemaObjs) hasObject(k string) bool {
+func (o SchemaObjs) hasObject(k semantics.Ident) bool {
 	_, ok := o.Objects[k]
 	return ok
 }

@@ -26,7 +26,7 @@ func newObjExprsWithoutUserGroups(cnf *Config, s string, ds DTAPSpec) (objExprs,
 		if len(m) > 1 {
 			return exprs, &syntax.FormattingError{fmt.Sprintf("'%s': multiple associated dtaps", s)}
 		}
-		expr, err := newObjExpr(r, cnf.ValidQuotedExpr, cnf.ValidUnquotedExpr)
+		expr, err := newObjExpr(cnf, r)
 		if err != nil {
 			return exprs, err
 		}
@@ -65,7 +65,7 @@ func newObjExprsWithUserGroups(cnf *Config, s string, ds DTAPSpec, userGroups ma
 			return exprs, &syntax.FormattingError{fmt.Sprintf("'%s': multiple but not all usergroups associated", s)}
 		}
 
-		expr, err := newObjExpr(r, cnf.ValidQuotedExpr, cnf.ValidUnquotedExpr)
+		expr, err := newObjExpr(cnf, r)
 		if err != nil {
 			return exprs, err
 		}

@@ -6,19 +6,18 @@ import (
 	"io"
 	"iter"
 	"maps"
-	"regexp"
 	"strings"
 
 	"github.com/rwberendsen/grupr/internal/syntax"
 )
 
-type ColExpr [4]ExprPart
+type ColExpr [4]IdentMatcher
 
 const (
 	Column Part = iota + 3 // Database, Schema, and Object are defined with Expr; as well as type Part
 )
 
-func newColExpr(s string, validQuotedExpr *regexp.Regexp, validUnquotedExpr *regexp.Regexp) (ColExpr, error) {
+func newColExpr(cnf *Config, s string) (ColExpr, error) {
 	r := ColExpr{}
 	reader := csv.NewReader(strings.NewReader(s)) // encoding/csv can conveniently handle quoted parts
 	reader.Comma = '.'
@@ -30,32 +29,18 @@ func newColExpr(s string, validQuotedExpr *regexp.Regexp, validUnquotedExpr *reg
 		return r, &syntax.FormattingError{"column expression number of fields outside [1, 4]"}
 	}
 	// figure out which parts were quoted, if any
-	fields := []ExprPart{}
+	fields := []IdentMatcher{}
 	for i, substr := range record {
 		_, start := reader.FieldPos(i)
 		start = start - 1 // FieldPos columns start numbering from 1
+		var isQuoted bool
 		if s[start] == '"' {
-			// this is a quoted field
-			end := start + 1 + len(substr)
-			if end == len(s) || s[end] != '"' {
-				panic("did not find quote at end of parsed quoted CSV field")
-			}
-			fields = append(fields, ExprPart{IsQuoted: true, S: substr})
-		} else {
-			// this is an unquoted field
-			end := start + len(substr)
-			if end != len(s) && s[end] != '.' {
-				panic("unquoted field not ending with end of line or period")
-			}
-			fields = append(fields, ExprPart{S: strings.ToLower(substr)})
-			// unquoted identifiers match in a case insensitive way
-			// TODO: create a function newExprPart and introduce this tricky detail ToLower there
+			isQuoted = true
 		}
-	}
-	// validate identifier expressions
-	for _, exprPart := range fields {
-		if !exprPart.validate(validQuotedExpr, validUnquotedExpr) {
-			return r, &syntax.FormattingError{fmt.Sprintf("invalid expr part: '%v'", exprPart)}
+		if im, err := NewIdentMatcher(cnf, substr, isQuoted); err != nil {
+			return r, err
+		} else {
+			fields = append(fields, im)
 		}
 	}
 	// expecting only one line, just checking there was not more
@@ -64,7 +49,7 @@ func newColExpr(s string, validQuotedExpr *regexp.Regexp, validUnquotedExpr *reg
 	}
 	// left-padding fields with * matchers until we have Database, Schema, Object, Column
 	for i := 0; i < 4-len(fields); i++ {
-		r[i] = ExprPart{S: "*", IsQuoted: false}
+		r[i] = NewMatchallIdentMatcher()
 	}
 	for i := 0; i < len(fields); i++ {
 		r[4-len(fields)+i] = fields[i]
@@ -74,29 +59,29 @@ func newColExpr(s string, validQuotedExpr *regexp.Regexp, validUnquotedExpr *reg
 
 func (lhs ColExpr) subsetOf(rhs ColExpr) bool {
 	// return true if rhs can match at least all objects that lhs can match
-	if !lhs[Database].subsetOf(rhs[Database]) {
+	if !lhs.Database().subsetOf(rhs.Database()) {
 		return false
 	}
-	if !lhs[Schema].subsetOf(rhs[Schema]) {
+	if !lhs.Schema().subsetOf(rhs.Schema()) {
 		return false
 	}
-	if !lhs[Object].subsetOf(rhs[Object]) {
+	if !lhs.Object().subsetOf(rhs.Object()) {
 		return false
 	}
-	return lhs[Column].subsetOf(rhs[Column])
+	return lhs.Column().subsetOf(rhs.Column())
 }
 
 func (lhs ColExpr) disjoint(rhs ColExpr) bool {
-	if lhs[Database].disjoint(rhs[Database]) {
+	if lhs.Database().disjoint(rhs.Database()) {
 		return true
 	}
-	if lhs[Schema].disjoint(rhs[Schema]) {
+	if lhs.Schema().disjoint(rhs.Schema()) {
 		return true
 	}
-	if lhs[Object].disjoint(rhs[Object]) {
+	if lhs.Object().disjoint(rhs.Object()) {
 		return true
 	}
-	return lhs[Column].disjoint(rhs[Column])
+	return lhs.Column().disjoint(rhs.Column())
 	// TODO implement tests
 }
 
@@ -123,10 +108,26 @@ func (c ColExpr) disjointWithObjMatchers(oms ObjMatchers, dtap string) bool {
 	return true
 }
 
+func (e ColExpr) Database() IdentMatcher {
+	return e[0]
+}
+
+func (e ColExpr) Schema() IdentMatcher {
+	return e[1]
+}
+
+func (e ColExpr) Object() IdentMatcher {
+	return e[2]
+}
+
+func (e ColExpr) Column() IdentMatcher {
+	return e[3]
+}
+
 func (e ColExpr) String() string {
 	a := []string{}
-	for _, ep := range e {
-		a = append(a, ep.String())
+	for _, im := range e {
+		a = append(a, im.String())
 	}
 	return strings.Join(a, ".")
 }

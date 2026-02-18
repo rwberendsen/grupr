@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"iter"
+	"strings"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
 	"github.com/rwberendsen/grupr/internal/syntax"
@@ -245,13 +246,13 @@ func (g *Grupin) revoke(ctx context.Context, synCnf *syntax.Config, cnf *Config,
 func (g *Grupin) setProductRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB) error {
 	g.productRoles = map[ProductRole]struct{}{}
 	// TODO: move query to product_role.go, working in similar way like grant.go or obj.go
-	rows, err := conn.QueryContext(ctx, fmt.Sprintf(`SHOW TERSE ROLES LIKE '%s' ->> SELECT "name" FROM $1`, cnf.ObjectPrefix+"%"))
+	rows, err := conn.QueryContext(ctx, fmt.Sprintf(`SHOW TERSE ROLES LIKE '%s' ->> SELECT "name" FROM $1`, strings.ToUpper(cnf.ObjectPrefix+"%")))
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var roleName string
+		var roleName semantics.Ident
 		if err = rows.Scan(&roleName); err != nil {
 			return err
 		}

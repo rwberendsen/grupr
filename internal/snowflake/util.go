@@ -39,11 +39,6 @@ func runMultipleSQL(ctx context.Context, cnf *Config, conn *sql.DB, sql string, 
 	return nil
 }
 
-func quoteIdentifier(s string) string {
-	s = strings.ReplaceAll(s, `"`, `""`)
-	return `"` + s + `"`
-}
-
 func printSQL(sql string, params ...any) {
 	fmt.Print(sql, "; ")
 	l := util.FmtSliceElements(params...)

@@ -15,8 +15,8 @@ func GetConfig() *Config {
 
 	// What are valid identifier parts in your backend; these regular expressions were developed against Snowflake
 	// Make sure DTAP and Usergroup IDs and Renderings will expand to something acceptable by the below expressions
-	cnf.ValidUnquotedExpr = regexp.MustCompile(`^[a-z_][a-z0-9_$]{0,254}[*]?$`) // identifier chars + optional wildcard suffix
-	cnf.ValidQuotedExpr = regexp.MustCompile(`.{0,255}`)
+	cnf.ValidUnquotedExpr = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_$]{0,254}$`) // identifier chars + optional wildcard suffix
+	cnf.ValidQuotedExpr = regexp.MustCompile(`^.{1,255}$`)
 	cnf.DefaultProdDTAPName = "p"
 
 	return cnf

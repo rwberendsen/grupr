@@ -3,18 +3,20 @@ package snowflake
 import (
 	"fmt"
 	"iter"
+
+	"github.com/rwberendsen/grupr/internal/semantics"
 )
 
 type matchedAccountObjs struct {
 	version  int
-	dbs      map[string]*matchedDBObjs
-	dbExists map[string]bool
+	dbs      map[semantics.Ident]*matchedDBObjs
+	dbExists map[semantics.Ident]bool
 }
 
-func (o *matchedAccountObjs) addDB(k string) {
+func (o *matchedAccountObjs) addDB(k semantics.Ident) {
 	if o.dbs == nil {
-		o.dbs = map[string]*matchedDBObjs{}
-		o.dbExists = map[string]bool{}
+		o.dbs = map[semantics.Ident]*matchedDBObjs{}
+		o.dbExists = map[semantics.Ident]bool{}
 	}
 	if _, ok := o.dbs[k]; !ok {
 		o.dbs[k] = &matchedDBObjs{}
@@ -22,19 +24,19 @@ func (o *matchedAccountObjs) addDB(k string) {
 	o.dbExists[k] = true
 }
 
-func (o *matchedAccountObjs) dropDB(k string) {
+func (o *matchedAccountObjs) dropDB(k semantics.Ident) {
 	if _, ok := o.dbs[k]; !ok {
-		panic(fmt.Sprintf("string not found: '%s'", k))
+		panic(fmt.Sprintf("Ident not found: '%s'", k))
 	}
 	o.dbExists[k] = false
 }
 
-func (o *matchedAccountObjs) hasDB(k string) bool {
+func (o *matchedAccountObjs) hasDB(k semantics.Ident) bool {
 	return o.dbExists != nil && o.dbExists[k]
 }
 
-func (o *matchedAccountObjs) getDBs() iter.Seq2[string, *matchedDBObjs] {
-	return func(yield func(string, *matchedDBObjs) bool) {
+func (o *matchedAccountObjs) getDBs() iter.Seq2[semantics.Ident, *matchedDBObjs] {
+	return func(yield func(semantics.Ident, *matchedDBObjs) bool) {
 		for k, v := range o.dbs {
 			if o.dbExists[k] {
 				if !yield(k, v) {

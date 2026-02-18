@@ -18,17 +18,8 @@ import (
 type accountCache struct {
 	mu       sync.RWMutex // guards dbs, dbExists, and version
 	version  int
-	dbs      map[string]*dbCache // nil: never requested; empty: none found
-	dbExists map[string]bool
-}
-
-// TODO: move this to some file with global functions
-func escapeIdentifier(s string) string {
-	return strings.ReplaceAll(s, "\"", "\"\"")
-}
-
-func escapeString(s string) string {
-	return strings.ReplaceAll(s, "'", "\\'")
+	dbs      map[semantics.Ident]*dbCache // nil: never requested; empty: none found
+	dbExists map[semantics.Ident]bool
 }
 
 func (c *accountCache) match(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, om semantics.ObjMatcher, o *matchedAccountObjs) error {
@@ -76,7 +67,7 @@ func (c *accountCache) matchDBs(ctx context.Context, synCnf *syntax.Config, cnf 
 	return nil
 }
 
-func (c *accountCache) matchSchemas(ctx context.Context, conn *sql.DB, db string, om semantics.ObjMatcher, o *matchedDBObjs) error {
+func (c *accountCache) matchSchemas(ctx context.Context, conn *sql.DB, db semantics.Ident, om semantics.ObjMatcher, o *matchedDBObjs) error {
 	c.mu.RLock() // Block till a (requesting) writer (obtains and) releases the lock, if any, get a read lock, now you can read this node,
 	// concurrently with other readers
 	defer c.mu.RUnlock()
@@ -111,7 +102,7 @@ func (c *accountCache) matchSchemas(ctx context.Context, conn *sql.DB, db string
 	return nil
 }
 
-func (c *accountCache) matchObjects(ctx context.Context, conn *sql.DB, db string, schema string, om semantics.ObjMatcher, o *matchedSchemaObjs) error {
+func (c *accountCache) matchObjects(ctx context.Context, conn *sql.DB, db semantics.Ident, schema semantics.Ident, om semantics.ObjMatcher, o *matchedSchemaObjs) error {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if !c.hasDB(db) {
@@ -133,7 +124,7 @@ func (c *accountCache) matchObjects(ctx context.Context, conn *sql.DB, db string
 	}
 	o.version = c.dbs[db].schemas[schema].version
 	// Next, we overwrite whatever objects o may have had; but note that we would have set it to nil to save memory; see schema_objs.go
-	o.objects = map[string]ObjAttr{}
+	o.objects = map[semantics.Ident]ObjAttr{}
 	for k, v := range c.dbs[db].schemas[schema].objects {
 		if !om.DisjointFromObject(db, schema, k) {
 			o.objects[k] = v
@@ -165,10 +156,10 @@ func (c *accountCache) refreshDBs(ctx context.Context, synCnf *syntax.Config, cn
 	return nil
 }
 
-func (c *accountCache) addDB(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, k string) error {
+func (c *accountCache) addDB(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, k semantics.Ident) error {
 	if c.dbs == nil {
-		c.dbs = map[string]*dbCache{}
-		c.dbExists = map[string]bool{}
+		c.dbs = map[semantics.Ident]*dbCache{}
+		c.dbExists = map[semantics.Ident]bool{}
 	}
 	if _, ok := c.dbs[k]; !ok {
 		c.dbs[k] = &dbCache{}
@@ -181,19 +172,19 @@ func (c *accountCache) addDB(ctx context.Context, synCnf *syntax.Config, cnf *Co
 	return nil
 }
 
-func (c *accountCache) dropDB(k string) {
+func (c *accountCache) dropDB(k semantics.Ident) {
 	if _, ok := c.dbs[k]; !ok {
 		panic(fmt.Sprintf("database not found: '%s'", k))
 	}
 	c.dbExists[k] = false
 }
 
-func (c *accountCache) hasDB(k string) bool {
+func (c *accountCache) hasDB(k semantics.Ident) bool {
 	return c.dbExists != nil && c.dbExists[k]
 }
 
-func (c *accountCache) getDBs() iter.Seq2[string, *dbCache] {
-	return func(yield func(string, *dbCache) bool) {
+func (c *accountCache) getDBs() iter.Seq2[semantics.Ident, *dbCache] {
+	return func(yield func(semantics.Ident, *dbCache) bool) {
 		for k, v := range c.dbs {
 			if c.hasDB(k) {
 				if !yield(k, v) {
@@ -204,8 +195,8 @@ func (c *accountCache) getDBs() iter.Seq2[string, *dbCache] {
 	}
 }
 
-func queryDBs(ctx context.Context, conn *sql.DB) (map[string]struct{}, error) {
-	dbs := map[string]struct{}{}
+func queryDBs(ctx context.Context, conn *sql.DB) (map[semantics.Ident]struct{}, error) {
+	dbs := map[semantics.Ident]struct{}{}
 	start := time.Now()
 	log.Printf("Querying Snowflake for database names...\n")
 	// TODO: Develop models (if any) for working with IMPORTED DATABASE, and APPLICATION DATABASE
@@ -216,7 +207,7 @@ func queryDBs(ctx context.Context, conn *sql.DB) (map[string]struct{}, error) {
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var db string
+		var db semantics.Ident
 		if err = rows.Scan(&db); err != nil {
 			return nil, fmt.Errorf("queryDBs: error scanning row: %w", err)
 		}

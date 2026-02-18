@@ -10,18 +10,19 @@ import (
 	"strings"
 
 	"github.com/rwberendsen/grupr/internal/util"
+	"github.com/rwberendsen/grupr/internal/semantics"
 )
 
 type FutureGrant struct {
 	Privileges        []PrivilegeComplete
 	GrantedOn         ObjType
 	GrantedIn         ObjType
-	Database          string
-	Schema            string
-	Object            string
+	Database          semantics.Ident
+	Schema            semantics.Ident
+	Object            semantics.Ident
 	GrantedTo         ObjType
-	GrantedToDatabase string
-	GrantedToRole     string
+	GrantedToDatabase semantics.Ident
+	GrantedToRole     semantics.Ident
 	GrantOption       bool // TODO: if we re-grant the same grant with a different grant option, does it get overwritten? Could be a way to correct such mishaps
 }
 
@@ -36,9 +37,9 @@ func (g FutureGrant) buildSQLGrant(revoke bool) string {
 	var granteeClause string
 	switch g.GrantedTo {
 	case ObjTpRole:
-		granteeClause = fmt.Sprintf(`%s ROLE %s`, preposition, quoteIdentifier(g.GrantedToRole))
+		granteeClause = fmt.Sprintf(`%s ROLE %s`, preposition, g.GrantedToRole)
 	case ObjTpDatabaseRole:
-		granteeClause = fmt.Sprintf(`%s DATABASE ROLE %s.%s`, preposition, quoteIdentifier(g.GrantedToDatabase), quoteIdentifier(g.GrantedToRole))
+		granteeClause = fmt.Sprintf(`%s DATABASE ROLE %s.%s`, preposition, g.GrantedToDatabase, g.GrantedToRole)
 	default:
 		panic("Not implemented")
 	}
@@ -53,13 +54,13 @@ func (g FutureGrant) buildSQLGrant(revoke bool) string {
 		if g.GrantedIn != ObjTpDatabase {
 			panic("Not implemented")
 		}
-		inClause += fmt.Sprintf(`%v %s`, g.GrantedIn, quoteIdentifier(g.Database))
+		inClause += fmt.Sprintf(`%v %s`, g.GrantedIn, g.Database)
 	case ObjTpTable, ObjTpView:
 		switch g.GrantedIn {
 		case ObjTpDatabase:
-			inClause += fmt.Sprintf(`%v %s`, g.GrantedIn, quoteIdentifier(g.Database))
+			inClause += fmt.Sprintf(`%v %s`, g.GrantedIn, g.Database)
 		case ObjTpSchema:
-			inClause += fmt.Sprintf(`%v %s.%s`, g.GrantedIn, quoteIdentifier(g.Database), quoteIdentifier(g.Schema))
+			inClause += fmt.Sprintf(`%v %s.%s`, g.GrantedIn, g.Database, g.Schema)
 		default:
 			panic("Not implemented")
 		}
@@ -71,8 +72,8 @@ func (g FutureGrant) buildSQLGrant(revoke bool) string {
 	return fmt.Sprintf(`%v %s %s %s %s`, verb, privilegeClause, onClause, inClause, granteeClause)
 }
 
-func newFutureGrant(privilege string, createObjType string, grantedOn string, name string, grantedTo ObjType,
-	grantedToDatabase string, grantedToRole string, grantOption bool) (FutureGrant, error) {
+func newFutureGrant(privilege string, createObjType string, grantedOn string, name semantics.Ident, grantedTo ObjType,
+	grantedToDatabase semantics.Ident, grantedToRole semantics.Ident, grantOption bool) (FutureGrant, error) {
 	g := FutureGrant{
 		Privileges:        []PrivilegeComplete{ParsePrivilegeComplete(privilege, createObjType)},
 		GrantedOn:         ParseObjType(grantedOn),
@@ -115,37 +116,37 @@ func newFutureGrant(privilege string, createObjType string, grantedOn string, na
 	return g, nil
 }
 
-func QueryFutureGrantsToRoleFiltered(ctx context.Context, conn *sql.DB, role string,
+func QueryFutureGrantsToRoleFiltered(ctx context.Context, conn *sql.DB, role semantics.Ident,
 	match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}) iter.Seq2[FutureGrant, error] {
 	return queryFutureGrantsToRole(ctx, conn, "", role, match, notMatch, 0)
 }
 
-func QueryFutureGrantsToDBRoleFiltered(ctx context.Context, conn *sql.DB, db string, role string,
+func QueryFutureGrantsToDBRoleFiltered(ctx context.Context, conn *sql.DB, db semantics.Ident, role semantics.Ident,
 	match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}) iter.Seq2[FutureGrant, error] {
 	return queryFutureGrantsToRole(ctx, conn, db, role, match, notMatch, 0)
 }
 
-func QueryFutureGrantsToRole(ctx context.Context, conn *sql.DB, role string) iter.Seq2[FutureGrant, error] {
+func QueryFutureGrantsToRole(ctx context.Context, conn *sql.DB, role semantics.Ident) iter.Seq2[FutureGrant, error] {
 	return queryFutureGrantsToRole(ctx, conn, "", role, nil, nil, 0)
 }
 
-func QueryFutureGrantsToDBRole(ctx context.Context, conn *sql.DB, db string, role string) iter.Seq2[FutureGrant, error] {
+func QueryFutureGrantsToDBRole(ctx context.Context, conn *sql.DB, db semantics.Ident, role semantics.Ident) iter.Seq2[FutureGrant, error] {
 	return queryFutureGrantsToRole(ctx, conn, db, role, nil, nil, 0)
 }
 
-func QueryFutureGrantsToRoleFilteredLimit(ctx context.Context, conn *sql.DB, role string,
+func QueryFutureGrantsToRoleFilteredLimit(ctx context.Context, conn *sql.DB, role semantics.Ident,
 	match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}, limit int) iter.Seq2[FutureGrant, error] {
 	return queryFutureGrantsToRole(ctx, conn, "", role, match, notMatch, limit)
 }
 
-func buildSQLQueryFutureGrants(db string, role string, match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}, limit int) string {
+func buildSQLQueryFutureGrants(db semantics.Ident, role semantics.Ident, match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}, limit int) string {
 	// fetch grants for DATABASE ROLE if needed, rather than ROLE
 	var dbClause string
-	granteeName := quoteIdentifier(role)
+	granteeName := role
 	if db != "" {
 		dbClause = `DATABASE `
 		// Note how we quote the db identifier, other processes created it and may have used special characters.
-		granteeName = fmt.Sprintf(`%s.%s`, quoteIdentifier(db), granteeName)
+		granteeName = fmt.Sprintf(`%s.%s`, db, granteeName)
 	}
 
 	var whereClause string
@@ -176,10 +177,8 @@ FROM $1%s`, dbClause, granteeName, whereClause)
 	return query
 }
 
-func queryFutureGrantsToRole(ctx context.Context, conn *sql.DB, db string, role string,
+func queryFutureGrantsToRole(ctx context.Context, conn *sql.DB, db semantics.Ident, role semantics.Ident,
 	match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}, limit int) iter.Seq2[FutureGrant, error] {
-	// Note that both db and string will be quoted before going to Snowflake, so
-	// if the names in Snowflake are upper case, present them here in upper case, too.
 	grantedTo := ObjTpRole
 	if db != "" {
 		grantedTo = ObjTpDatabaseRole
@@ -199,7 +198,7 @@ func queryFutureGrantsToRole(ctx context.Context, conn *sql.DB, db string, role 
 			var privilege string
 			var createObjectType string
 			var grantedOn string
-			var name string
+			var name semantics.Ident
 			var grantOption bool
 			if err = rows.Scan(&privilege, &createObjectType, &grantedOn, &name, &grantOption); err != nil {
 				yield(FutureGrant{}, err)

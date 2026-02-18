@@ -1,6 +1,10 @@
 package snowflake
 
+import (
+	"github.com/rwberendsen/grupr/internal/semantics"
+)
+
 type ObjAttr struct {
 	ObjectType ObjType
-	Owner      string
+	Owner      semantics.Ident
 }

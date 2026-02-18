@@ -6,11 +6,11 @@ import (
 
 // Couple of simple data structures to hold matched objects in account
 type AccountObjs struct {
-	DBs map[string]DBObjs
+	DBs map[semantics.Ident]DBObjs
 }
 
 func newAccountObjs(o AccountObjs, om semantics.ObjMatcher) AccountObjs {
-	r := AccountObjs{DBs: map[string]DBObjs{}}
+	r := AccountObjs{DBs: map[semantics.Ident]DBObjs{}}
 	for db, dbObjects := range o.DBs {
 		if !om.DisjointFromDB(db) {
 			r.DBs[db] = newDBObjs(db, dbObjects, om)
@@ -20,7 +20,7 @@ func newAccountObjs(o AccountObjs, om semantics.ObjMatcher) AccountObjs {
 }
 
 func newAccountObjsFromMatched(m *matchedAccountObjs) AccountObjs {
-	r := AccountObjs{DBs: map[string]DBObjs{}}
+	r := AccountObjs{DBs: map[semantics.Ident]DBObjs{}}
 	for k, v := range m.getDBs() {
 		r.DBs[k] = newDBObjsFromMatched(v)
 	}

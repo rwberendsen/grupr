@@ -1,7 +1,11 @@
 package snowflake
 
+import (
+	"github.com/rwberendsen/grupr/internal/semantics"
+)
+
 type AggSchemaObjs struct {
-	Objects         map[string]AggObjAttr
+	Objects         map[semantics.Ident]AggObjAttr
 	MatchAllObjects bool
 
 	// set while grants are being set
@@ -11,7 +15,7 @@ type AggSchemaObjs struct {
 
 func newAggSchemaObjs(o SchemaObjs) AggSchemaObjs {
 	r := AggSchemaObjs{
-		Objects:         make(map[string]AggObjAttr, len(o.Objects)),
+		Objects:         make(map[semantics.Ident]AggObjAttr, len(o.Objects)),
 		MatchAllObjects: o.MatchAllObjects,
 	}
 	for k, v := range o.Objects {
@@ -20,7 +24,7 @@ func newAggSchemaObjs(o SchemaObjs) AggSchemaObjs {
 	return r
 }
 
-func (o AggSchemaObjs) hasObject(k string) bool {
+func (o AggSchemaObjs) hasObject(k semantics.Ident) bool {
 	_, ok := o.Objects[k]
 	return ok
 }
@@ -63,7 +67,7 @@ func (o AggSchemaObjs) hasGrantTo(m Mode, p Privilege) bool {
 	return m == ModeRead && p == PrvUsage && o.isUsageGrantedToRead
 }
 
-func (o AggSchemaObjs) pushToDoFutureGrants(yield func(FutureGrant) bool, dbRole DatabaseRole, schema string) bool {
+func (o AggSchemaObjs) pushToDoFutureGrants(yield func(FutureGrant) bool, dbRole DatabaseRole, schema semantics.Ident) bool {
 	if o.MatchAllObjects {
 		for _, ot := range [2]ObjType{ObjTpTable, ObjTpView} {
 			prvs := []PrivilegeComplete{}
@@ -91,7 +95,7 @@ func (o AggSchemaObjs) pushToDoFutureGrants(yield func(FutureGrant) bool, dbRole
 	return true
 }
 
-func (o AggSchemaObjs) pushToDoGrants(yield func(Grant) bool, dbRole DatabaseRole, schema string) bool {
+func (o AggSchemaObjs) pushToDoGrants(yield func(Grant) bool, dbRole DatabaseRole, schema semantics.Ident) bool {
 	if !o.hasGrantTo(ModeRead, PrvUsage) {
 		if !yield(Grant{
 			Privileges:        []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage}},

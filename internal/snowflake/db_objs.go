@@ -5,13 +5,13 @@ import (
 )
 
 type DBObjs struct {
-	Schemas         map[string]SchemaObjs
+	Schemas         map[semantics.Ident]SchemaObjs
 	MatchAllSchemas bool
 	MatchAllObjects bool
 }
 
-func newDBObjs(db string, o DBObjs, om semantics.ObjMatcher) DBObjs {
-	r := DBObjs{Schemas: map[string]SchemaObjs{}}
+func newDBObjs(db semantics.Ident, o DBObjs, om semantics.ObjMatcher) DBObjs {
+	r := DBObjs{Schemas: map[semantics.Ident]SchemaObjs{}}
 	r = r.setMatchAllSchemas(db, om)
 	r.setMatchAllObjects(db, om)
 	for schema, schemaObjs := range o.Schemas {
@@ -23,14 +23,14 @@ func newDBObjs(db string, o DBObjs, om semantics.ObjMatcher) DBObjs {
 }
 
 func newDBObjsFromMatched(m *matchedDBObjs) DBObjs {
-	o := DBObjs{Schemas: map[string]SchemaObjs{}}
+	o := DBObjs{Schemas: map[semantics.Ident]SchemaObjs{}}
 	for k, v := range m.getSchemas() {
 		o.Schemas[k] = newSchemaObjsFromMatched(v)
 	}
 	return o
 }
 
-func (o DBObjs) setMatchAllSchemas(db string, om semantics.ObjMatcher) DBObjs {
+func (o DBObjs) setMatchAllSchemas(db semantics.Ident, om semantics.ObjMatcher) DBObjs {
 	if !om.Include[semantics.Schema].MatchAll() {
 		return o
 	}
@@ -43,7 +43,7 @@ func (o DBObjs) setMatchAllSchemas(db string, om semantics.ObjMatcher) DBObjs {
 	return o
 }
 
-func (o DBObjs) setMatchAllObjects(db string, om semantics.ObjMatcher) DBObjs {
+func (o DBObjs) setMatchAllObjects(db semantics.Ident, om semantics.ObjMatcher) DBObjs {
 	if om.SupersetOfDB(db) {
 		o.MatchAllObjects = true
 	}

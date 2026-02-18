@@ -6,15 +6,17 @@ import (
 	"fmt"
 	"iter"
 	"strings"
+
+	"github.com/rwberendsen/grupr/internal/semantics"
 )
 
 type Obj struct {
-	Name       string
+	Name       semantics.Ident
 	ObjectType ObjType
-	Owner      string
+	Owner      semantics.Ident
 }
 
-func QueryObjs(ctx context.Context, conn *sql.DB, db string, schema string) iter.Seq2[Obj, error] {
+func QueryObjs(ctx context.Context, conn *sql.DB, db semantics.Ident, schema semantics.Ident) iter.Seq2[Obj, error] {
 	return func(yield func(Obj, error) bool) {
 		// When there are more than 10K results, paginate.
 		// Because we apply filters, even if fewer results are returned, perhaps there are still more.
@@ -23,7 +25,7 @@ func QueryObjs(ctx context.Context, conn *sql.DB, db string, schema string) iter
 		var fromClause string
 		limit := 10000
 		for mayHaveMore {
-			rows, err := conn.QueryContext(ctx, fmt.Sprintf(`SHOW OBJECTS IN SCHEMA IDENTIFIER('%s') LIMIT %d%s ->>
+			rows, err := conn.QueryContext(ctx, fmt.Sprintf(`SHOW OBJECTS IN SCHEMA IDENTIFIER('%s.%s') LIMIT %d%s ->>
 SELECT
     NULL AS n
   , "name" AS name
@@ -37,7 +39,7 @@ SELECT
   , '' AS kind
   , '' AS owner
 FROM $1
-`, quoteIdentifier(db)+"."+quoteIdentifier(schema), limit, fromClause, ObjTpTable.String(), ObjTpView.String()))
+`, db, schema, limit, fromClause, ObjTpTable, ObjTpView))
 			if err != nil {
 				if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
 					err = ErrObjectNotExistOrAuthorized
@@ -46,12 +48,12 @@ FROM $1
 				return
 			}
 			defer rows.Close()
-			var lastName string
+			var lastName semantics.Ident
 			for rows.Next() {
 				var n *int
-				var name string
+				var name semantics.Ident
 				var kind string
-				var owner string
+				var owner semantics.Ident
 				if err = rows.Scan(&n, &name, &kind, &owner); err != nil {
 					err = fmt.Errorf("QueryObjs: error scanning row: %w", err)
 					yield(Obj{}, err)
@@ -61,7 +63,7 @@ FROM $1
 					if *n < limit {
 						mayHaveMore = false
 					} else {
-						fromClause = fmt.Sprintf(" FROM '%s'", lastName)
+						fromClause = fmt.Sprintf(" FROM '%s'", string(lastName))
 					}
 					continue
 				}

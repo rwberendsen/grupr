@@ -12,11 +12,11 @@ import (
 )
 
 type Config struct {
-	User                    string
-	Role                    string
+	User                    semantics.Ident
+	Role                    semantics.Ident
 	Account                 string
-	Database                string
-	Schema                  string
+	Database                semantics.Ident
+	Schema                  semantics.Ident
 	UseSQLOpen              bool
 	RSAKeyPath              string
 	ObjectPrefix            string // for objects (roles) created by Grupr in Snowflake
@@ -34,7 +34,7 @@ type Config struct {
 func GetConfig(semCnf *semantics.Config) (*Config, error) {
 	cnf := &Config{
 		UseSQLOpen:              false,
-		ObjectPrefix:            strings.ToUpper("_x_"),
+		ObjectPrefix:            "_x_",
 		MaxOpenConns:            0, // unlimited
 		MaxIdleConns:            3, // MaxProductDTAPThreads - 1 (sometimes we use only one conn before quickly fanning out again)
 		MaxProductDTAPThreads:   4,
@@ -47,19 +47,21 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 	if user, ok := os.LookupEnv("GRUPR_SNOWFLAKE_USER"); !ok {
 		return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_USER")
 	} else {
-		if !semCnf.ValidUnquotedExpr.MatchString(user) {
+		if user, err := semantics.NewIdentStripQuotesIfAny(semCnf, user); err != nil {
 			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_USER: Invalid user name")
+		} else {
+			cnf.User = user
 		}
-		cnf.User = strings.ToUpper(user)
 	}
 
 	if role, ok := os.LookupEnv("GRUPR_SNOWFLAKE_ROLE"); !ok {
 		return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_USER")
 	} else {
-		if !semCnf.ValidUnquotedExpr.MatchString(role) {
+		if role, err := semantics.NewIdentStripQuotesIfAny(semCnf, role); err != nil {
 			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_ROLE: Invalid role name")
+		} else {
+			cnf.Role = role
 		}
-		cnf.Role = strings.ToUpper(role)
 	}
 
 	if account, ok := os.LookupEnv("GRUPR_SNOWFLAKE_ACCOUNT"); !ok {
@@ -71,19 +73,21 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 	if database, ok := os.LookupEnv("GRUPR_SNOWFLAKE_DB"); !ok {
 		return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_DB")
 	} else {
-		if !semCnf.ValidUnquotedExpr.MatchString(database) {
+		if database, err := semantics.NewIdentStripQuotesIfAny(semCnf, database); err != nil {
 			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_DB: Invalid database name")
+		} else {
+			cnf.Database = database
 		}
-		cnf.Database = strings.ToUpper(database)
 	}
 
 	if schema, ok := os.LookupEnv("GRUPR_SNOWFLAKE_SCHEMA"); !ok {
 		return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_SCHEMA")
 	} else {
-		if !semCnf.ValidUnquotedExpr.MatchString(schema) {
+		if schema, err := semantics.NewIdentStripQuotesIfAny(semCnf, schema); err != nil {
 			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_SCHEMA: Invalid schema name")
+		} else {
+			cnf.Schema = schema
 		}
-		cnf.Schema = strings.ToUpper(schema)
 	}
 
 	if useSQLOpen, ok := os.LookupEnv("GRUPR_SNOWFLAKE_USE_SQL_OPEN"); ok {
@@ -102,7 +106,7 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 		if err := syntax.ValidateID(objectPrefix); err != nil {
 			return nil, fmt.Errorf("invalid value for GRUPR_SNOWFLAKE_OBJECT_PREFIX")
 		}
-		cnf.ObjectPrefix = strings.ToUpper(objectPrefix)
+		cnf.ObjectPrefix = strings.ToLower(objectPrefix)
 	}
 
 	if maxOpenConns, ok := os.LookupEnv("GRUPR_SNOWFLAKE_MAX_OPEN_CONNS"); ok {

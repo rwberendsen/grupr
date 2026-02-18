@@ -39,7 +39,7 @@ func (o AggObjAttr) hasGrantTo(m Mode, p Privilege) bool {
 	return false
 }
 
-func (o AggObjAttr) pushToDoGrants(yield func(Grant) bool, dbRole DatabaseRole, schema string, obj string) bool {
+func (o AggObjAttr) pushToDoGrants(yield func(Grant) bool, dbRole DatabaseRole, schema semantics.Ident, obj semantics.Ident) bool {
 	prvs := []PrivilegeComplete{}
 	for _, p := range [2]Privilege{PrvSelect, PrvReferences} {
 		if !o.hasGrantTo(ModeRead, p) {
