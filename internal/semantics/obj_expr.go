@@ -97,7 +97,7 @@ func allDisjointObjExprs(i iter.Seq[ObjExpr]) error {
 	return nil
 }
 
-func (e ObjExpr) MatchesAllObjectsInAnySchemaInDB(db string) bool {
+func (e ObjExpr) MatchesAllObjectsInAnySchemaInDB(db Ident) bool {
 	if !e.Database().Match(db) {
 		return false
 	}

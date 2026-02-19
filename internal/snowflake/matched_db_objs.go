@@ -3,7 +3,7 @@ package snowflake
 import (
 	"fmt"
 	"iter"
-	
+
 	"github.com/rwberendsen/grupr/internal/semantics"
 )
 

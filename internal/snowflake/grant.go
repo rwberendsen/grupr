@@ -9,8 +9,8 @@ import (
 	"iter"
 	"strings"
 
-	"github.com/rwberendsen/grupr/internal/util"
 	"github.com/rwberendsen/grupr/internal/semantics"
+	"github.com/rwberendsen/grupr/internal/util"
 )
 
 type Grant struct {
@@ -72,7 +72,7 @@ func (g Grant) buildSQLGrant(revoke bool) string {
 	return fmt.Sprintf(`%s %s ON %s %s %s`, verb, privilegeClause, objectClause, preposition, granteeClause)
 }
 
-func newGrant(privilege string, createObjType string, grantedOn string, name semantics.Ident, grantedRoleStartsWithPrefix bool, grantedTo ObjType,
+func newGrant(privilege string, createObjType string, grantedOn string, name string, grantedRoleStartsWithPrefix bool, grantedTo ObjType,
 	grantedToDatabase semantics.Ident, grantedToRole semantics.Ident, grantedToRoleStartsWithPrefix bool, grantOption bool, grantedBy semantics.Ident) (Grant, error) {
 	g := Grant{
 		Privileges:                    []PrivilegeComplete{ParsePrivilegeComplete(privilege, createObjType)},
@@ -106,19 +106,19 @@ func newGrant(privilege string, createObjType string, grantedOn string, name sem
 	} // more than one record
 	switch g.GrantedOn {
 	case ObjTpDatabase:
-		g.Database = rec[0]
+		g.Database = semantics.Ident(rec[0])
 	case ObjTpDatabaseRole:
-		g.Database = rec[0]
-		g.GrantedRole = rec[1]
+		g.Database = semantics.Ident(rec[0])
+		g.GrantedRole = semantics.Ident(rec[1])
 	case ObjTpRole:
-		g.GrantedRole = rec[0]
+		g.GrantedRole = semantics.Ident(rec[0])
 	case ObjTpSchema:
-		g.Database = rec[0]
-		g.Schema = rec[1]
+		g.Database = semantics.Ident(rec[0])
+		g.Schema = semantics.Ident(rec[1])
 	case ObjTpTable, ObjTpView:
-		g.Database = rec[0]
-		g.Schema = rec[1]
-		g.Object = rec[2]
+		g.Database = semantics.Ident(rec[0])
+		g.Schema = semantics.Ident(rec[1])
+		g.Object = semantics.Ident(rec[2])
 	default:
 		return g, fmt.Errorf("unsupported granted_on object type for grant")
 	}
@@ -156,11 +156,11 @@ func QueryGrantsToDBRoleFilteredLimit(ctx context.Context, cnf *Config, conn *sq
 func buildSQLQueryGrants(db semantics.Ident, role semantics.Ident, match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}, grantedRolePrefix string, limit int) string {
 	// fetch grants for DATABASE ROLE if needed, rather than ROLE
 	var dbClause string
-	granteeName := role
+	granteeName := fmt.Sprintf(`%s`, role)
 	if db != "" {
 		dbClause = `DATABASE `
 		// Note how we quote the db identifier, other processes created it and may have used special characters.
-		granteeName = fmt.Sprintf(`%s.%s`, db, granteeName)
+		granteeName = fmt.Sprintf(`%s.%s`, db, role)
 	}
 
 	var whereClause string
@@ -220,7 +220,7 @@ func queryGrantsToRole(ctx context.Context, cnf *Config, conn *sql.DB, db semant
 			var privilege string
 			var createObjectType string
 			var grantedOn string
-			var name semantics.Ident
+			var name string
 			var grantedRoleStartsWithPrefix bool
 			var grantOption bool
 			var grantedBy semantics.Ident

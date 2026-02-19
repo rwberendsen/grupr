@@ -31,7 +31,7 @@ func newDBObjsFromMatched(m *matchedDBObjs) DBObjs {
 }
 
 func (o DBObjs) setMatchAllSchemas(db semantics.Ident, om semantics.ObjMatcher) DBObjs {
-	if !om.Include[semantics.Schema].MatchAll() {
+	if !om.Include.Schema().MatchAll() {
 		return o
 	}
 	o.MatchAllSchemas = true

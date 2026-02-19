@@ -9,8 +9,8 @@ import (
 	"iter"
 	"strings"
 
-	"github.com/rwberendsen/grupr/internal/util"
 	"github.com/rwberendsen/grupr/internal/semantics"
+	"github.com/rwberendsen/grupr/internal/util"
 )
 
 type FutureGrant struct {
@@ -72,7 +72,7 @@ func (g FutureGrant) buildSQLGrant(revoke bool) string {
 	return fmt.Sprintf(`%v %s %s %s %s`, verb, privilegeClause, onClause, inClause, granteeClause)
 }
 
-func newFutureGrant(privilege string, createObjType string, grantedOn string, name semantics.Ident, grantedTo ObjType,
+func newFutureGrant(privilege string, createObjType string, grantedOn string, name string, grantedTo ObjType,
 	grantedToDatabase semantics.Ident, grantedToRole semantics.Ident, grantOption bool) (FutureGrant, error) {
 	g := FutureGrant{
 		Privileges:        []PrivilegeComplete{ParsePrivilegeComplete(privilege, createObjType)},
@@ -94,22 +94,22 @@ func newFutureGrant(privilege string, createObjType string, grantedOn string, na
 	switch len(rec) {
 	case 2:
 		g.GrantedIn = ObjTpDatabase
-		g.Database = rec[0]
+		g.Database = semantics.Ident(rec[0])
 	case 3:
 		g.GrantedIn = ObjTpSchema
-		g.Database = rec[0]
-		g.Schema = rec[1]
+		g.Database = semantics.Ident(rec[0])
+		g.Schema = semantics.Ident(rec[1])
 	default:
 		return g, fmt.Errorf("parsing name in future grant failed")
 	}
 	switch g.GrantedOn {
 	case ObjTpSchema:
-		g.Database = rec[0]
-		g.Schema = rec[1]
+		g.Database = semantics.Ident(rec[0])
+		g.Schema = semantics.Ident(rec[1])
 	case ObjTpTable, ObjTpView:
-		g.Database = rec[0]
-		g.Schema = rec[1]
-		g.Object = rec[2]
+		g.Database = semantics.Ident(rec[0])
+		g.Schema = semantics.Ident(rec[1])
+		g.Object = semantics.Ident(rec[2])
 	default:
 		return g, fmt.Errorf("unsupported granted_on object type for future grant")
 	}
@@ -142,11 +142,10 @@ func QueryFutureGrantsToRoleFilteredLimit(ctx context.Context, conn *sql.DB, rol
 func buildSQLQueryFutureGrants(db semantics.Ident, role semantics.Ident, match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}, limit int) string {
 	// fetch grants for DATABASE ROLE if needed, rather than ROLE
 	var dbClause string
-	granteeName := role
+	granteeName := fmt.Sprintf(`%s`, role)
 	if db != "" {
 		dbClause = `DATABASE `
-		// Note how we quote the db identifier, other processes created it and may have used special characters.
-		granteeName = fmt.Sprintf(`%s.%s`, db, granteeName)
+		granteeName = fmt.Sprintf(`%s.%s`, db, role)
 	}
 
 	var whereClause string
@@ -198,7 +197,7 @@ func queryFutureGrantsToRole(ctx context.Context, conn *sql.DB, db semantics.Ide
 			var privilege string
 			var createObjectType string
 			var grantedOn string
-			var name semantics.Ident
+			var name string
 			var grantOption bool
 			if err = rows.Scan(&privilege, &createObjectType, &grantedOn, &name, &grantOption); err != nil {
 				yield(FutureGrant{}, err)

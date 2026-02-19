@@ -1,8 +1,12 @@
 package snowflake
 
+import (
+	"github.com/rwberendsen/grupr/internal/semantics"
+)
+
 type AggObjAttr struct {
 	ObjectType ObjType
-	Owner      string
+	Owner      semantics.Ident
 
 	// set when grant() is called on AggDBObjs
 	isSelectGrantedToRead     bool

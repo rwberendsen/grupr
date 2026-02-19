@@ -114,7 +114,7 @@ func (pd *ProductDTAP) createProductRoles(ctx context.Context, synCnf *syntax.Co
 }
 
 func (pd *ProductDTAP) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{},
-	createDBRoleGrants map[string]struct{}, c *accountCache) error {
+	createDBRoleGrants map[semantics.Ident]struct{}, c *accountCache) error {
 	for {
 		if err := pd.grant_(ctx, synCnf, cnf, conn, productRoles, createDBRoleGrants, c); err != ErrObjectNotExistOrAuthorized {
 			return err
@@ -123,7 +123,7 @@ func (pd *ProductDTAP) grant(ctx context.Context, synCnf *syntax.Config, cnf *Co
 }
 
 func (pd *ProductDTAP) grant_(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{},
-	createDBRoleGrants map[string]struct{}, c *accountCache) error {
+	createDBRoleGrants map[semantics.Ident]struct{}, c *accountCache) error {
 	if err := pd.refresh(ctx, synCnf, cnf, conn, c); err != nil {
 		return err
 	}
@@ -232,7 +232,7 @@ func (pd *ProductDTAP) revokeFromProductRole(ctx context.Context, cnf *Config, c
 }
 
 func (pd *ProductDTAP) refreshGrantRevoke(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{},
-	createDBRoleGrants map[string]struct{}, c *accountCache) error {
+	createDBRoleGrants map[semantics.Ident]struct{}, c *accountCache) error {
 	if err := pd.grant(ctx, synCnf, cnf, conn, productRoles, createDBRoleGrants, c); err != nil {
 		return err
 	}
@@ -269,7 +269,7 @@ func (pd *ProductDTAP) getToDoRevokes() iter.Seq[Grant] {
 }
 
 func (pd *ProductDTAP) revoke(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{},
-	createDBRoleGrants map[string]struct{}, c *accountCache) error {
+	createDBRoleGrants map[semantics.Ident]struct{}, c *accountCache) error {
 	if err := pd.revokeFromProductRole(ctx, cnf, conn); err != nil {
 		return err
 	}

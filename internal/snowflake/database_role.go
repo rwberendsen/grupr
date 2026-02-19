@@ -8,8 +8,8 @@ import (
 	"log"
 	"strings"
 
-	"github.com/rwberendsen/grupr/internal/syntax"
 	"github.com/rwberendsen/grupr/internal/semantics"
+	"github.com/rwberendsen/grupr/internal/syntax"
 )
 
 type DatabaseRole struct {
@@ -21,7 +21,7 @@ type DatabaseRole struct {
 	Name        semantics.Ident
 }
 
-func NewDatabaseRole(synCnf *syntax.Config, cnf *Config, productID string, dtap string, interfaceID string, mode Mode, db string) DatabaseRole {
+func NewDatabaseRole(synCnf *syntax.Config, cnf *Config, productID string, dtap string, interfaceID string, mode Mode, db semantics.Ident) DatabaseRole {
 	r := DatabaseRole{
 		ProductID:   productID,
 		DTAP:        dtap,
@@ -39,11 +39,11 @@ func NewDatabaseRole(synCnf *syntax.Config, cnf *Config, productID string, dtap 
 
 func newDatabaseRoleFromString(synCnf *syntax.Config, cnf *Config, db semantics.Ident, role semantics.Ident) (DatabaseRole, error) {
 	r := DatabaseRole{Name: role, Database: db}
-	roleStr = strings.ToLower(string(role))
+	roleStr := strings.ToLower(string(role))
 	if !strings.HasPrefix(roleStr, cnf.ObjectPrefix) {
 		return r, fmt.Errorf("role does not start with Grupr prefix: '%s'", r)
 	}
-	roleStr = strings.TrimPrefix(role, cnf.ObjectPrefix)
+	roleStr = strings.TrimPrefix(roleStr, cnf.ObjectPrefix)
 	parts := strings.Split(roleStr, synCnf.Infix)
 	if len(parts) != 3 && len(parts) != 4 {
 		return r, fmt.Errorf("role does not have three or four parts: '%s'", r)

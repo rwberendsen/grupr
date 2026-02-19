@@ -109,7 +109,7 @@ func (i *Interface) setAggAccountObjects() {
 	i.accountObjects = nil // reset, we do not need it anymore, and maps referenced inside this data structure may have been altered while summing
 }
 
-func (i *Interface) setFutureGrants(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, createDBRoleGrants map[string]struct{},
+func (i *Interface) setFutureGrants(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, createDBRoleGrants map[semantics.Ident]struct{},
 	pID string, dtap string, iID string, c *accountCache) error {
 	for db, dbObjs := range i.aggAccountObjects.DBs {
 		if !c.hasDB(db) {

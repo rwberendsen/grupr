@@ -13,10 +13,6 @@ import (
 
 type ColExpr [4]IdentMatcher
 
-const (
-	Column Part = iota + 3 // Database, Schema, and Object are defined with Expr; as well as type Part
-)
-
 func newColExpr(cnf *Config, s string) (ColExpr, error) {
 	r := ColExpr{}
 	reader := csv.NewReader(strings.NewReader(s)) // encoding/csv can conveniently handle quoted parts
@@ -49,7 +45,7 @@ func newColExpr(cnf *Config, s string) (ColExpr, error) {
 	}
 	// left-padding fields with * matchers until we have Database, Schema, Object, Column
 	for i := 0; i < 4-len(fields); i++ {
-		r[i] = NewMatchallIdentMatcher()
+		r[i] = NewMatchAllIdentMatcher()
 	}
 	for i := 0; i < len(fields); i++ {
 		r[4-len(fields)+i] = fields[i]

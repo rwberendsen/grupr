@@ -18,7 +18,7 @@ type Grupin struct {
 
 	// Some fetch-one time reference data on objects that exist in Snowflake already
 	productRoles       map[ProductRole]struct{}
-	createDBRoleGrants map[string]struct{}
+	createDBRoleGrants map[semantics.Ident]struct{}
 
 	// The account cache, used to fetch objects by several concurrent threads, possibly from the same databases and schemas
 	accountCache *accountCache
@@ -266,7 +266,7 @@ func (g *Grupin) setProductRoles(ctx context.Context, synCnf *syntax.Config, cnf
 }
 
 func (g *Grupin) setCreateDBRoleGrants(ctx context.Context, cnf *Config, conn *sql.DB) error {
-	g.createDBRoleGrants = map[string]struct{}{}
+	g.createDBRoleGrants = map[semantics.Ident]struct{}{}
 	for grant, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, cnf.Role, false,
 		map[GrantTemplate]struct{}{
 			GrantTemplate{
