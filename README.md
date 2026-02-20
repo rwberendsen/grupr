@@ -62,12 +62,12 @@ to keep track of which objects have their data in them.
 Together, the above fields form a kind of definition of what a data product is,
 when you use grupr.
 
-| :memo:   | A data product is a collection of objects that have            |
-|          | a single way of referring to DTAP environments and user groups |
-|----------|:---------------------------------------------------------------|
+A *data product* is a collection of objects that have a single way of referring
+to DTAP environments and user groups.
 
 This was designed as a bare minimum of information that a data platform team
-may require from any data team that wants to store objects on the platform.
+may require and enforce from any data team that wants to store objects on the
+platform.
 
 In many cases, DBAs or data platform engineers will be the ones to get 
 questions like:
@@ -105,5 +105,91 @@ are considered part of the interface. The same object can be part of multiple
 interfaces in grupr YAML.
 
 The `customer` interface belongs to a product with id `crm_fr`.
+An interface may override some metadata with regard to the product it belongs
+to. For example, it may define a lower classification, or a subset of
+user groups.
 
+## Consumption relationships
 
+Since products consume interfaces, let us add a few consumption relationships
+to our product example.
+
+```
+product:
+  id: crm
+  classification: l3
+  dtaps:
+    prod: p
+    non_prod: [d, t, a]
+  user_groups:
+    - fr
+    - de
+  objects:
+    - '{{ .DTAP }}_gold.crm.*'
+  consumes:
+    id: customer
+    product_id: crm_fr
+    id: customer
+    product_id: crm_de
+```
+
+It looks like our `crm` data product is consuming `customer` interfaces from CRM
+data products of two differernt user groups. With this information in hand,
+we can define a simple access management model.
+
+## Access management
+
+At the moment, we have a single access management model on top of Snowflake, 
+which we will discuss here.
+
+For each combination of data product and dtap, grupr creates a product read role.
+Employees working on this data product can assume this role. 
+
+The product role gets read access to all objects in the product, as well as
+read access to all objects in interfaces consumed by the product.
+
+Rather than directly getting privileges on the objects,for efficiency reasons
+(fewer relations to manage) privileges to objects are granted to database
+roles. Each product and each interface has a set of associated database roles,
+usually just one database role; but there can be more if objects of a sinlge
+product or interface reside in different databases.
+
+Concretely then, the product role is granted the database roles of the product
+objects, and the database roles of all interface it consumes.
+
+If you change the YAML, it can be that privileges that have been granted in the
+database, based on an earlier YAML version, need to be revoked, and grupr will
+indeed revoke such privileges. But if you as a DBA granted additional privileges
+to a (database) role, perhaps privileges that are not currently in scope for
+grupr, grupr will leave those privileges intact.
+
+It is important to note that grupr will also clean up after itself. Any
+(database) roles that it itself may have created in the past (i.e., that start
+with a configurable prefix) but that are not found in the YAML will be removed.
+However, if such roles have privileges that are outside of grupr its scope, 
+and therefore must have been granted outside of grupr, grupr logs a message but
+keeps the role and those additional privileges intact.
+
+It is interesting to compare the way grupr manages access with popular infra as
+code approaches like Terraform or OpenTofu. Such approaches tend to stay close
+to the kind of objects they create. You define each resource in code, and the
+tool manages its lifecycle, create, read, update, delete (CRUD). In contrast,
+in grupr YAML, you define more high level concepts like data products, interfaces,
+and consumption relationships. While those concepts may not have a one to one
+physical representation in the database, based on just a few concepts, potentially
+many resources such as roles, database roles, and privileges can be managed
+automatically.
+
+## Roadmap
+
+Next steps include:
+
+- The addition of a write role for each product, which will obtain OWNERSHIP
+  of all objects in the product. This role is intended for service accounts
+  to assume.
+- The ability to describe which service accounts deploy which data products.
+- The ability to describe which teams work on which data products.
+- Ways to query the YAML metadata and / or the physical objects: for example: 
+  - Give me a list of all products that consume interface X or Y.
+  - Give me a list of all products and interfaces that have data of usergroup A or B.
+  - Give me a list of all physical objects that have data of usergroup A or B.
