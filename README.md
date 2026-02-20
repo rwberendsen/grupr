@@ -9,12 +9,12 @@ views). You can annotate high level lineage in grupr YAML, where data products
 consume interfaces. 
 
 YAML is friendly to human eyes, so the collection of YAML files give you a
-understanding of your data platform at a high level. YAML it is also machine
-readable, which means there are use cases for automation, once you describe
-your data products in grupr its YAML format.  Currently, grupr can manage
+understanding of your data platform at a high level. Since YAML is also machine
+readable, there are use cases for automation, once you have defined
+your data products. Currently, grupr can manage
 access to data objects in Snowflake.
 
-Because grupr uses a simple text based data format (YAML), you can take
+Because grupr uses a text based data format, you can take
 your metadata with you wherever you go.
 
 Let's have a bit closer look at data products, interfaces, and the relations
@@ -39,22 +39,22 @@ product:
 ```
 
 There are a few things to note here.  First you assign all `objects` in schema
-`gold.crm` to a product with id `crm`. In grupr YAML, any object that may exist
-in your data platform can only be part of a single data product. This object
-grouping is already enough information to set up some basic access management
-in an automated fashion, and grupr does indeed provide an implementation of
-this; currently only for Snowflake, a well known SaaS database and compute
-platform.
+`p_gold.crm` (for the production environment) to a product with id `crm`. In
+grupr YAML, any object that may exist in your data platform can only be part of
+a single data product. This object grouping is already enough information to
+set up some basic access management in an automated fashion, and grupr does
+indeed provide an implementation of this; currently only for Snowflake, a well
+known SaaS database and compute platform.
 
 `classification` is a mandatory field at the moment. It is the classification
 of the most sensitive data contained in this data product. While you can define
-labels like `l3` here, you have to assign each label an integer value, and a
-higher value is interpreted as more sensitive. 
+labels like `l3` here, you have to assign (in a separate YAML file) each label
+an integer value, and a higher value is interpreted as more sensitive. 
 
 `dtaps` is optional, and can be used in cases where you have both production
 and non-production data available in one and the same collection of databases
-you are managing with this YAML. Note how you can use go template syntax to
-rendering the dtap name as part of a database, schema, or object identifier.
+that you are managing with this YAML. Note how you can use go template syntax
+to rendering the dtap name as part of a database, schema, or object identifier.
 You have to do this if you specify multiple DTAP environments; an object can
 only be part of a single DTAP.
 
