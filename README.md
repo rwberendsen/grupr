@@ -33,6 +33,7 @@ product:
   user_groups:
     - fr
     - de
+  user_group_column: user_group
   objects:
     - '{{ .DTAP }}_gold.crm.*'
 ```
@@ -54,10 +55,21 @@ higher value is interpreted as more sensitive.
 and non-production data available in one and the same collection of databases
 you are managing with this YAML. Note how you can use go template syntax to
 rendering the dtap name as part of a database, schema, or object identifier.
+You have to do this if you specify multiple DTAP environments; an object can
+only be part of a single DTAP.
 
 `user_groups` is a term borrowed from a LeanIX meta model. In enterprise
 settings, you may use it to refer to high level entities in your organisation,
-to keep track of which objects have their data in them.
+to keep track of which objects have their data in them. Like with DTAPs, you can use 
+use go templating to render the user group name as part of the database, schema,
+or object name. Unlike with DTAPs, you do not have to do so. If you don't, the
+object is considered to have data of all user groups.
+
+`user_group_column` is the name of a column that can be used by the data team
+that build the data product to denote to which user group each row in a table
+or view belongs, for tables or views that contain data that belongs to
+different user groups. This promotes a simple way of keeping track of data
+the user groups in your organisation accross your data platform.
 
 Together, the above fields form a kind of definition of what a data product is,
 when you use grupr.
@@ -83,6 +95,7 @@ Using this same YAML metadata for access management is not only convenient, but
 also ensures that the grouping will be correct. Your data teams will make sure
 they have access to all the data they need, and as a result, you will have a
 clean record of that.
+
 
 ## Interfaces
 
@@ -136,6 +149,25 @@ product:
 It looks like our `crm` data product is consuming `customer` interfaces from CRM
 data products of two differernt user groups. With this information in hand,
 we can define a simple access management model.
+
+## Other features
+
+There are more features than listed above, in particular features that
+introduce a bit more flexibility and configurability regarding classifications,
+user groups, dtaps, and consumption relationships. Different teams do things
+differently sometimes, and grupr is designed to capture some of those
+differences. For example, different data products may use different names for
+user groups, and grupr offers a way for you to map them on a single list of
+user group names. Different teams may have different DTAPs, too, and in a
+consumption relationship you can therefore specify a DTAP mapping.  Regarding
+both usergroups and DTAPs, how you name them in the YAML may not always reflect
+how they appear in physical object names, and for that reason you can define
+multiple mappings regarding how they should be rendered.
+
+grupr enforces a few policies, too. For example, production environments are not
+allowed to consume non-production environments. Products are not allowed to
+consume interfaces with a higher classification than the product classification
+itself. Such policies make sure the YAML in internally consistent, coherent.
 
 ## Access management
 
