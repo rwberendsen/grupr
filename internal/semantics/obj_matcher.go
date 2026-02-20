@@ -2,103 +2,107 @@ package semantics
 
 import (
 	"fmt"
-
-	"github.com/rwberendsen/grupr/internal/syntax"
+	"maps"
 )
 
 type ObjMatcher struct {
-	Include        ObjExprs
-	Exclude        ObjExprs            `yaml:",omitempty"`
-	StrictSuperset map[ObjExpr]ObjExpr `yaml:"strict_superset,omitempty"` // value is strict superset of key
-	StrictSubset   map[ObjExpr]ObjExpr `yaml:"strict_subset,omitempty"`   // value is strict subset of key
-}
-
-func newObjMatcher(include []string, exclude []string, dtaps syntax.Rendering, userGroups syntax.Rendering) (ObjMatcher, error) {
-	m := ObjMatcher{ObjExprs{}, ObjExprs{}, map[ObjExpr]ObjExpr{}, map[ObjExpr]ObjExpr{}}
-	for _, expr := range include {
-		objExprs, err := newObjExprs(expr, dtaps, userGroups)
-		if err != nil {
-			return m, fmt.Errorf("parsing obj expr: %s", err)
-		}
-		for e, ea := range objExprs {
-			if _, ok := m.Include[e]; ok {
-				return m, fmt.Errorf("duplicate include expr: '%v', with attributes: '%v'", e, ea)
-			}
-			m.Include[e] = ea
-		}
-	}
-	if ok := m.Include.allDisjoint(); !ok {
-		return m, fmt.Errorf("non disjoint set of include exprs")
-	}
-	for _, expr := range exclude {
-		objExprs, err := newObjExprs(expr, dtaps, userGroups)
-		if err != nil {
-			return m, fmt.Errorf("parsing obj expr: %s", err)
-		}
-		for e, ea := range objExprs {
-			if _, ok := m.Exclude[e]; ok {
-				return m, fmt.Errorf("duplicate exclude expr")
-			}
-			m.Exclude[e] = ea
-		}
-	}
-	if ok := m.Exclude.allDisjoint(); !ok {
-		return m, fmt.Errorf("non disjoint set of exclude exprs")
-	}
-	// Check that every expr in exclude is a strict subset of exactly one expression in include
-	for i := range m.Exclude {
-		hasStrictSuperset := 0
-		for j := range m.Include {
-			if i.subsetOf(j) && !j.subsetOf(i) {
-				hasStrictSuperset += 1
-				m.StrictSuperset[i] = j
-				m.StrictSubset[j] = i
-			}
-		}
-		if hasStrictSuperset != 1 {
-			return m, fmt.Errorf("exclude expr without exactly one strict superset include expr")
-		}
-	}
-	return m, nil
-}
-
-func (lhs ObjMatcher) Equal(rhs ObjMatcher) bool {
-	return lhs.Include.Equal(rhs.Include) && lhs.Exclude.Equal(rhs.Exclude)
-	// StrictSuperset and StrictSubset are derived from include and exclude, no need to compare
+	Include ObjExpr
+	ObjExprAttr
+	Exclude  map[ObjExpr]struct{} // No need to store ObjExprAttr of excluded objects
+	SubsetOf ObjExpr              // used for any ObjMatcher that is part of an interface; "" means none
 }
 
 func (lhs ObjMatcher) disjoint(rhs ObjMatcher) bool {
-	for l := range lhs.Include {
-		for r := range rhs.Include {
-			if !l.disjoint(r) {
-				if !l.subsetOfObjExprs(rhs.Exclude) && !r.subsetOfObjExprs(lhs.Exclude) {
-					return false
-				}
-			}
+	if lhs.Include.disjoint(rhs.Include) {
+		return true
+	}
+	for l := range lhs.Exclude {
+		if rhs.Include.subsetOf(l) {
+			return true
 		}
 	}
-	return true
+	for r := range rhs.Exclude {
+		if lhs.Include.subsetOf(r) {
+			return true
+		}
+	}
+	return false
 }
 
 func (lhs ObjMatcher) subsetOf(rhs ObjMatcher) bool {
-	for l := range lhs.Include {
-		hasSuperset := false
-		for r := range rhs.Include {
-			if l.subsetOf(r) {
-				if rExclude, ok := rhs.StrictSubset[r]; !ok {
-					hasSuperset = true
-					break
-				} else {
-					if !l.subsetOf(rExclude) {
-						hasSuperset = true
-						break
-					}
-				}
+	if !lhs.Include.subsetOf(rhs.Include) {
+		return false
+	}
+	// lhs.Include is subset of rhs.Include
+
+	// Two scenarios are now still possible where lhs is not a subset of rhs though:
+	// 1. lhs.Include is also a subset of one of rhs.Exclude[]
+	// 2. One of rhs.Exclude[] excludes objects that are in lhs.Include also and that are not excluded by any of lhs.Exclude[],
+	for r := range rhs.Exclude {
+		if lhs.Include.subsetOf(r) {
+			return false // lhs and rhs are disjoint
+		}
+		if !r.subsetOf(lhs.Include) {
+			continue // This rhs exclude is disjoint from lhs.Include, so, not related, let's say
+		}
+		// r is a subset of lhs.Include.
+		// Check that r is also excluded in lhs.Include, otherwise, lhs can not be a subset of rhs
+		alsoExcludedInLHS := false
+		for l := range lhs.Exclude {
+			if r.subsetOf(l) {
+				alsoExcludedInLHS = true
 			}
 		}
-		if !hasSuperset {
+		if !alsoExcludedInLHS {
 			return false
 		}
 	}
 	return true
+}
+
+func (om ObjMatcher) addExclude(e ObjExpr) ObjMatcher {
+	if om.Exclude == nil {
+		om.Exclude = map[ObjExpr]struct{}{}
+	}
+	om.Exclude[e] = struct{}{}
+	return om
+}
+
+func (lhs ObjMatcher) validateExprAttrAgainst(rhs ObjMatcher) error {
+	// Caller must ensure lhs is subset of rhs
+	if lhs.ObjExprAttr != rhs.ObjExprAttr {
+		return fmt.Errorf("mismatch in ObjExprAttr")
+	}
+	return nil
+}
+
+func (lhs ObjMatcher) DisjointFromDB(db Ident) bool {
+	rhs := ObjMatcher{Include: ObjExpr{IdentMatcher{S: db}, NewMatchAllIdentMatcher(), NewMatchAllIdentMatcher()}}
+	return lhs.disjoint(rhs)
+}
+
+func (lhs ObjMatcher) DisjointFromSchema(db Ident, schema Ident) bool {
+	rhs := ObjMatcher{Include: ObjExpr{IdentMatcher{S: db}, IdentMatcher{S: schema}, NewMatchAllIdentMatcher()}}
+	return lhs.disjoint(rhs)
+}
+
+func (lhs ObjMatcher) DisjointFromObject(db Ident, schema Ident, object Ident) bool {
+	rhs := ObjMatcher{Include: ObjExpr{IdentMatcher{S: db}, IdentMatcher{S: schema}, IdentMatcher{S: object}}}
+	return lhs.disjoint(rhs)
+}
+
+func (lhs ObjMatcher) SupersetOfDB(db Ident) bool {
+	rhs := ObjMatcher{Include: ObjExpr{IdentMatcher{S: db}, NewMatchAllIdentMatcher(), NewMatchAllIdentMatcher()}}
+	return rhs.subsetOf(lhs)
+}
+
+func (lhs ObjMatcher) SupersetOfSchema(db Ident, schema Ident) bool {
+	rhs := ObjMatcher{Include: ObjExpr{IdentMatcher{S: db}, IdentMatcher{S: schema}, NewMatchAllIdentMatcher()}}
+	return rhs.subsetOf(lhs)
+}
+
+func (lhs ObjMatcher) Equal(rhs ObjMatcher) bool {
+	return lhs.Include == rhs.Include &&
+		lhs.ObjExprAttr == lhs.ObjExprAttr &&
+		maps.Equal(lhs.Exclude, rhs.Exclude)
 }

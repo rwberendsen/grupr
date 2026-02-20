@@ -1,43 +1,94 @@
 package semantics
 
 import (
+	"fmt"
+	"iter"
 	"maps"
 
 	"github.com/rwberendsen/grupr/internal/syntax"
+	"github.com/rwberendsen/grupr/internal/util"
 )
 
 type DTAPSpec struct {
-	Prod          string
-	NonProd       map[string]bool
-	DTAPRendering syntax.Rendering
+	Prod           *string
+	NonProd        map[string]struct{}
+	DTAPRenderings map[string]syntax.Rendering
 }
 
-func newDTAPSpec(dsSyn syntax.DTAPSpec, dtapRendering syntax.Rendering) DTAPSpec {
-	if dsSyn.IsEmpty() {
-		// Not specifying any DTAP info means your objects will be considered as production, and you cannot use the [dtap] expansion
-		return DTAPSpec{
-			Prod:          "",
-			DTAPRendering: syntax.Rendering{}, // empty rendering
+func newDTAPSpec(cnf *Config, dsSyn *syntax.DTAPSpec, dtapRenderings map[string]syntax.Rendering) (DTAPSpec, error) {
+	var dsSem DTAPSpec
+	if dsSyn == nil {
+		// Not specifying any DTAP info means you will get a default DTAP spec, which has only a production DTAP
+		dsSem.Prod = &cnf.DefaultProdDTAPName
+	} else {
+		dsSem.Prod = dsSyn.Prod
+		if dsSyn.Prod != nil {
+			dsSem.Prod = dsSyn.Prod
+		}
+		dsSem.NonProd = make(map[string]struct{}, len(dsSyn.NonProd))
+		for _, d := range dsSyn.NonProd {
+			dsSem.NonProd[d] = struct{}{}
 		}
 	}
-	dsSem := DTAPSpec{
-		Prod:          dsSyn.Prod,
-		NonProd:       make(map[string]bool, len(dsSyn.NonProd)),
-		DTAPRendering: make(syntax.Rendering, len(dsSyn.NonProd)+1),
+	dsSem.DTAPRenderings = make(map[string]syntax.Rendering, len(dtapRenderings))
+	for k, r := range dtapRenderings {
+		dsSem.DTAPRenderings[k] = syntax.Rendering{}
+		for dtap := range dsSem.All() {
+			dsSem.DTAPRenderings[k][dtap] = dtap // default value
+		}
+		for dtap, v := range r {
+			if !dsSem.HasDTAP(dtap) {
+				return dsSem, &SetLogicError{fmt.Sprintf("dtap_rendering '%s': unknown dtap '%s'", k, dtap)}
+			}
+			dsSem.DTAPRenderings[k][dtap] = v
+		}
 	}
-	dsSem.DTAPRendering[dsSem.Prod] = dsSem.Prod
-	for _, d := range dsSyn.NonProd {
-		dsSem.NonProd[d] = true
-		dsSem.DTAPRendering[d] = d
+	return dsSem, nil
+}
+
+func (spec DTAPSpec) HasDTAP(dtap string) bool {
+	if spec.Prod != nil {
+		if *spec.Prod == dtap {
+			return true
+		}
 	}
-	for d, r := range dtapRendering {
-		dsSem.DTAPRendering[d] = r
+	_, ok := spec.NonProd[dtap]
+	return ok
+}
+
+func (spec DTAPSpec) IsProd(dtap string) bool {
+	return spec.Prod != nil && dtap == *spec.Prod
+}
+
+func (spec DTAPSpec) HasProd() bool {
+	return spec.Prod != nil
+}
+
+func (spec DTAPSpec) Count() int {
+	c := 0
+	if spec.Prod != nil {
+		c++
 	}
-	return dsSem
+	return c + len(spec.NonProd)
+}
+
+func (spec DTAPSpec) All() iter.Seq2[string, bool] {
+	return func(yield func(string, bool) bool) {
+		if spec.Prod != nil {
+			if !yield(*spec.Prod, true) {
+				return
+			}
+		}
+		for k := range spec.NonProd {
+			if !yield(k, false) {
+				return
+			}
+		}
+	}
 }
 
 func (lhs DTAPSpec) Equal(rhs DTAPSpec) bool {
-	return lhs.Prod == rhs.Prod &&
+	return util.EqualStrPtr(lhs.Prod, rhs.Prod) &&
 		maps.Equal(lhs.NonProd, rhs.NonProd) &&
-		maps.Equal(lhs.DTAPRendering, rhs.DTAPRendering)
+		maps.EqualFunc(lhs.DTAPRenderings, rhs.DTAPRenderings, syntax.Rendering.Equal)
 }

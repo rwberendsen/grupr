@@ -1,0 +1,249 @@
+package snowflake
+
+import (
+	"context"
+	"database/sql"
+	"encoding/csv"
+	"fmt"
+	"io"
+	"iter"
+	"strings"
+
+	"github.com/rwberendsen/grupr/internal/semantics"
+	"github.com/rwberendsen/grupr/internal/util"
+)
+
+type FutureGrant struct {
+	Privileges        []PrivilegeComplete
+	GrantedOn         ObjType
+	GrantedIn         ObjType
+	Database          semantics.Ident
+	Schema            semantics.Ident
+	Object            semantics.Ident
+	GrantedTo         ObjType
+	GrantedToDatabase semantics.Ident
+	GrantedToRole     semantics.Ident
+	GrantOption       bool // TODO: if we re-grant the same grant with a different grant option, does it get overwritten? Could be a way to correct such mishaps
+}
+
+func (g FutureGrant) buildSQLGrant(revoke bool) string {
+	verb := `GRANT`
+	preposition := `TO`
+	if revoke {
+		verb = `REVOKE`
+		preposition = `FROM`
+	}
+
+	var granteeClause string
+	switch g.GrantedTo {
+	case ObjTpRole:
+		granteeClause = fmt.Sprintf(`%s ROLE %s`, preposition, g.GrantedToRole)
+	case ObjTpDatabaseRole:
+		granteeClause = fmt.Sprintf(`%s DATABASE ROLE %s.%s`, preposition, g.GrantedToDatabase, g.GrantedToRole)
+	default:
+		panic("Not implemented")
+	}
+
+	privilegeClause := strings.Join(util.FmtSliceElements[PrivilegeComplete](g.Privileges...), `, `)
+
+	onClause := `ON FUTURE `
+	inClause := `IN `
+	switch g.GrantedOn {
+	case ObjTpSchema:
+		// Only supported IN DATABASE, only USAGE supported
+		if g.GrantedIn != ObjTpDatabase {
+			panic("Not implemented")
+		}
+		inClause += fmt.Sprintf(`%v %s`, g.GrantedIn, g.Database)
+	case ObjTpTable, ObjTpView:
+		switch g.GrantedIn {
+		case ObjTpDatabase:
+			inClause += fmt.Sprintf(`%v %s`, g.GrantedIn, g.Database)
+		case ObjTpSchema:
+			inClause += fmt.Sprintf(`%v %s.%s`, g.GrantedIn, g.Database, g.Schema)
+		default:
+			panic("Not implemented")
+		}
+	default:
+		panic("Not implemented")
+	}
+
+	onClause += fmt.Sprintf(`%vS`, g.GrantedOn)
+	return fmt.Sprintf(`%v %s %s %s %s`, verb, privilegeClause, onClause, inClause, granteeClause)
+}
+
+func newFutureGrant(privilege string, createObjType string, grantedOn string, name string, grantedTo ObjType,
+	grantedToDatabase semantics.Ident, grantedToRole semantics.Ident, grantOption bool) (FutureGrant, error) {
+	g := FutureGrant{
+		Privileges:        []PrivilegeComplete{ParsePrivilegeComplete(privilege, createObjType)},
+		GrantedOn:         ParseObjType(grantedOn),
+		GrantedTo:         grantedTo,
+		GrantedToDatabase: grantedToDatabase,
+		GrantedToRole:     grantedToRole,
+		GrantOption:       grantOption,
+	}
+	r := csv.NewReader(strings.NewReader(name)) // handles quoted fields as they appear in name
+	r.Comma = '.'
+	rec, err := r.Read()
+	if err != nil {
+		return g, err
+	}
+	if _, err = r.Read(); err != io.EOF {
+		return g, err
+	} // more than one record
+	switch len(rec) {
+	case 2:
+		g.GrantedIn = ObjTpDatabase
+		g.Database = semantics.Ident(rec[0])
+	case 3:
+		g.GrantedIn = ObjTpSchema
+		g.Database = semantics.Ident(rec[0])
+		g.Schema = semantics.Ident(rec[1])
+	default:
+		return g, fmt.Errorf("parsing name in future grant failed")
+	}
+	switch g.GrantedOn {
+	case ObjTpSchema:
+		g.Database = semantics.Ident(rec[0])
+		g.Schema = semantics.Ident(rec[1])
+	case ObjTpTable, ObjTpView:
+		g.Database = semantics.Ident(rec[0])
+		g.Schema = semantics.Ident(rec[1])
+		g.Object = semantics.Ident(rec[2])
+	default:
+		return g, fmt.Errorf("unsupported granted_on object type for future grant")
+	}
+	return g, nil
+}
+
+func QueryFutureGrantsToRoleFiltered(ctx context.Context, conn *sql.DB, role semantics.Ident,
+	match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}) iter.Seq2[FutureGrant, error] {
+	return queryFutureGrantsToRole(ctx, conn, "", role, match, notMatch, 0)
+}
+
+func QueryFutureGrantsToDBRoleFiltered(ctx context.Context, conn *sql.DB, db semantics.Ident, role semantics.Ident,
+	match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}) iter.Seq2[FutureGrant, error] {
+	return queryFutureGrantsToRole(ctx, conn, db, role, match, notMatch, 0)
+}
+
+func QueryFutureGrantsToRole(ctx context.Context, conn *sql.DB, role semantics.Ident) iter.Seq2[FutureGrant, error] {
+	return queryFutureGrantsToRole(ctx, conn, "", role, nil, nil, 0)
+}
+
+func QueryFutureGrantsToDBRole(ctx context.Context, conn *sql.DB, db semantics.Ident, role semantics.Ident) iter.Seq2[FutureGrant, error] {
+	return queryFutureGrantsToRole(ctx, conn, db, role, nil, nil, 0)
+}
+
+func QueryFutureGrantsToRoleFilteredLimit(ctx context.Context, conn *sql.DB, role semantics.Ident,
+	match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}, limit int) iter.Seq2[FutureGrant, error] {
+	return queryFutureGrantsToRole(ctx, conn, "", role, match, notMatch, limit)
+}
+
+func buildSQLQueryFutureGrants(db semantics.Ident, role semantics.Ident, match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}, limit int) string {
+	// fetch grants for DATABASE ROLE if needed, rather than ROLE
+	var dbClause string
+	granteeName := fmt.Sprintf(`%s`, role)
+	if db != "" {
+		dbClause = `DATABASE `
+		granteeName = fmt.Sprintf(`%s.%s`, db, role)
+	}
+
+	var whereClause string
+	clauseStr, nClauses := buildSQLMatchNotMatchGrantTemplates(match, notMatch)
+	if nClauses > 0 {
+		whereClause = fmt.Sprintf("\nWHERE\n  %s", strings.ReplaceAll(clauseStr, "\n", "\n  "))
+	}
+
+	query := fmt.Sprintf(`SHOW FUTURE GRANTS TO %sROLE IDENTIFIER('%s')
+->> SELECT
+    CASE
+    WHEN STARTSWITH("privilege", 'CREATE ') THEN 'CREATE'
+    ELSE "privilege"
+    END AS privilege
+  , CASE
+    WHEN STARTSWITH("privilege", 'CREATE ') THEN SUBSTR("privilege", 8)
+    ELSE NULL
+    END AS create_object_type
+  , "grant_on"		AS granted_on
+  , "name"		AS name
+  , "grant_option"	AS grant_option
+FROM $1%s`, dbClause, granteeName, whereClause)
+
+	if limit > 0 {
+		query += fmt.Sprintf("\nLIMIT %d", limit)
+	}
+
+	return query
+}
+
+func queryFutureGrantsToRole(ctx context.Context, conn *sql.DB, db semantics.Ident, role semantics.Ident,
+	match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}, limit int) iter.Seq2[FutureGrant, error] {
+	grantedTo := ObjTpRole
+	if db != "" {
+		grantedTo = ObjTpDatabaseRole
+	}
+	query := buildSQLQueryFutureGrants(db, role, match, notMatch, limit)
+	return func(yield func(FutureGrant, error) bool) {
+		rows, err := conn.QueryContext(ctx, query)
+		if err != nil {
+			if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
+				err = ErrObjectNotExistOrAuthorized
+			}
+			yield(FutureGrant{}, err)
+			return
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var privilege string
+			var createObjectType string
+			var grantedOn string
+			var name string
+			var grantOption bool
+			if err = rows.Scan(&privilege, &createObjectType, &grantedOn, &name, &grantOption); err != nil {
+				yield(FutureGrant{}, err)
+				return
+			}
+			g, err := newFutureGrant(privilege, createObjectType, grantedOn, name, grantedTo, db, role, grantOption)
+			if err != nil {
+				yield(FutureGrant{}, err)
+			}
+			if !yield(g, nil) {
+				return
+			}
+		}
+		if err = rows.Err(); err != nil {
+			yield(FutureGrant{}, err)
+			return
+		}
+	}
+}
+
+func DoFutureGrants(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[FutureGrant]) error {
+	return doFutureGrants(ctx, cnf, conn, grants, false)
+}
+
+func DoFutureRevokes(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[FutureGrant]) error {
+	return doFutureGrants(ctx, cnf, conn, grants, true)
+}
+
+func doFutureGrants(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[FutureGrant], revoke bool) error {
+	// Runs grant statements in batches
+	buf := make([]string, cnf.StmtBatchSize)
+	i := 0
+	for g := range grants {
+		if i == cnf.StmtBatchSize {
+			if err := runMultipleSQL(ctx, cnf, conn, strings.Join(buf, ";"), i); err != nil {
+				return err
+			}
+			i = 0
+		}
+		buf[i] = g.buildSQLGrant(revoke)
+		i++
+	}
+	if i > 0 {
+		if err := runMultipleSQL(ctx, cnf, conn, strings.Join(buf[0:i], ";"), i); err != nil {
+			return err
+		}
+	}
+	return nil
+}

@@ -1,11 +1,9 @@
 package semantics
 
-import "gopkg.in/yaml.v3"
-
 type GrupinDiff struct {
-	Created map[string]Product     `yaml:",omitempty"`
-	Deleted map[string]Product     `yaml:",omitempty"`
-	Updated map[string]ProductDiff `yaml:",omitempty"`
+	Created map[string]Product
+	Deleted map[string]Product
+	Updated map[string]ProductDiff
 	// TODO: GlobalUserGroups, UserGroupMappings, when use cases need to compare them, expose them here somehow.
 	Old Grupin
 	New Grupin
@@ -38,12 +36,4 @@ func NewGrupinDiff(lhs Grupin, rhs Grupin) GrupinDiff {
 type ProductDiff struct {
 	Old Product
 	New Product
-}
-
-func (g GrupinDiff) String() string {
-	data, err := yaml.Marshal(g)
-	if err != nil {
-		panic("GrupsDiff could not be marshalled")
-	}
-	return string(data)
 }

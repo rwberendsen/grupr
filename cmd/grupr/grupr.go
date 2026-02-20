@@ -1,17 +1,21 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
 	"github.com/rwberendsen/grupr/internal/snowflake"
-	"github.com/rwberendsen/grupr/internal/util"
+	"github.com/rwberendsen/grupr/internal/syntax"
 )
 
 func main() {
-	oldFlag := flag.String("o", "", "old YAML, if any")
+	// oldFlag := flag.String("o", "", "old YAML, if any") // TODO: grupinDiff needs work
 	flag.Parse()
 	if len(flag.Args()) != 1 {
 		log.Fatalf("need one argument with path to YAML")
@@ -35,11 +39,14 @@ func main() {
 	// temp key in S3 and then copy them; S3 CopyObject does support condtional write
 	// headers; most likely they would be applied on the target object for the copy
 	// operation. So, yeah, most likely this would work.
-	newGrupin, err := util.GetGrupinFromPath(flag.Arg(0))
+	synCnf := syntax.GetConfig()
+	semCnf := semantics.GetConfig()
+	newGrupin, err := getGrupinFromPath(synCnf, semCnf, flag.Arg(0))
 	if err != nil {
 		log.Fatalf("get new grupin: %v", err)
 	}
 
+	/* TODO: consider implementing GrupinDiff
 	if *oldFlag != "" {
 		oldGrupin, err := util.GetGrupinFromPath(*oldFlag)
 		if err != nil {
@@ -54,13 +61,41 @@ func main() {
 		// expanding the object (exclude) expressions to sets of matching tables.
 		snowflake.NewGrupinDiff(grupinDiff)
 	}
+	*/
 
-	snowflakeNewGrupin := snowflake.NewGrupin(newGrupin)
+	// Set up catching signals and context before we do network requests
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGTERM)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		<-sigs   // block until we receive Signal
+		cancel() // cancel context we will use to spawn threads, e.g., that hit our backend, e.g., Snowflake
+	}()
 
-	basicStats := snowflake.NewBasicStats(newGrupin, snowflakeNewGrupin)
-	err = snowflake.PersistInSnowflake(basicStats)
+	// Get DB connection; calling this only once and passing it around as necessary
+	snowCnf, err := snowflake.GetConfig(semCnf)
 
+	conn, err := snowflake.GetDB(ctx, snowCnf)
 	if err != nil {
-		log.Fatalf("persisting stats: %v", err)
+		log.Fatalf("error creating db connection: %v", err)
 	}
+
+	// Create Snowflake Grupin object, which will hold relevant account objects per data product
+	snowflakeNewGrupin := snowflake.NewGrupin(ctx, snowCnf, conn, newGrupin)
+
+	// Use it now to manage access
+	if err := snowflakeNewGrupin.ManageAccess(ctx, synCnf, snowCnf, conn); err != nil {
+		log.Fatalf("ManageAccess: %v", err)
+	}
+
+	// And, after managing access, which may have resulted in numerous refreshes of which objects exist,
+	// let's store the latest object counts
+	if err := snowflake.StoreObjCountsRows(ctx, snowCnf, conn, snowflakeNewGrupin.GetObjCountsRows()); err != nil {
+		log.Fatalf("StoreObjectCounts: %v", err)
+	}
+
+	// TODO: also think about how to guard against an error scenario in which someone triggers an old grupr run in CI/CD, e.g., we could store a UUID, or even a git hash
+	// in the Grupr schema of the currently running run; the last thing Grupr would always try before crashing is to wipe that one; but, it'd mean from time to time ops may have
+	// to come in and delete that one; but imagine the bewilderment if two grupr processes are concurrently trying to make two different yamls the reality...
 }

@@ -1,4 +1,4 @@
-package util
+package main
 
 import (
 	"os"
@@ -7,17 +7,17 @@ import (
 	"github.com/rwberendsen/grupr/internal/syntax"
 )
 
-func GetGrupinFromPath(path string) (semantics.Grupin, error) {
+func getGrupinFromPath(synCnf *syntax.Config, semCnf *semantics.Config, path string) (semantics.Grupin, error) {
 	var r semantics.Grupin
 	f, err := os.Open(path)
 	if err != nil {
 		return r, err
 	}
-	g, err := syntax.NewGrupin(f)
+	g, err := syntax.NewGrupin(synCnf, f)
 	f.Close()
 	if err != nil {
 		return r, err
 	}
-	r, err = semantics.NewGrupin(g)
+	r, err = semantics.NewGrupin(semCnf, g)
 	return r, err
 }

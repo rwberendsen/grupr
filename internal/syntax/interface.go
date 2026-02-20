@@ -7,14 +7,17 @@ import (
 type Interface struct {
 	ID                string `yaml:"id"`
 	ProductID         string `yaml:"product_id"`
-	InterfaceMetadata `yaml:"interface_metadata,inline"`
+	InterfaceMetadata `yaml:",inline"`
 }
 
-func (i *Interface) validate() error {
-	if err := validateID(i.ID); err != nil {
+func (i *Interface) validate(cnf *Config) error {
+	if err := ValidateIDPart(cnf, i.ID); err != nil {
 		return err
 	}
-	if err := i.InterfaceMetadata.validate(); err != nil {
+	if err := ValidateIDPart(cnf, i.ProductID); err != nil {
+		return err
+	}
+	if err := i.InterfaceMetadata.validate(cnf); err != nil {
 		return fmt.Errorf("interface '%s' of product '%s': %v", i.ID, i.ProductID, err)
 	}
 	return nil

@@ -1,87 +1,70 @@
 package snowflake
 
 import (
+	"context"
 	"crypto/rsa"
 	"crypto/x509"
 	"database/sql"
 	"encoding/base64"
+	"fmt"
 	"log"
-	"os"
 
-	"github.com/rwberendsen/grupr/internal/config"
-
+	"github.com/rwberendsen/grupr/internal/util"
 	"github.com/snowflakedb/gosnowflake"
 )
 
-var db *sql.DB
-
-func getDB() *sql.DB {
-	if db != nil {
-		return db
-	}
-	user := config.GetEnvOrDie("GRUPR_SNOWFLAKE_USER")
-	role := config.GetEnvOrDie("GRUPR_SNOWFLAKE_ROLE")
-	account := config.GetEnvOrDie("GRUPR_SNOWFLAKE_ACCOUNT")
-	dbName := config.GetEnvOrDie("GRUPR_SNOWFLAKE_DB")
-	useSQLOpen := config.GetEnvOrDie("GRUPR_SNOWFLAKE_USE_SQL_OPEN")
-
+func GetDB(ctx context.Context, snowCnf *Config) (*sql.DB, error) {
+	var conn *sql.DB
 	var rsaKey *rsa.PrivateKey
-	if useSQLOpen == "true" {
-		dsn := user + "@" + account + "/" + dbName + "?authenticator=" + gosnowflake.AuthTypeExternalBrowser.String()
+	if snowCnf.UseSQLOpen {
+		dsn := fmt.Sprintf("%v@%v/%v?authenticator=%s", util.EscapeQuotes(snowCnf.User.String()), snowCnf.Account,
+			util.EscapeQuotes(snowCnf.Database.String()), gosnowflake.AuthTypeExternalBrowser.String())
 		log.Printf("dsn: %v", dsn)
 		var err error
-		db, err = sql.Open("snowflake", dsn)
+		conn, err = sql.Open("snowflake", dsn)
 		if err != nil {
-			log.Fatalf("sql.Open error: %v", err)
+			return nil, err
 		}
 	} else {
 		var cnf *gosnowflake.Config
-		if keyPath, ok := os.LookupEnv("GRUPR_SNOWFLAKE_RSA_KEY_PATH"); !ok {
+		if snowCnf.RSAKeyPath == "" {
 			cnf = &gosnowflake.Config{
-				Account:       account,
-				User:          user,
-				Role:          role,
-				Database:      dbName,
+				Account:       snowCnf.Account,
+				User:          string(snowCnf.User),
+				Role:          string(snowCnf.Role),
+				Database:      string(snowCnf.Database),
 				Authenticator: gosnowflake.AuthTypeExternalBrowser,
 				Params:        map[string]*string{},
 			}
 		} else {
 			var err error
-			rsaKey, err = getPrivateRSAKey(keyPath)
+			rsaKey, err = getPrivateRSAKey(snowCnf.RSAKeyPath)
 			if err != nil {
-				log.Fatalf("getting rsa key: %v", err)
+				return nil, err
 			}
 			cnf = &gosnowflake.Config{
-				Account:       account,
-				User:          user,
-				Role:          role,
-				Database:      dbName,
+				Account:       snowCnf.Account,
+				User:          string(snowCnf.User),
+				Role:          string(snowCnf.Role),
+				Database:      string(snowCnf.Database),
 				Authenticator: gosnowflake.AuthTypeJwt,
 				PrivateKey:    rsaKey,
 				Params:        map[string]*string{},
 			}
 		}
 		connector := gosnowflake.NewConnector(gosnowflake.SnowflakeDriver{}, *cnf)
-		db = sql.OpenDB(connector)
+		conn = sql.OpenDB(connector)
 	}
-	rows, err := db.Query("SELECT CURRENT_USER()")
+	conn.SetMaxOpenConns(snowCnf.MaxOpenConns)
+	conn.SetMaxIdleConns(snowCnf.MaxIdleConns)
+	err := conn.PingContext(ctx)
 	if err != nil {
 		if rsaKey != nil {
 			log.Printf("please make sure public key is registered in Snowflake:")
 			pubKeyByte, _ := x509.MarshalPKIXPublicKey(rsaKey.Public())
 			log.Print(base64.StdEncoding.EncodeToString(pubKeyByte))
 		}
-		log.Fatalf("Error querying: %v", err)
+		return conn, err
 	}
-	for rows.Next() {
-		var s string
-		if err = rows.Scan(&s); err != nil {
-			log.Fatalf("error scanning rows: %v", err)
-		}
-		log.Printf("Connection is open with user %s", s)
-	}
-	if err = rows.Err(); err != nil {
-		log.Fatalf("errors found during scanning: %s", err)
-	}
-	return db
+	return conn, nil
 }

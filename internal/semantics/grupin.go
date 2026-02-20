@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/rwberendsen/grupr/internal/syntax"
-	"gopkg.in/yaml.v3"
 )
 
 type Grupin struct {
@@ -21,7 +20,7 @@ type Grupin struct {
 	//	 For now, these bigger changes are outside of the scope, and even when in scope, perhaps they can be handled outside of the Grupin data structure.
 }
 
-func NewGrupin(gSyn syntax.Grupin) (Grupin, error) {
+func NewGrupin(cnf *Config, gSyn syntax.Grupin) (Grupin, error) {
 	start := time.Now()
 	log.Printf("Validating deserialized YAML documents...\n")
 	gSem := Grupin{
@@ -30,6 +29,12 @@ func NewGrupin(gSyn syntax.Grupin) (Grupin, error) {
 		UserGroupMappings: map[string]UserGroupMapping{},
 		Products:          map[string]Product{},
 	}
+	// Validate user group mappings
+	// Add identity mapping for ease of reference
+	gSem.UserGroupMappings[""] = UserGroupMapping{}
+	for k, _ := range gSem.GlobalUserGroups {
+		gSem.UserGroupMappings[""][k] = k
+	}
 	for k, v := range gSyn.UserGroupMappings {
 		if ugm, err := newUserGroupMapping(v, gSem.GlobalUserGroups); err != nil {
 			return gSem, err
@@ -37,28 +42,41 @@ func NewGrupin(gSyn syntax.Grupin) (Grupin, error) {
 			gSem.UserGroupMappings[k] = ugm
 		}
 	}
+	// Validate product specs
 	for k, v := range gSyn.Products {
-		if p, err := newProduct(v, gSem.Classes, gSem.GlobalUserGroups, gSem.UserGroupMappings); err != nil {
+		if p, err := newProduct(cnf, v, gSem.Classes, gSem.GlobalUserGroups, gSem.UserGroupMappings); err != nil {
 			return gSem, err
 		} else {
 			gSem.Products[k] = p
 		}
 	}
+	// Validate interface specs
 	for iid, v := range gSyn.Interfaces {
-		if err := gSem.validateInterfaceID(iid); err != nil {
-			return gSem, err
-		}
-		dtaps := gSem.Products[iid.ProductID].DTAPs.DTAPRendering
-		parent := gSem.Products[iid.ProductID].InterfaceMetadata
-		if im, err := newInterfaceMetadata(v.InterfaceMetadata, gSem.Classes, gSem.GlobalUserGroups, gSem.UserGroupMappings, dtaps, &parent); err != nil {
-			return gSem, fmt.Errorf("interface '%s': %w", iid, err)
+		if parentProduct, ok := gSem.Products[iid.ProductID]; !ok {
+			return gSem, &SetLogicError{fmt.Sprintf("interface id '%s': product not found", iid)}
 		} else {
-			gSem.Products[iid.ProductID].Interfaces[iid.ID] = im
+			ds := parentProduct.DTAPs
+			userGroupMapping := gSem.UserGroupMappings[parentProduct.UserGroupMappingID]
+			userGroupRenderings := parentProduct.UserGroupRenderings
+			parent := parentProduct.InterfaceMetadata
+			if im, err := newInterfaceMetadata(cnf, v.InterfaceMetadata, gSem.Classes, ds, userGroupMapping, userGroupRenderings, &parent); err != nil {
+				return gSem, fmt.Errorf("interface '%s': %w", iid, err)
+			} else {
+				parentProduct.Interfaces[iid.ID] = im
+			}
 		}
 	}
+	// Validate DTAP and UserGroup tagging
+	for k, v := range gSem.Products {
+		if err := v.validateExprAttr(); err != nil {
+			return gSem, fmt.Errorf("product '%s': %w", k, err)
+		}
+	}
+	// Validate consume relationships
 	if err := gSem.allConsumedOk(); err != nil {
 		return gSem, err
 	}
+	// Validate all products are disjoint
 	if err := gSem.allDisjoint(); err != nil {
 		return gSem, err
 	}
@@ -69,21 +87,45 @@ func NewGrupin(gSyn syntax.Grupin) (Grupin, error) {
 
 func (g Grupin) allConsumedOk() error {
 	for _, p := range g.Products {
-		for iid := range p.Consumes {
-			if _, ok := g.Products[iid.ProductID]; !ok {
+		for iid, dtapMapping := range p.Consumes {
+			pSource, ok := g.Products[iid.ProductID]
+			if !ok {
 				return &SetLogicError{fmt.Sprintf("product '%s': consumed interface '%s': product not found", p.ID, iid)}
 			}
-			if _, ok := g.Products[iid.ProductID].Interfaces[iid.ID]; !ok {
+			iSource, ok := pSource.Interfaces[iid.ID]
+			if !ok {
 				return &SetLogicError{
 					fmt.Sprintf("product '%s': consumed interface '%s': interface not found", p.ID, iid),
 				}
 			}
-			// TODO: think: this policy is also checked when creating the product semantic object, perhaps remove check in one of these places.
-			if iid.ProductID == p.ID {
-				return &PolicyError{fmt.Sprintf("product '%s' not allowed to consume own interface '%s'", iid.ProductID, iid.ID)}
-			}
-			if p.Classification < g.Products[iid.ProductID].Interfaces[iid.ID].Classification {
+			if p.Classification < iSource.Classification {
+				// TODO: consider removing this policy rule, possibly too strict
+				// It might be useful to keep it, if e.g., you are using masking or hashing directives in the YAML,
+				// then when you define those, you lower the classification of the interface accordingly;
+				// you can have a separate interface for the same tables where you do not use such directives, and
+				// where you keep the higher classification.
+				// and then you implement some mechanism by which you make sure if a consumer consumes the
+				// interface with masking or hashing directives, that the consumer indeed does not consume the
+				// unmasked and unhashed data.
 				return &PolicyError{fmt.Sprintf("product '%s' consumes interface with higher classification", p.ID)}
+			}
+
+			// Check DTAP mapping
+			// TODO: add hide_dtaps to interface metadata, union product level and interface level, and check here that hidden dtaps are not consumed.
+			for dtapSelf, dtapSource := range dtapMapping {
+				if p.DTAPs.IsProd(dtapSelf) {
+					if !pSource.DTAPs.HasProd() {
+						// TODO: when source has hidden dtaps, consider that here, too
+						return &PolicyError{fmt.Sprintf("product '%s': consumed interface '%s': source has no prod dtap", p.ID, iid)}
+					}
+					dtapSource = *pSource.DTAPs.Prod
+					dtapMapping[dtapSelf] = dtapSource
+				} else if !pSource.DTAPs.HasDTAP(dtapSource) {
+					return &SetLogicError{fmt.Sprintf("product '%s': consumed interface '%s': dtap '%s': dtap not found", p.ID, iid, dtapSource)}
+				}
+				// Even though iSource is a copy, all copies reference the same map, initialized upon creation by NewInterface
+				// So we can reach into that map here and add an element to it
+				iSource.ConsumedBy[dtapSource][ProductDTAPID{ProductID: p.ID, DTAP: dtapSelf}] = struct{}{}
 			}
 		}
 		for id, im := range p.Interfaces {
@@ -123,12 +165,4 @@ func (g Grupin) validateInterfaceID(iid syntax.InterfaceID) error {
 		return &SetLogicError{fmt.Sprintf("interface id '%s': product not found", iid)}
 	}
 	return nil
-}
-
-func (g Grupin) String() string {
-	data, err := yaml.Marshal(g)
-	if err != nil {
-		panic("Grups could not be marshalled")
-	}
-	return string(data)
 }

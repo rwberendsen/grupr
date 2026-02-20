@@ -2,79 +2,74 @@ package semantics
 
 import (
 	"fmt"
-	"maps"
-	"strings"
 
 	"github.com/rwberendsen/grupr/internal/syntax"
+	"github.com/rwberendsen/grupr/internal/util"
 )
 
-type ObjExprs map[ObjExpr]ObjExprAttr
+type objExprs map[ObjExpr]ObjExprAttr
 
-const (
-	DTAPTemplate      = "[dtap]" // TODO: At some point, make the character(s) used to demarkate this template configurable; or, just the whole template; remember, this expands even inside of quoted parts; it happens before splitting.
-	UserGroupTemplate = "[user_group]"
-)
+func newObjExprs(cnf *Config, s string, ds DTAPSpec, userGroups map[string]struct{}, userGroupRenderings map[string]syntax.Rendering) (objExprs, error) {
+	if len(userGroups) == 0 {
+		return newObjExprsWithoutUserGroups(cnf, s, ds)
+	}
+	return newObjExprsWithUserGroups(cnf, s, ds, userGroups, userGroupRenderings)
+}
 
-func newObjExprs(s string, dtaps syntax.Rendering, userGroups syntax.Rendering) (ObjExprs, error) {
-	exprs := ObjExprs{}
-	if strings.ContainsRune(s, '\n') {
-		return exprs, fmt.Errorf("object expression has newline")
+func newObjExprsWithoutUserGroups(cnf *Config, s string, ds DTAPSpec) (objExprs, error) {
+	exprs := objExprs{}
+	renderings, err := renderTmplDataDTAP(s, util.Seq2First(ds.All()), ds.DTAPRenderings)
+	if err != nil {
+		return exprs, err
 	}
-	dtapExpanded := map[string]ObjExprAttr{}
-	if strings.Contains(s, DTAPTemplate) { // If object exists only in, say, a dev env, that's okay. Cause it's okay if the production rendition of the object does not match any existing objects. What counts is that if they would exist, then they would be matched.
-		if len(dtaps) == 0 {
-			return exprs, fmt.Errorf("expanding dtaps in '%s': no dtap renderings found", s)
+	for r, m := range renderings {
+		if len(m) > 1 {
+			return exprs, &syntax.FormattingError{fmt.Sprintf("'%s': multiple associated dtaps", s)}
 		}
-		for d, renderedDTAP := range dtaps {
-			dtapExpanded[strings.ReplaceAll(s, DTAPTemplate, renderedDTAP)] = ObjExprAttr{DTAP: d}
-		}
-	} else {
-		if len(dtaps) != 0 {
-			return exprs, fmt.Errorf("The product has dtap renderings, but no DTAP expansion found")
-		}
-		dtapExpanded[s] = ObjExprAttr{}
-	}
-	userGroupExpanded := map[string]ObjExprAttr{}
-	for k, v := range dtapExpanded {
-		if strings.Contains(k, UserGroupTemplate) { // If object only actually exists for, say, one particular user group, that's okay. Cause it's okay if the rendition of the object for other user groups does not match any existing objects. What counts is that if they would exist, then they would be matched.
-			if len(userGroups) == 0 {
-				return exprs, fmt.Errorf("expanding user groups in '%s': no user groups found", k)
-			}
-			for u, renderedUserGroup := range userGroups {
-				userGroupExpanded[strings.ReplaceAll(k, UserGroupTemplate, renderedUserGroup)] = ObjExprAttr{DTAP: v.DTAP, UserGroups: syntax.Rendering{u: renderedUserGroup}}
-			}
-		} else {
-			userGroupExpanded[k] = ObjExprAttr{DTAP: v.DTAP, UserGroups: userGroups} // Objects matched by expression are shared between user groups
-		}
-	}
-	for k, v := range userGroupExpanded {
-		expr, err := newObjExpr(k)
+		expr, err := newObjExpr(cnf, r)
 		if err != nil {
 			return exprs, err
 		}
-		exprs[expr] = v
+		for ea := range m {
+			exprs[expr] = ea
+		}
 	}
 	return exprs, nil
 }
 
-func (m ObjExprs) allDisjoint() bool {
-	if len(m) < 2 {
-		return true
+func newObjExprsWithUserGroups(cnf *Config, s string, ds DTAPSpec, userGroups map[string]struct{},
+	userGroupRenderings map[string]syntax.Rendering) (objExprs, error) {
+	exprs := objExprs{}
+	renderings, err := renderTmplDataDTAPUG(s, util.Seq2First(ds.All()), ds.DTAPRenderings, userGroups, userGroupRenderings)
+	if err != nil {
+		return exprs, err
 	}
-	var keys []ObjExpr
-	for i := range m {
-		keys = append(keys, i)
-	}
-	for i := 0; i < len(keys)-1; i++ {
-		for j := i + 1; j < len(keys); j++ {
-			if !keys[i].disjoint(keys[j]) {
-				return false
-			}
+	for r, m := range renderings {
+		var dtap string
+		if nDTAPsObjExprAttr(m) > 1 {
+			return exprs, &syntax.FormattingError{fmt.Sprintf("'%s': multiple associated dtaps", s)}
 		}
-	}
-	return true
-}
+		for ea := range m {
+			dtap = ea.DTAP
+		}
 
-func (lhs ObjExprs) Equal(rhs ObjExprs) bool {
-	return maps.EqualFunc(lhs, rhs, ObjExprAttr.Equal)
+		var ug string
+		switch nUGsObjExprAttr(m) {
+		case 1:
+			for ea := range m {
+				ug = ea.UserGroup
+			}
+		case len(userGroups):
+			ug = "" // template did not expand user group, object is shared between usergroups
+		default:
+			return exprs, &syntax.FormattingError{fmt.Sprintf("'%s': multiple but not all usergroups associated", s)}
+		}
+
+		expr, err := newObjExpr(cnf, r)
+		if err != nil {
+			return exprs, err
+		}
+		exprs[expr] = ObjExprAttr{DTAP: dtap, UserGroup: ug}
+	}
+	return exprs, nil
 }
