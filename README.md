@@ -54,7 +54,7 @@ an integer value, and a higher value is interpreted as more sensitive.
 `dtaps` is optional, and can be used in cases where you have both production
 and non-production data available in one and the same collection of databases
 that you are managing with this YAML. Note how you can use go template syntax
-to rendering the dtap name as part of a database, schema, or object identifier.
+for rendering the dtap name as part of a database, schema, or object identifier.
 You have to do this if you specify multiple DTAP environments; an object can
 only be part of a single DTAP.
 
@@ -72,7 +72,7 @@ different user groups. This promotes a simple way of keeping track of data
 the user groups in your organisation accross your data platform.
 
 Together, the above fields form a kind of definition of what a data product is,
-when you use grupr.
+when you use grupr:
 
 A *data product* is a collection of objects that have a single way of referring
 to DTAP environments and user groups.
