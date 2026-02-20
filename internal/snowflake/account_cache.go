@@ -210,6 +210,9 @@ func queryDBs(ctx context.Context, conn *sql.DB) (map[semantics.Ident]struct{}, 
 		if err = rows.Scan(&db); err != nil {
 			return nil, fmt.Errorf("queryDBs: error scanning row: %w", err)
 		}
+		if len(db) == 0 {
+			return nil, fmt.Errorf("zero length db identifier: %v", db)
+		}
 		if _, ok := dbs[db]; ok {
 			return nil, fmt.Errorf("duplicate db: %v", db)
 		}

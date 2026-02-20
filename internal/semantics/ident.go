@@ -25,7 +25,7 @@ func NewIdent(cnf *Config, s string, isQuoted bool) (Ident, error) {
 
 func NewIdentStripQuotesIfAny(cnf *Config, s string) (Ident, error) {
 	if strings.HasPrefix(s, `"`) {
-		if !strings.HasSuffix(s, `"`) {
+		if len(s) < 3 || !strings.HasSuffix(s, `"`) {
 			return Ident(""), fmt.Errorf("invalid quoted identifier string")
 		}
 		return NewIdent(cnf, s[1:len(s)-1], true)

@@ -16,6 +16,16 @@ type Obj struct {
 	Owner      semantics.Ident
 }
 
+func newObj(name semantics.Ident, objType ObjType, owner semantics.Ident) (Obj, error) {
+	if len(name) == 0 {
+		return Obj{}, fmt.Errorf("zero length identifier")
+	}
+	if objType != ObjTpTable && objType != ObjTpView {
+		panic("ObjTp not implemented")
+	}
+	return Obj{Name: name, ObjectType: objType, Owner: owner}, nil
+}
+
 func QueryObjs(ctx context.Context, conn *sql.DB, db semantics.Ident, schema semantics.Ident) iter.Seq2[Obj, error] {
 	return func(yield func(Obj, error) bool) {
 		// When there are more than 10K results, paginate.
@@ -67,8 +77,10 @@ FROM $1
 					}
 					continue
 				}
-				obj := Obj{Name: name, ObjectType: ParseObjType(kind), Owner: owner}
-				if !yield(obj, nil) {
+				if obj, err := newObj(name, ParseObjType(kind), owner); err != nil {
+					yield(Obj{}, err)
+					return
+				} else if !yield(obj, nil) {
 					return
 				}
 				lastName = name

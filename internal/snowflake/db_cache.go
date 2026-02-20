@@ -106,6 +106,9 @@ func querySchemas(ctx context.Context, conn *sql.DB, db semantics.Ident) (map[se
 		if err = rows.Scan(&schema); err != nil {
 			return nil, fmt.Errorf("querySchemas: error scanning row: %w", err)
 		}
+		if len(schema) == 0 {
+			return nil, fmt.Errorf("zero-length schema identifier")
+		}
 		if _, ok := schemas[schema]; ok {
 			return nil, fmt.Errorf("duplicate schema name: %s", schema)
 		}

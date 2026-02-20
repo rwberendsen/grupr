@@ -104,10 +104,12 @@ func (imSem *InterfaceMetadata) setObjectMatchers(cnf *Config, imSyn syntax.Inte
 	ds DTAPSpec, userGroupRenderings map[string]syntax.Rendering) error {
 	if imSyn.Objects == nil {
 		if parent != nil {
+			if len(parent.ObjectMatchers) == 0 {
+				return &PolicyError{"interface on product without objects"}
+			}
 			imSem.ObjectMatchers = parent.ObjectMatchers
 			return nil
 		}
-		return &PolicyError{"ObjectMatcher is a required field for an interface"}
 	}
 	if m, err := newObjMatchers(cnf, imSyn.Objects, imSyn.ObjectsExclude, ds, imSem.UserGroups, userGroupRenderings); err != nil {
 		return fmt.Errorf("ObjectMatchers: %w", err)
