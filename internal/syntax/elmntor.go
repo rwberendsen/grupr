@@ -10,6 +10,7 @@ type ElmntOr struct {
 	UserGroupMapping *UserGroupMapping `yaml:"user_group_mapping,omitempty"`
 	Product          *Product          `yaml:",omitempty"`
 	Interface        *Interface        `yaml:"interface,omitempty"`
+	ServiceAccount   *Service          `yaml:"service_account,omitempty`
 }
 
 func (e ElmntOr) validateAndAdd(cnf *Config, g *Grupin) error {
@@ -30,13 +31,13 @@ func (e ElmntOr) validateAndAdd(cnf *Config, g *Grupin) error {
 		g.Classes = e.Classes
 	}
 	if e.GlobalUserGroups != nil {
+		n_elements += 1
 		if g.GlobalUserGroups != nil {
 			return &FormattingError{"user_groups specified more than once"}
 		}
 		if err := e.GlobalUserGroups.validate(); err != nil {
 			return err
 		}
-		n_elements += 1
 		g.GlobalUserGroups = e.GlobalUserGroups
 	}
 	if e.UserGroupMapping != nil {
@@ -72,6 +73,16 @@ func (e ElmntOr) validateAndAdd(cnf *Config, g *Grupin) error {
 			return &FormattingError{fmt.Sprintf("duplicate interface id: %s", iid)}
 		}
 		g.Interfaces[iid] = *e.Interface
+	}
+	if e.ServiceAccount != nil {
+		n_elements += 1
+		if err := e.ServiceAccount.validate(cnf); err != nil {
+			return err
+		}
+		if _, ok := g.ServiceAccounts[e.ServiceAccount.ID]; ok {
+			return &FormattingError{fmt.Sprintf("duplicate service account id")}
+		}
+		g.ServiceAccounts[e.ServiceAccount.ID] = *e.ServiceAccount
 	}
 	if n_elements != 1 {
 		return &FormattingError{"not exactly one element in ElmntOr"}

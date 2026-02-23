@@ -13,11 +13,7 @@ type Grupin struct {
 	GlobalUserGroups  GlobalUserGroups
 	UserGroupMappings map[string]UserGroupMapping
 	Products          map[string]Product
-	// NB: ConsumingServices (e.g., a virtualisation tool, or, a file export tool) can be handled in a different top level YAML format
-	// NB: Are we going to do anything with the BusinessPartner concept, where it could take the value of big customers, for example?
-	// 	 And the ThirdParty concept, for when we ship data to a third party?
-	// 	 And the Application concept (app), for when we ship data intended for a downstream application, a logical app, could be operational one, being outside of our system?
-	//	 For now, these bigger changes are outside of the scope, and even when in scope, perhaps they can be handled outside of the Grupin data structure.
+	ServiceAccounts   map[string]ServiceAccount
 }
 
 func NewGrupin(cnf *Config, gSyn syntax.Grupin) (Grupin, error) {
@@ -28,6 +24,7 @@ func NewGrupin(cnf *Config, gSyn syntax.Grupin) (Grupin, error) {
 		GlobalUserGroups:  newGlobalUserGroups(*gSyn.GlobalUserGroups),
 		UserGroupMappings: map[string]UserGroupMapping{},
 		Products:          map[string]Product{},
+		ServiceAccounts:   map[string]ServiceAccount{},
 	}
 	// Validate user group mappings
 	// Add identity mapping for ease of reference
@@ -64,6 +61,14 @@ func NewGrupin(cnf *Config, gSyn syntax.Grupin) (Grupin, error) {
 			} else {
 				parentProduct.Interfaces[iid.ID] = im
 			}
+		}
+	}
+	// Validate service accounts
+	for k, v := gSyn.ServiceAccounts {
+		if svc, err := newServiceAccount(cnf, v); err != nil {
+			return gSem, err
+		} else {
+			gSem.ServiceAccounts[k] = svc
 		}
 	}
 	// Validate DTAP and UserGroup tagging

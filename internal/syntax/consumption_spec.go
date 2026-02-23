@@ -10,13 +10,16 @@ type ConsumptionSpec struct {
 	NonConsumingDTAPs []string          `yaml:"non_consuming_dtaps,omitempty"`
 }
 
-func (cs ConsumptionSpec) validate(cnf *Config, ds DTAPSpec) error {
+func (cs ConsumptionSpec) validate(cnf *Config, dtaps DTAPSpec) error {
 	if err := cs.InterfaceID.validate(cnf); err != nil {
 		return err
 	}
 	for k, v := range cs.DTAPMapping {
-		if !ds.HasDTAP(k) {
+		if !dtaps.HasDTAP(k) {
 			return &FormattingError{fmt.Sprintf("dtap_mapping: '%s': unknown dtap", k)}
+		}
+		if dtaps.IsProd(k) {
+			return &FormattingError{fmt.Sprintf("dtap_mapping: '%s': prod dtaps only allowed to consume prod dtaps")}
 		}
 		if err := ValidateIDPart(cnf, v); err != nil { // can't check if DTAP exists, belongs to other product, will happen in semantics package
 			return err
@@ -24,7 +27,7 @@ func (cs ConsumptionSpec) validate(cnf *Config, ds DTAPSpec) error {
 	}
 	ncd := map[string]struct{}{}
 	for _, k := range cs.NonConsumingDTAPs {
-		if !ds.HasDTAP(k) {
+		if !dtaps.HasDTAP(k) {
 			return &FormattingError{fmt.Sprintf("dtap_mapping: '%s': unknown dtap", k)}
 		}
 		if _, ok := ncd[k]; ok {
