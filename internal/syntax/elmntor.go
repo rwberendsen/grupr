@@ -10,7 +10,7 @@ type ElmntOr struct {
 	UserGroupMapping *UserGroupMapping `yaml:"user_group_mapping,omitempty"`
 	Product          *Product          `yaml:",omitempty"`
 	Interface        *Interface        `yaml:"interface,omitempty"`
-	ServiceAccount   *Service          `yaml:"service_account,omitempty`
+	ServiceAccount   *ServiceAccount   `yaml:"service_account,omitempty`
 }
 
 func (e ElmntOr) validateAndAdd(cnf *Config, g *Grupin) error {

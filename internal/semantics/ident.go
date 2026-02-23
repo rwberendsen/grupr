@@ -3,6 +3,7 @@ package semantics
 import (
 	"encoding/csv"
 	"fmt"
+	"io"
 	"strings"
 )
 
@@ -32,10 +33,10 @@ func NewIdentStripQuotesIfAny(cnf *Config, s string) (Ident, error) {
 		}
 		isQuoted = true
 		reader := csv.NewReader(strings.NewReader(s)) // encoding/csv can conveniently handle quoted parts,
-                                                              // same way we use it everywhere else
+		// same way we use it everywhere else
 		reader.FieldsPerRecord = 1
 		if rec, err := reader.Read(); err != nil {
-			return r, fmt.Errorf("reading csv: %s", err)
+			return Ident(""), fmt.Errorf("reading csv: %s", err)
 		} else {
 			s = rec[0]
 		}

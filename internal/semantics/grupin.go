@@ -63,14 +63,6 @@ func NewGrupin(cnf *Config, gSyn syntax.Grupin) (Grupin, error) {
 			}
 		}
 	}
-	// Validate service accounts
-	for k, v := gSyn.ServiceAccounts {
-		if svc, err := newServiceAccount(cnf, v); err != nil {
-			return gSem, err
-		} else {
-			gSem.ServiceAccounts[k] = svc
-		}
-	}
 	// Validate DTAP and UserGroup tagging
 	for k, v := range gSem.Products {
 		if err := v.validateExprAttr(); err != nil {
@@ -84,6 +76,14 @@ func NewGrupin(cnf *Config, gSyn syntax.Grupin) (Grupin, error) {
 	// Validate all products are disjoint
 	if err := gSem.allDisjoint(); err != nil {
 		return gSem, err
+	}
+	// Validate service accounts
+	for k, v := range gSyn.ServiceAccounts {
+		if svc, err := newServiceAccount(cnf, v, gSem.Products); err != nil {
+			return gSem, err
+		} else {
+			gSem.ServiceAccounts[k] = svc
+		}
 	}
 	t := time.Now()
 	log.Printf("Validating deserialized YAML documents took %v\n", t.Sub(start))

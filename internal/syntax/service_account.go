@@ -16,10 +16,10 @@ func (svc ServiceAccount) validate(cnf *Config) error {
 	if err := ValidateIDPart(cnf, svc.ID); err != nil {
 		return err
 	}
-	if err := svs.DTAPs.validate(cnf); err != nil {
+	if err := svc.DTAPs.validate(cnf); err != nil {
 		return fmt.Errorf("service account id: %s, DTAPs: %w", svc.ID, err)
 	}
-	for _, ds := range p.Deploys {
+	for _, ds := range svc.Deploys {
 		if err := ds.validate(cnf, *svc.DTAPs); err != nil {
 			return err
 		}
@@ -29,4 +29,5 @@ func (svc ServiceAccount) validate(cnf *Config) error {
 			return fmt.Errorf("service account '%s', dtap_rendering: '%s': %w", svc.ID, k, err)
 		}
 	}
+	return nil
 }

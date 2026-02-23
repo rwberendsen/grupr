@@ -6,17 +6,22 @@ import (
 	"slices"
 
 	"github.com/rwberendsen/grupr/internal/syntax"
+	"github.com/rwberendsen/grupr/internal/util"
 )
 
 type ServiceAccount struct {
 	ID      string
-	Idents	map[string]Ident             // k: dtap; v: ident
+	Idents  map[string]Ident // k: dtap; v: ident
 	DTAPs   DTAPSpec
 	Deploys map[string]map[string]string // k: product id; v: dtap mapping
 }
 
 func newServiceAccount(cnf *Config, svcSyn syntax.ServiceAccount, products map[string]Product) (ServiceAccount, error) {
-	svcSem := ServiceAccount{ID: svcSyn.ID}
+	svcSem := ServiceAccount{
+		ID: svcSyn.ID,
+		Idents: map[string]Ident{},
+		Deploys: map[string]map[string]string{},
+	}
 
 	// Set DTAPs
 	if dtaps, err := newDTAPSpec(cnf, svcSyn.DTAPs, svcSyn.DTAPRenderings); err != nil {
@@ -26,7 +31,7 @@ func newServiceAccount(cnf *Config, svcSyn syntax.ServiceAccount, products map[s
 	}
 
 	// Set Idents
-	renderings, err := renderTmplDataDTAP(svcSyn.Ident, util.Seq2First(svcSem.DTAPs.All()), svcSem.DTAPs.DTAPRenderings)
+	renderings, err := renderTmplDataDTAP(svcSyn.IdentExpr, util.Seq2First(svcSem.DTAPs.All()), svcSem.DTAPs.DTAPRenderings)
 	if err != nil {
 		return svcSem, err
 	}
@@ -47,18 +52,17 @@ func newServiceAccount(cnf *Config, svcSyn syntax.ServiceAccount, products map[s
 	}
 
 	// Set Deploys
-	pSem.Deploys = map[string]map[string]string{}
 	for _, ds := range svcSyn.Deploys {
 		if _, ok := svcSem.Deploys[ds.ProductID]; ok {
 			return svcSem, fmt.Errorf("deploy spec: duplicate product id '%s'", ds.ProductID)
 		}
-		
+
 		pSem, ok := products[ds.ProductID]
 		if !ok {
 			return svcSem, fmt.Errorf("deploy spec: unknown product id '%s'", ds.ProductID)
 		}
 
-		for dtapProduct, dtapSVC := range ds.DTAPMappping {
+		for dtapProduct, dtapSVC := range ds.DTAPMapping {
 			if !pSem.DTAPs.HasDTAP(dtapProduct) {
 				return svcSem, fmt.Errorf("deploy spec: product id '%s': unknown dtap '%s'", pSem.ID, dtapProduct)
 			}
@@ -68,40 +72,48 @@ func newServiceAccount(cnf *Config, svcSyn syntax.ServiceAccount, products map[s
 		}
 
 		if !ds.DoesNotDeployProd && !pSem.DTAPs.HasProd() {
-			return svcSem, fmt.Errorr("deploy spec: product id '%s' has no prod dtap", pSem.ID)
-		} 
+			return svcSem, fmt.Errorf("deploy spec: product id '%s' has no prod dtap", pSem.ID)
+		}
 
-		svcSem.Deploys[pSem.ID] = ds.DTAPMapping // k: dtap of product, v: dtap of service account
+		for _, dtapProduct := range ds.DoesNotDeployNonProd {
+			if !pSem.DTAPs.HasDTAP(dtapProduct) || pSem.DTAPs.IsProd(dtapProduct) {
+				return svcSem, fmt.Errorf("deploy spec: does not deploy non-prod: unknown non-prod dtap '%s'", dtapProduct)
+			}
+		}
 
-		if !ds.DoesNotDeployProd {
-			svcSem.Deploys[pSem.ID][*pSem.DTAPs.Prod] = *svcSem.DTAPs.Prod // it was checked in syntax that svc has prod dtap
+		for dtapProduct, isProd := range pSem.DTAPs.All() {
+			if isProd {
+				if !ds.DoesNotDeployProd {
+					svcSem.Deploys[pSem.ID][*pSem.DTAPs.Prod] = *svcSem.DTAPs.Prod // it was checked in syntax that svc has prod dtap
+				}
+				continue
+			}
+			if !slices.Contains(ds.DoesNotDeployNonProd, dtapProduct) {
+				if dtapSvc, ok := ds.DTAPMapping[dtapProduct]; ok {
+					svcSem.Deploys[pSem.ID][dtapProduct] = dtapSvc
+				} else {
+					if !svcSem.DTAPs.HasDTAP(dtapProduct) || svcSem.DTAPs.IsProd(dtapProduct) {
+						return svcSem, fmt.Errorf("deploy spec: no non-prod svc dtap to deploy non-prod dtap '%s' of product '%s'", dtapProduct, pSem.ID)
+					}
+					svcSem.Deploys[pSem.ID][dtapProduct] = dtapProduct // default
+				}
+			}
 		}
 	}
+	return svcSem, nil
 }
 
 func (lhs ServiceAccount) Equal(rhs ServiceAccount) bool {
 	if lhs.ID != rhs.ID {
 		return false
 	}
+	if !maps.Equal(lhs.Idents, rhs.Idents) {
+		return false
+	}
 	if !lhs.DTAPs.Equal(rhs.DTAPs) {
 		return false
 	}
-	if !maps.EqualFunc(lhs.Consumes, rhs.Consumes, maps.Equal) {
-		return false
-	}
-	if lhs.UserGroupMappingID != rhs.UserGroupMappingID {
-		return false
-	}
-	if !maps.EqualFunc(lhs.UserGroupRenderings, rhs.UserGroupRenderings, syntax.Rendering.Equal) {
-		return false
-	}
-	if !lhs.InterfaceMetadata.Equal(rhs.InterfaceMetadata) {
-		return false
-	}
-	if !lhs.UserGroupColumn.Equal(rhs.UserGroupColumn) {
-		return false
-	}
-	if !maps.EqualFunc(lhs.Interfaces, rhs.Interfaces, InterfaceMetadata.Equal) {
+	if !maps.EqualFunc(lhs.Deploys, rhs.Deploys, maps.Equal) {
 		return false
 	}
 	return true
