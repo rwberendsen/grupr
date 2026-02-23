@@ -19,19 +19,31 @@ func newServiceAccount(cnf *Config, svcSyn syntax.ServiceAccount, products map[s
 	svcSem := ServiceAccount{ID: svcSyn.ID}
 
 	// Set DTAPs
-	dtaps, err := newDTAPSpec(cnf, svcSyn.DTAPs, svcSyn.DTAPRenderings)
-	if err != nil {
+	if dtaps, err := newDTAPSpec(cnf, svcSyn.DTAPs, svcSyn.DTAPRenderings); err != nil {
 		return svcSem, err
+	} else {
+		svcSem.DTAPs = dtaps
 	}
-	svcSem.DTAPs = dtaps
 
 	// Set Idents
-	renderings, err := renderTmplDataDTAP(svcSyn.Ident, util.Seq2First(dtaps.All()), dtaps.DTAPRenderings)
+	renderings, err := renderTmplDataDTAP(svcSyn.Ident, util.Seq2First(svcSem.DTAPs.All()), svcSem.DTAPs.DTAPRenderings)
 	if err != nil {
 		return svcSem, err
 	}
-	for k, v := range renderings {
-		// WIP
+	if len(renderings) != svcSem.DTAPs.Count() {
+		return svcSem, fmt.Errorf("number of rendered ident exprs does not match number of DTAPs")
+	}
+	for s, m := range renderings {
+		if len(m) != 1 {
+			return svcSem, fmt.Errorf("not exactly one DTAP for rendered identifier expression")
+		}
+		for ea := range m {
+			if ident, err := NewIdentStripQuotesIfAny(cnf, s); err != nil {
+				return svcSem, err
+			} else {
+				svcSem.Idents[ea.DTAP] = ident
+			}
+		}
 	}
 
 	// Set Deploys
