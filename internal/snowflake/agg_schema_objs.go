@@ -85,7 +85,7 @@ func (o AggSchemaObjs) pushToDoFutureGrants(yield func(FutureGrant) bool, dbRole
 					Schema:            schema,
 					GrantedTo:         ObjTpDatabaseRole,
 					GrantedToDatabase: dbRole.Database,
-					GrantedToRole:     dbRole.Name,
+					GrantedToName:     dbRole.Name,
 				}) {
 					return false
 				}
@@ -104,7 +104,7 @@ func (o AggSchemaObjs) pushToDoGrants(yield func(Grant) bool, dbRole DatabaseRol
 			Schema:            schema,
 			GrantedTo:         ObjTpDatabaseRole,
 			GrantedToDatabase: dbRole.Database,
-			GrantedToRole:     dbRole.Name,
+			GrantedToName:     dbRole.Name,
 		}) {
 			return false
 		}

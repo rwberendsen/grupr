@@ -13,7 +13,7 @@ type ServiceAccount struct {
 	ID      string
 	Idents  map[string]Ident // k: dtap; v: ident
 	DTAPs   DTAPSpec
-	Deploys map[string]map[string]string // k: product id; v: dtap mapping
+	Deploys map[string]map[string]string // k: product id; v: dtap mapping; [k]k: product dtap, [k]v: service account dtap
 }
 
 func newServiceAccount(cnf *Config, svcSyn syntax.ServiceAccount, products map[string]Product) (ServiceAccount, error) {

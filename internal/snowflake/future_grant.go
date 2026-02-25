@@ -22,7 +22,7 @@ type FutureGrant struct {
 	Object            semantics.Ident
 	GrantedTo         ObjType
 	GrantedToDatabase semantics.Ident
-	GrantedToRole     semantics.Ident
+	GrantedToName     semantics.Ident
 	GrantOption       bool // TODO: if we re-grant the same grant with a different grant option, does it get overwritten? Could be a way to correct such mishaps
 }
 
@@ -37,9 +37,9 @@ func (g FutureGrant) buildSQLGrant(revoke bool) string {
 	var granteeClause string
 	switch g.GrantedTo {
 	case ObjTpRole:
-		granteeClause = fmt.Sprintf(`%s ROLE %s`, preposition, g.GrantedToRole)
+		granteeClause = fmt.Sprintf(`%s ROLE %s`, preposition, g.GrantedToName)
 	case ObjTpDatabaseRole:
-		granteeClause = fmt.Sprintf(`%s DATABASE ROLE %s.%s`, preposition, g.GrantedToDatabase, g.GrantedToRole)
+		granteeClause = fmt.Sprintf(`%s DATABASE ROLE %s.%s`, preposition, g.GrantedToDatabase, g.GrantedToName)
 	default:
 		panic("Not implemented")
 	}
@@ -73,13 +73,13 @@ func (g FutureGrant) buildSQLGrant(revoke bool) string {
 }
 
 func newFutureGrant(privilege string, createObjType string, grantedOn string, name string, grantedTo ObjType,
-	grantedToDatabase semantics.Ident, grantedToRole semantics.Ident, grantOption bool) (FutureGrant, error) {
+	grantedToDatabase semantics.Ident, grantedToName semantics.Ident, grantOption bool) (FutureGrant, error) {
 	g := FutureGrant{
 		Privileges:        []PrivilegeComplete{ParsePrivilegeComplete(privilege, createObjType)},
 		GrantedOn:         ParseObjType(grantedOn),
 		GrantedTo:         grantedTo,
 		GrantedToDatabase: grantedToDatabase,
-		GrantedToRole:     grantedToRole,
+		GrantedToName:     grantedToName,
 		GrantOption:       grantOption,
 	}
 	r := csv.NewReader(strings.NewReader(name)) // handles quoted fields as they appear in name

@@ -10,6 +10,7 @@ const (
 	ObjTpRole
 	ObjTpSchema
 	ObjTpTable
+	ObjTpUser
 	ObjTpView
 )
 
@@ -21,6 +22,7 @@ func ParseObjType(s string) ObjType {
 		"ROLE":          ObjTpRole,
 		"SCHEMA":        ObjTpSchema,
 		"TABLE":         ObjTpTable,
+		"USER":          ObjTpUser,
 		"VIEW":          ObjTpView,
 	}[s]
 }
@@ -34,6 +36,7 @@ func (ot ObjType) String() string {
 		ObjTpRole:         "ROLE",
 		ObjTpSchema:       "SCHEMA",
 		ObjTpTable:        "TABLE",
+		ObjTpUser:         "USER",
 		ObjTpView:         "VIEW",
 	}[ot]
 }

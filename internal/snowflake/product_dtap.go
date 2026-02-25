@@ -19,15 +19,18 @@ type ProductDTAP struct {
 	Interfaces map[string]*Interface
 	Consumes   map[syntax.InterfaceID]string // value is source dtap
 	ReadRole   ProductRole
+	DeployedBy map[semantics.Ident]bool // initially set to false, then to true if GRANTS are found in Snowflake
 
 	isReadRoleNew         bool
 	refreshCount          int // how many times has this ProductDTAP been refreshed: populated with Snowflake objects
 	matchedAccountObjects map[semantics.ObjExpr]*matchedAccountObjs
 	hasProductRoles       bool
 	revokeGrantsToRead    []Grant
+	revokeGrantsOfRead    []Grant
 }
 
-func NewProductDTAP(pdID semantics.ProductDTAPID, isProd bool, pSem semantics.Product, userGroupMappings map[string]semantics.UserGroupMapping) *ProductDTAP {
+func NewProductDTAP(pdID semantics.ProductDTAPID, isProd bool, pSem semantics.Product, userGroupMappings map[string]semantics.UserGroupMapping,
+	svcs map[string]semantics.ServiceAccount) *ProductDTAP {
 	pd := &ProductDTAP{
 		ProductDTAPID:         pdID,
 		IsProd:                isProd,
@@ -51,6 +54,14 @@ func NewProductDTAP(pdID semantics.ProductDTAPID, isProd bool, pSem semantics.Pr
 
 	for k := range pd.Interface.ObjectMatchers {
 		pd.matchedAccountObjects[k] = &matchedAccountObjs{}
+	}
+
+	for _, svc := range svcs {
+		if dtapMapping, ok := svc.Deploys[pd.ProductID]; ok {
+			if svcDTAP, ok := dtapMapping[pd.DTAP]; ok {
+				pd.DeployedBy[svc.Idents[svcDTAP]] = false // no GRANT found in Snowflake yet
+			}
+		}
 	}
 
 	return pd
@@ -202,7 +213,7 @@ func (pd *ProductDTAP) pushToDoDBRoleGrants(yield func(Grant) bool, doProd bool,
 				Database:      db,
 				GrantedRole:   dbObjs.dbRole.Name,
 				GrantedTo:     ObjTpRole,
-				GrantedToRole: pd.ReadRole.ID,
+				GrantedToName: pd.ReadRole.ID,
 			}) {
 				return false
 			}
@@ -217,6 +228,37 @@ func (pd *ProductDTAP) pushToDoDBRoleGrants(yield func(Grant) bool, doProd bool,
 	return true
 }
 
+func (pd *ProductDTAP) pushToDoProductRoleGrants(yield func(Grant) bool) bool {
+	for svc, alreadyGranted := range pd.DeployedBy {
+		if !alreadyGranted {
+			if !yield(Grant{
+				Privileges:    []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage}},
+				GrantedOn:     ObjTpRole,
+				GrantedRole:   pd.ReadRole.ID,
+				GrantedTo:     ObjTpUser,
+				GrantedToName: svc,
+			}) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func (pd *ProductDTAP) setGrantedUsers(ctx context.Context, conn *sql.DB) error {
+	for grant, err := range QueryGrantsOfRole(ctx, conn, pd.ReadRole.ID) {
+		if err != nil {
+			return err
+		}
+		if _, ok := pd.DeployedBy[grant.GrantedToName]; ok {
+			pd.DeployedBy[grant.GrantedToName] = true
+		} else {
+			pd.revokeGrantsOfRead = append(pd.revokeGrantsOfRead, grant)
+		}
+	}
+	return nil
+}
+
 func (pd *ProductDTAP) revokeGrantFromRead(g Grant) {
 	pd.revokeGrantsToRead = append(pd.revokeGrantsToRead, g)
 }
@@ -229,6 +271,18 @@ func (pd *ProductDTAP) revokeFromProductRole(ctx context.Context, cnf *Config, c
 	// needed to revoke would have already been dropped server side as
 	// well.
 	return DoRevokesSkipErrors(ctx, cnf, conn, slices.Values(pd.revokeGrantsToRead))
+	// Note that if during revoking privileges on objects, errors were encountered,
+	// and querying grants on objects was retried, then, at present, also these
+	// revokes here are executed again. But, there is no harm in that, really.
+}
+
+func (pd *ProductDTAP) revokeProductRoleFrom(ctx context.Context, cnf *Config, conn *sql.DB) error {
+	// We skip errors here, because users are not managed by grupr. And if users in the YAML
+	// do not exist, well, then they would not have any roles granted to them, and we are done
+	return DoRevokesSkipErrors(ctx, cnf, conn, slices.Values(pd.revokeGrantsOfRead))
+	// Note that if during revoking privileges on objects, errors were encountered,
+	// and querying grants on objects was retried, then, at present, also these
+	// revokes here are executed again. But, there is no harm in that, really.
 }
 
 func (pd *ProductDTAP) refreshGrantRevoke(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{},
@@ -270,6 +324,9 @@ func (pd *ProductDTAP) getToDoRevokes() iter.Seq[Grant] {
 
 func (pd *ProductDTAP) revoke(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{},
 	createDBRoleGrants map[semantics.Ident]struct{}, c *accountCache) error {
+	if err := pd.revokeProductRoleFrom(ctx, cnf, conn); err != nil {
+		return err
+	}
 	if err := pd.revokeFromProductRole(ctx, cnf, conn); err != nil {
 		return err
 	}
@@ -312,12 +369,12 @@ func (pd *ProductDTAP) revoke_(ctx context.Context, cnf *Config, conn *sql.DB) e
 	return nil
 }
 
-func (pd *ProductDTAP) pushObjectCounts(yield func(ObjCountsRow) bool, pdID semantics.ProductDTAPID) bool {
-	if !pd.Interface.pushObjectCounts(yield, pdID, "") {
+func (pd *ProductDTAP) pushObjectCounts(yield func(ObjCountsRow) bool) bool {
+	if !pd.Interface.pushObjectCounts(yield, pd.ProductDTAPID, "") {
 		return false
 	}
 	for iid, i := range pd.Interfaces {
-		if !i.pushObjectCounts(yield, pdID, iid) {
+		if !i.pushObjectCounts(yield, pd.ProductDTAPID, iid) {
 			return false
 		}
 	}

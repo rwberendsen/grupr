@@ -23,7 +23,7 @@ type Grant struct {
 	GrantedRoleStartsWithPrefix   bool
 	GrantedTo                     ObjType
 	GrantedToDatabase             semantics.Ident
-	GrantedToRole                 semantics.Ident
+	GrantedToName                 semantics.Ident
 	GrantedToRoleStartsWithPrefix bool
 	GrantOption                   bool // TODO: if we re-grant the same grant with a different grant option, does it get overwritten? Could be a way to correct such mishaps
 	GrantedBy                     semantics.Ident
@@ -40,9 +40,11 @@ func (g Grant) buildSQLGrant(revoke bool) string {
 	var granteeClause string
 	switch g.GrantedTo {
 	case ObjTpRole:
-		granteeClause = fmt.Sprintf(`ROLE %s`, g.GrantedToRole)
+		granteeClause = fmt.Sprintf(`ROLE IDENTIFIER('%s')`, g.GrantedToName)
 	case ObjTpDatabaseRole:
-		granteeClause = fmt.Sprintf(`DATABASE ROLE %s.%s`, g.GrantedToDatabase, g.GrantedToRole)
+		granteeClause = fmt.Sprintf(`DATABASE ROLE IDENTIFIER('%s.%s')`, g.GrantedToDatabase, g.GrantedToName)
+	case ObjTpUser:
+		granteeClause = fmt.Sprintf(`USER IDENTIFIER('%s')`, g.GrantedToName)
 	default:
 		panic("Not implemented")
 	}
@@ -72,15 +74,15 @@ func (g Grant) buildSQLGrant(revoke bool) string {
 	return fmt.Sprintf(`%s %s ON %s %s %s`, verb, privilegeClause, objectClause, preposition, granteeClause)
 }
 
-func newGrant(privilege string, createObjType string, grantedOn string, name string, grantedRoleStartsWithPrefix bool, grantedTo ObjType,
-	grantedToDatabase semantics.Ident, grantedToRole semantics.Ident, grantedToRoleStartsWithPrefix bool, grantOption bool, grantedBy semantics.Ident) (Grant, error) {
+func newGrantToRole(privilege string, createObjType string, grantedOn string, name string, grantedRoleStartsWithPrefix bool, grantedTo ObjType,
+	grantedToDatabase semantics.Ident, grantedToName semantics.Ident, grantedToRoleStartsWithPrefix bool, grantOption bool, grantedBy semantics.Ident) (Grant, error) {
 	g := Grant{
 		Privileges:                    []PrivilegeComplete{ParsePrivilegeComplete(privilege, createObjType)},
 		GrantedOn:                     ParseObjType(grantedOn),
 		GrantedRoleStartsWithPrefix:   grantedRoleStartsWithPrefix,
 		GrantedTo:                     grantedTo,
 		GrantedToDatabase:             grantedToDatabase,
-		GrantedToRole:                 grantedToRole,
+		GrantedToName:                 grantedToName,
 		GrantedToRoleStartsWithPrefix: grantedToRoleStartsWithPrefix,
 		GrantOption:                   grantOption,
 		GrantedBy:                     grantedBy,
@@ -125,6 +127,18 @@ func newGrant(privilege string, createObjType string, grantedOn string, name str
 	return g, nil
 }
 
+func newGrantOfRole(role semantics.Ident, granteeName semantics.Ident, grantedBy semantics.Ident) Grant {
+	return Grant{
+		Privileges: []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage}},
+		GrantedOn: ObjTpRole,
+		GrantedRole: role,
+		GrantedRoleStartsWithPrefix: true, // only used for product dtap roles at this point
+		GrantedTo: ObjTpUser,
+		GrantedToName: granteeName,
+		GrantedBy: grantedBy,
+	}
+}
+
 func QueryGrantsToRoleFiltered(ctx context.Context, cnf *Config, conn *sql.DB, role semantics.Ident,
 	grantedToRoleStartsWithPrefix bool, match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}) iter.Seq2[Grant, error] {
 	return queryGrantsToRole(ctx, cnf, conn, "", role, grantedToRoleStartsWithPrefix, match, notMatch, 0)
@@ -153,7 +167,7 @@ func QueryGrantsToDBRoleFilteredLimit(ctx context.Context, cnf *Config, conn *sq
 	return queryGrantsToRole(ctx, cnf, conn, db, role, grantedToRoleStartsWithPrefix, match, notMatch, limit)
 }
 
-func buildSQLQueryGrants(db semantics.Ident, role semantics.Ident, match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}, grantedRolePrefix string, limit int) string {
+func buildSQLQueryGrantsToRole(db semantics.Ident, role semantics.Ident, match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}, grantedRolePrefix string, limit int) string {
 	// fetch grants for DATABASE ROLE if needed, rather than ROLE
 	var dbClause string
 	granteeName := fmt.Sprintf(`%s`, role)
@@ -205,7 +219,7 @@ func queryGrantsToRole(ctx context.Context, cnf *Config, conn *sql.DB, db semant
 	if db != "" {
 		grantedTo = ObjTpDatabaseRole
 	}
-	query := buildSQLQueryGrants(db, role, match, notMatch, cnf.ObjectPrefix, limit)
+	query := buildSQLQueryGrantsToRole(db, role, match, notMatch, cnf.ObjectPrefix, limit)
 	return func(yield func(Grant, error) bool) {
 		rows, err := conn.QueryContext(ctx, query)
 		if err != nil {
@@ -229,11 +243,43 @@ func queryGrantsToRole(ctx context.Context, cnf *Config, conn *sql.DB, db semant
 				return
 			}
 			// NB: the caller decides which role to query, and therefore knows if the role starts with the prefix from Cnf
-			g, err := newGrant(privilege, createObjectType, grantedOn, name, grantedRoleStartsWithPrefix, grantedTo, db, role, grantedToRoleStartsWithPrefix, grantOption, grantedBy)
+			g, err := newGrantToRole(privilege, createObjectType, grantedOn, name, grantedRoleStartsWithPrefix, grantedTo, db, role, grantedToRoleStartsWithPrefix, grantOption, grantedBy)
 			if err != nil {
 				yield(Grant{}, err)
 			}
 			if !yield(g, nil) {
+				return
+			}
+		}
+		if err = rows.Err(); err != nil {
+			yield(Grant{}, err)
+			return
+		}
+	}
+}
+
+func QueryGrantsOfRole(ctx context.Context, conn *sql.DB, role semantics.Ident) iter.Seq2[Grant, error] {
+	// only used to query grants of product dtap roles, so, grantedRoleStartsWithPrefix will be true
+	return func(yield func(Grant, error) bool) {
+		rows, err := conn.QueryContext(ctx, fmt.Sprintf(`SHOW GRANTS OF ROLE IDENTIFIER('%v') ->>
+SELECT
+    "grantee_name" AS grantee_name
+  , "granted_by" AS granted_by
+FROM $1
+WHERE "granted_to" = USER`, role))
+		if err != nil {
+			yield(Grant{}, err)
+			return
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var granteeName semantics.Ident
+			var grantedBy semantics.Ident
+			if err = rows.Scan(&granteeName, &grantedBy); err != nil {
+				yield(Grant{}, err)
+				return
+			}
+			if !yield(newGrantOfRole(role, granteeName, grantedBy), nil) {
 				return
 			}
 		}
@@ -249,7 +295,7 @@ func DoGrants(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[Gr
 }
 
 func DoGrantsSkipErrors(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[Grant]) error {
-	return doGrants(ctx, cnf, conn, grants, false)
+	return doGrantsSkipErrors(ctx, cnf, conn, grants, false)
 }
 
 func DoRevokes(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[Grant]) error {
@@ -257,7 +303,7 @@ func DoRevokes(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[G
 }
 
 func DoRevokesSkipErrors(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[Grant]) error {
-	return doGrants(ctx, cnf, conn, grants, true)
+	return doGrantsSkipErrors(ctx, cnf, conn, grants, true)
 }
 
 func doGrants(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[Grant], revoke bool) error {
