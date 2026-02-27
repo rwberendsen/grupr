@@ -19,12 +19,16 @@ type ProductDTAP struct {
 	Interfaces map[string]*Interface
 	Consumes   map[syntax.InterfaceID]string // value is source dtap
 	ReadRole   ProductRole
+	WriteRole  ProductRole
 	DeployedBy map[semantics.Ident]bool // initially set to false, then to true if GRANTS are found in Snowflake
 
+	hasReadRole           bool
 	isReadRoleNew         bool
+	hasWriteRole          bool
+	isWriteRoleNew        bool
+	writeRoleGrantedTo    map[semantics.Ident]struct{} // we grant the product write role to original owners of product objects
 	refreshCount          int // how many times has this ProductDTAP been refreshed: populated with Snowflake objects
 	matchedAccountObjects map[semantics.ObjExpr]*matchedAccountObjs
-	hasProductRoles       bool
 	revokeGrantsToRead    []Grant
 	revokeGrantsOfRead    []Grant
 }
@@ -37,6 +41,7 @@ func NewProductDTAP(pdID semantics.ProductDTAPID, isProd bool, pSem semantics.Pr
 		Interface:             NewInterface(pdID.DTAP, pSem.InterfaceMetadata, userGroupMappings[pSem.UserGroupMappingID]),
 		Interfaces:            map[string]*Interface{},
 		Consumes:              map[syntax.InterfaceID]string{},
+		writeRoleGrantedTo     map[semantics.Ident]struct{}{},
 		matchedAccountObjects: map[semantics.ObjExpr]*matchedAccountObjs{},
 		revokeGrantsToRead:    []Grant{},
 	}
@@ -108,7 +113,8 @@ func (pd *ProductDTAP) recalcObjects() {
 
 func (pd *ProductDTAP) createProductRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config,
 	conn *sql.DB, productRoles map[ProductRole]struct{}) error {
-	if pd.hasProductRoles {
+	// Read role
+	if pd.hasReadRole {
 		pd.isReadRoleNew = false // in the mean-time, it may have acquired grants, and it is no longer correct to assume it would have none.
 		return nil
 	}
@@ -119,9 +125,23 @@ func (pd *ProductDTAP) createProductRoles(ctx context.Context, synCnf *syntax.Co
 		}
 		pd.isReadRoleNew = true
 	}
-	pd.hasProductRoles = true
-	return nil
+	pd.hasReadRole = true
 
+	// Write role, identical logic, maybe refactor
+	if pd.hasWriteRole {
+		pd.isWriteRoleNew = false // in the mean-time, it may have acquired grants, and it is no longer correct to assume it would have none.
+		return nil
+	}
+	pd.WriteRole = newProductRole(synCnf, cnf, pd.ProductID, pd.DTAP, ModeWrite)
+	if _, ok := productRoles[pd.WriteRole]; !ok {
+		if err := pd.WriteRole.Create(ctx, cnf, conn); err != nil {
+			return err
+		}
+		pd.isWriteRoleNew = true
+	}
+	pd.hasWriteRole = true
+
+	return nil
 }
 
 func (pd *ProductDTAP) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{},
@@ -135,14 +155,36 @@ func (pd *ProductDTAP) grant(ctx context.Context, synCnf *syntax.Config, cnf *Co
 
 func (pd *ProductDTAP) grant_(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{},
 	createDBRoleGrants map[semantics.Ident]struct{}, c *accountCache) error {
+	// First get the objects that are there in the account
 	if err := pd.refresh(ctx, synCnf, cnf, conn, c); err != nil {
 		return err
 	}
+	
+	// Create the product roles if necessary (read, write)
 	if err := pd.createProductRoles(ctx, synCnf, cnf, conn, productRoles); err != nil {
 		return err
 	}
 
-	// Future grants go first, so that as quickly as possible newly created objects will have correct privileges granted
+	// Ownership grants go first, so that we do not have to copy all the read privileges we're about to set when granting ownership.
+	// We grant objects directly to the product role, not via intermediate database roles.
+	// Before we actually grant ownership to the write role, grant the write role itself to all the current owners of the objects
+	// of interest. This way, they will not lose ownership, in fact, they will not lose any privilege, and running grupr will
+	// not mess up any processes that may be running.
+	// So, first make a pass over all objects to grant the write role itself to all current owning roles.
+	// Then, make a second pass over the objects, and grant ownership to the write role.
+	// 
+	// What happens when, after a does not exist error for this product dtap, this function gets called a second time?
+	// Well, this time around many objects may have already been granted to the write role. We just repeat the same process.
+	// We do not keep track of to which other roles the product has already been granted, or do we? We may keep that information
+	// in memory, actually, so we don't have to repeat such grants unnecessarily.
+	for db, dbObjs := range pd.Interface.aggAccountObjects.DBs {
+		dbObjs.grantWriteRoleToOriginalOwners(pd.WriteRole.ID, pd.writeRoleGrantedTo)
+	}
+	for db, dbObjs := range pd.Interface.aggAccountObjects.DBs {
+		dbObjs.grantOwnershipToWriteRole(pd.WriteRole.ID) // TODO: here we will check for a time out, and retry if needed
+	}
+
+	// Future grants next, so that as quickly as possible newly created objects will have correct privileges granted
 	if err := pd.Interface.setFutureGrants(ctx, synCnf, cnf, conn, createDBRoleGrants, pd.ProductID, pd.DTAP, "", c); err != nil {
 		return err
 	}
