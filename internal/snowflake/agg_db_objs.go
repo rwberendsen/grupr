@@ -266,7 +266,7 @@ func (o AggDBObjs) pushToDoFutureGrants(yield func(FutureGrant) bool) bool {
 				Database:          o.dbRole.Database,
 				GrantedTo:         ObjTpDatabaseRole,
 				GrantedToDatabase: o.dbRole.Database,
-				GrantedToRole:     o.dbRole.Name,
+				GrantedToName:     o.dbRole.Name,
 			}) {
 				return false
 			}
@@ -288,7 +288,7 @@ func (o AggDBObjs) pushToDoFutureGrants(yield func(FutureGrant) bool) bool {
 					Database:          o.dbRole.Database,
 					GrantedTo:         ObjTpDatabaseRole,
 					GrantedToDatabase: o.dbRole.Database,
-					GrantedToRole:     o.dbRole.Name,
+					GrantedToName:     o.dbRole.Name,
 				}) {
 					return false
 				}
@@ -311,7 +311,7 @@ func (o AggDBObjs) pushToDoGrants(yield func(Grant) bool) bool {
 			Database:          o.dbRole.Database,
 			GrantedTo:         ObjTpDatabaseRole,
 			GrantedToDatabase: o.dbRole.Database,
-			GrantedToRole:     o.dbRole.Name,
+			GrantedToName:     o.dbRole.Name,
 		}) {
 			return false
 		}

@@ -167,7 +167,7 @@ func (i *Interface) pushToDoDBRoleGrants(yield func(Grant) bool, doProd bool, m 
 						Database:      db,
 						GrantedRole:   dbObjs.dbRole.Name,
 						GrantedTo:     ObjTpRole,
-						GrantedToRole: m[pdID].ReadRole.ID,
+						GrantedToName: m[pdID].ReadRole.ID,
 					}) {
 						return false
 					}

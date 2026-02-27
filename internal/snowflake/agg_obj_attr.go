@@ -59,7 +59,7 @@ func (o AggObjAttr) pushToDoGrants(yield func(Grant) bool, dbRole DatabaseRole, 
 			Object:            obj,
 			GrantedTo:         ObjTpDatabaseRole,
 			GrantedToDatabase: dbRole.Database,
-			GrantedToRole:     dbRole.Name,
+			GrantedToName:     dbRole.Name,
 		}) {
 			return false
 		}

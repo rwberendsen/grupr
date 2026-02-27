@@ -1,7 +1,9 @@
 package semantics
 
 import (
+	"encoding/csv"
 	"fmt"
+	"io"
 	"strings"
 )
 
@@ -24,13 +26,26 @@ func NewIdent(cnf *Config, s string, isQuoted bool) (Ident, error) {
 }
 
 func NewIdentStripQuotesIfAny(cnf *Config, s string) (Ident, error) {
+	var isQuoted bool
 	if strings.HasPrefix(s, `"`) {
 		if len(s) < 3 || !strings.HasSuffix(s, `"`) {
 			return Ident(""), fmt.Errorf("invalid quoted identifier string")
 		}
-		return NewIdent(cnf, s[1:len(s)-1], true)
+		isQuoted = true
+		reader := csv.NewReader(strings.NewReader(s)) // encoding/csv can conveniently handle quoted parts,
+		// same way we use it everywhere else
+		reader.FieldsPerRecord = 1
+		if rec, err := reader.Read(); err != nil {
+			return Ident(""), fmt.Errorf("reading csv: %s", err)
+		} else {
+			s = rec[0]
+		}
+		// expecting only one record, just checking there was not more
+		if _, err := reader.Read(); err != io.EOF {
+			panic("parsing did not result in single record")
+		}
 	}
-	return NewIdent(cnf, s, false)
+	return NewIdent(cnf, s, isQuoted)
 }
 
 func NewIdentUnquoted(s string) Ident {

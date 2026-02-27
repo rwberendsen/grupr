@@ -50,6 +50,14 @@ func (d DTAPSpec) HasDTAP(dtap string) bool {
 	return false
 }
 
+func (d DTAPSpec) HasProd() bool {
+	return d.Prod != nil
+}
+
+func (d DTAPSpec) IsProd(dtap string) bool {
+	return d.Prod != nil && dtap == *d.Prod
+}
+
 func (d DTAPSpec) Count() int {
 	if d.Prod != nil {
 		return len(d.NonProd) + 1

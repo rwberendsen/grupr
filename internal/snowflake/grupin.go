@@ -34,7 +34,7 @@ func NewGrupin(ctx context.Context, cnf *Config, conn *sql.DB, g semantics.Grupi
 	for pID, pSem := range g.Products {
 		for dtap, isProd := range pSem.DTAPs.All() {
 			pdID := semantics.ProductDTAPID{ProductID: pID, DTAP: dtap}
-			r.ProductDTAPs[pdID] = NewProductDTAP(pdID, isProd, pSem, r.UserGroupMappings)
+			r.ProductDTAPs[pdID] = NewProductDTAP(pdID, isProd, pSem, r.UserGroupMappings, g.ServiceAccounts)
 		}
 	}
 	return r
@@ -197,6 +197,18 @@ func (g *Grupin) doToDoDBRoleGrants(ctx context.Context, cnf *Config, conn *sql.
 	return eg.Wait()
 }
 
+func (g *Grupin) getToDoProductRoleGrants(doProd bool) iter.Seq[Grant] {
+	return func(yield func(Grant) bool) {
+		for _, pd := range g.ProductDTAPs {
+			if doProd == pd.IsProd {
+				if !pd.pushToDoProductRoleGrants(yield) {
+					return
+				}
+			}
+		}
+	}
+}
+
 func (g *Grupin) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, doProd bool) error {
 	// The bulk of the grants are granting objects to roles, we do it concurrently per product-dtap
 	eg, egCtx := errgroup.WithContext(ctx)
@@ -214,7 +226,7 @@ func (g *Grupin) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, 
 	}
 	// Now all necessary db roles have been created and they have been granted the necessary privileges
 
-	// Next, find out which DB roles have been granted to which product roles, and which grants still to do / revoke
+	// Find out which DB roles have been granted to which product roles, and which grants still to do / revoke
 	// We do not do this concurrently, because this concerns relationships between product dtaps, no need to overcomplicate
 	for _, pd := range g.ProductDTAPs {
 		if doProd == pd.IsProd {
@@ -225,9 +237,26 @@ func (g *Grupin) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, 
 			}
 		}
 	}
+	// Do the DB role grants still to do.
+	if err := g.doToDoDBRoleGrants(ctx, cnf, conn, doProd); err != nil {
+		return err
+	}
 
-	// Next, do the grants still to do.
-	return g.doToDoDBRoleGrants(ctx, cnf, conn, doProd)
+	// Find out for each product-dtap role which users it has been granted to; 
+	// Grant it to any remaining user based on the YAML,
+	// Revoke it from any user that is not in the YAML.
+	// TODO: if this becomes a performance bottleneck, parallelize it, should be straightforward
+	for _, pd := range g.ProductDTAPs {
+		if doProd == pd.IsProd {
+			if !pd.isReadRoleNew {
+				if err := pd.setGrantedUsers(ctx, conn); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	// Do the todo grants of product dtap roles to users
+	return DoGrantsSkipErrors(ctx, cnf, conn, g.getToDoProductRoleGrants(doProd))
 }
 
 func (g *Grupin) revoke(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, doProd bool) error {
@@ -318,8 +347,8 @@ func (g *Grupin) dropDatabaseRoles(ctx context.Context, cnf *Config, conn *sql.D
 
 func (g *Grupin) GetObjCountsRows() iter.Seq[ObjCountsRow] {
 	return func(yield func(ObjCountsRow) bool) {
-		for pdID, pd := range g.ProductDTAPs {
-			if !pd.pushObjectCounts(yield, pdID) {
+		for _, pd := range g.ProductDTAPs {
+			if !pd.pushObjectCounts(yield) {
 				return
 			}
 		}
