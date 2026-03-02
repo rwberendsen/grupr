@@ -71,14 +71,14 @@ func (o AggDBObjs) setFutureGrantTo(_ Mode, g FutureGrant) AggDBObjs {
 		switch g.Privileges[0].Privilege {
 		case PrvUsage:
 			o.isUsageGrantedToFutureSchemas = true
-		default:
-			panic("unsupported privilege on schema")
 		}
+		// Ignore; unmanaged grant
 	case ObjTpTable, ObjTpView:
 		switch g.Privileges[0].Privilege {
 		case PrvSelect, PrvReferences:
 			o.isPrivilegeGrantedToFutureObject[g.GrantedOn.getIdxObjectLevel()][g.Privileges[0].Privilege.getIdxObjectLevel()] = true
 		}
+		// Ignore; unmanaged grant
 	}
 	return o
 }
@@ -108,10 +108,10 @@ func (o AggDBObjs) setRevokeFutureGrantTo(m Mode, g FutureGrant) AggDBObjs {
 }
 
 func (o AggDBObjs) setGrantTo(m Mode, g Grant) AggDBObjs {
-	if m != ModeRead || g.Privileges[0].Privilege != PrvUsage {
-		panic("not implemented")
+	if m == ModeRead && g.Privileges[0].Privilege == PrvUsage {
+		o.isUsageGrantedToRead = true
 	}
-	o.isUsageGrantedToRead = true
+	// Ignore; unmanaged grant
 	return o
 }
 
@@ -178,9 +178,8 @@ func (o AggDBObjs) setFutureGrants(ctx context.Context, synCnf *syntax.Config, c
 					} else {
 						o = o.setRevokeFutureGrantTo(ModeRead, g)
 					}
-				default:
-					panic("unsupported granted_on object type in future grant")
 				}
+				// Ignore this grant, it's not in grupr its scope (unmanaged grant)
 			case ObjTpSchema:
 				if o.hasSchema(g.Schema) {
 					if o.Schemas[g.Schema].MatchAllObjects {
@@ -240,9 +239,8 @@ func (o AggDBObjs) setGrants(ctx context.Context, synCnf *syntax.Config, cnf *Co
 				} else if oms.DisjointFromObject(g.Database, g.Schema, g.Object) {
 					o = o.setRevokeGrantTo(ModeRead, g)
 				} // Ignore this grant, it is correct, even if we did not know about the object's existence yet (result of FUTURE grant, probably)
-			default:
-				panic("unsupported granted_on object_type in grant")
 			}
+			// Ignore this grant, it is not managed by grupr at the moment, sysadmins may have granted it if it is not in grupr's scope currently
 		}
 	}
 	return o, nil

@@ -188,6 +188,29 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 			GrantedRoleStartsWithPrefix: util.NewTrue(),
 		}: {},
 	}
+	cnf.ProductRolePrivileges[ModeWrite] = map[GrantTemplate]struct{}{
+		GrantTemplate{
+			PrivilegeComplete:           PrivilegeComplete{Privilege: PrvUsage},
+			GrantedOn:                   ObjTpRole,
+			GrantedRoleStartsWithPrefix: util.NewTrue(),
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete:           PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpTable},
+			GrantedOn:                   ObjTpSchema,
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete:           PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpView},
+			GrantedOn:                   ObjTpSchema,
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete:           PrivilegeComplete{Privilege: PrvOwnership},
+			GrantedOn:                   ObjTpTable,
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete:           PrivilegeComplete{Privilege: PrvOwnership},
+			GrantedOn:                   ObjTpView,
+		}: {},
+	}
 
 	return cnf, nil
 }

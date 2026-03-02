@@ -10,7 +10,8 @@ type AggSchemaObjs struct {
 
 	// set while grants are being set
 	isUsageGrantedToRead             bool
-	isPrivilegeGrantedToFutureObject [2][2]bool // [ObjectType][Privilege]
+	isPrivilegeGrantedToFutureObject [2][2]bool // [ObjType][Privilege]
+	isCreateGrantedToWrite           [2]bool    // [ObjType]
 }
 
 func newAggSchemaObjs(o SchemaObjs) AggSchemaObjs {
@@ -19,7 +20,7 @@ func newAggSchemaObjs(o SchemaObjs) AggSchemaObjs {
 		MatchAllObjects: o.MatchAllObjects,
 	}
 	for k, v := range o.Objects {
-		r.Objects[k] = AggObjAttr{ObjectType: v.ObjectType, Owner: v.Owner}
+		r.Objects[k] = AggObjAttr{ObjectType: v.ObjectType}
 	}
 	return r
 }
@@ -35,12 +36,10 @@ func (o AggSchemaObjs) setFutureGrantTo(m Mode, g FutureGrant) AggSchemaObjs {
 		switch g.Privileges[0].Privilege {
 		case PrvSelect, PrvReferences:
 			o.isPrivilegeGrantedToFutureObject[g.GrantedOn.getIdxObjectLevel()][g.Privileges[0].Privilege.getIdxObjectLevel()] = true
-		default:
-			panic("unsupported privilege on table or view")
 		}
-	default:
-		panic("unsupported granted_on object type")
+		// Ignore; unmanaged grant
 	}
+	// Ignore; unmanaged grant
 	return o
 }
 
@@ -56,10 +55,14 @@ func (o AggSchemaObjs) hasFutureGrantTo(m Mode, grantedOn ObjType, p Privilege) 
 }
 
 func (o AggSchemaObjs) setGrantTo(m Mode, g Grant) AggSchemaObjs {
-	if m != ModeRead || g.Privileges[0].Privilege != PrvUsage {
-		panic("not implemented")
+	if m == ModeRead && g.Privileges[0].Privilege == PrvUsage {
+		o.isUsageGrantedToRead = true
 	}
-	o.isUsageGrantedToRead = true
+	if m == ModeWrite && g.Privileges[0].Privilege == PrvCreate &&
+	(g.Privileges[0].CreateObjectType == ObjTpTable || g.Privileges[0].CreateObjectType == ObjTpView) {
+		o.isCreateGrantedToWrite[g.Privileges[0].CreateObjectType.getIdxObjectLevel()] = true
+	}
+	// Ignore; unmanaged grant
 	return o
 }
 

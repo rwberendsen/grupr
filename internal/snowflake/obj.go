@@ -13,17 +13,16 @@ import (
 type Obj struct {
 	Name       semantics.Ident
 	ObjectType ObjType
-	Owner      semantics.Ident
 }
 
-func newObj(name semantics.Ident, objType ObjType, owner semantics.Ident) (Obj, error) {
+func newObj(name semantics.Ident, objType ObjType) (Obj, error) {
 	if len(name) == 0 {
 		return Obj{}, fmt.Errorf("zero length identifier")
 	}
 	if objType != ObjTpTable && objType != ObjTpView {
 		panic("ObjTp not implemented")
 	}
-	return Obj{Name: name, ObjectType: objType, Owner: owner}, nil
+	return Obj{Name: name, ObjectType: objType}, nil
 }
 
 func QueryObjs(ctx context.Context, conn *sql.DB, db semantics.Ident, schema semantics.Ident) iter.Seq2[Obj, error] {
@@ -40,14 +39,12 @@ SELECT
     NULL AS n
   , "name" AS name
   , "kind" As kind
-  , "owner" AS owner
 FROM $1 WHERE kind in ('%s', '%s')
 UNION ALL
 SELECT
     COUNT(*)
   , '' AS name
   , '' AS kind
-  , '' AS owner
 FROM $1
 `, db, schema, limit, fromClause, ObjTpTable, ObjTpView))
 			if err != nil {
@@ -63,8 +60,7 @@ FROM $1
 				var n *int
 				var name semantics.Ident
 				var kind string
-				var owner semantics.Ident
-				if err = rows.Scan(&n, &name, &kind, &owner); err != nil {
+				if err = rows.Scan(&n, &name, &kind); err != nil {
 					err = fmt.Errorf("QueryObjs: error scanning row: %w", err)
 					yield(Obj{}, err)
 					return
@@ -77,7 +73,7 @@ FROM $1
 					}
 					continue
 				}
-				if obj, err := newObj(name, ParseObjType(kind), owner); err != nil {
+				if obj, err := newObj(name, ParseObjType(kind)); err != nil {
 					yield(Obj{}, err)
 					return
 				} else if !yield(obj, nil) {

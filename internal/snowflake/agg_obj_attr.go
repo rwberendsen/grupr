@@ -6,11 +6,11 @@ import (
 
 type AggObjAttr struct {
 	ObjectType ObjType
-	Owner      semantics.Ident
 
 	// set when grant() is called on AggDBObjs
 	isSelectGrantedToRead     bool
 	isReferencesGrantedToRead bool
+	isOwnedByWrite            bool
 }
 
 func (o AggObjAttr) setGrantTo(m Mode, g Grant) AggObjAttr {
@@ -21,9 +21,14 @@ func (o AggObjAttr) setGrantTo(m Mode, g Grant) AggObjAttr {
 			o.isSelectGrantedToRead = true
 		case PrvReferences:
 			o.isReferencesGrantedToRead = true
-		default:
-			panic("not implemented")
 		}
+		// Ignore; unmanaged grant
+	case ModeWrite:
+		switch g.Privileges[0].Privilege {
+		case PrvOwnership:
+			o.isOwnedByWrite = true
+		}
+		// Ignore; unmanaged grant
 	default:
 		panic("not implemented")
 	}
