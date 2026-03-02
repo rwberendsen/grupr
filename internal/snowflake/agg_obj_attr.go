@@ -6,6 +6,7 @@ import (
 
 type AggObjAttr struct {
 	ObjectType ObjType
+	Owner semantics.Ident
 
 	// set when grant() is called on AggDBObjs
 	isSelectGrantedToRead     bool

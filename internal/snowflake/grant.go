@@ -258,7 +258,15 @@ func queryGrantsToRole(ctx context.Context, cnf *Config, conn *sql.DB, db semant
 	}
 }
 
-func QueryGrantsOfRole(ctx context.Context, conn *sql.DB, role semantics.Ident) iter.Seq2[Grant, error] {
+func QueryGrantsOfRoleToUsers(ctx context.Context, conn *sql.DB, role semantics.Ident) iter.Seq2[Grant, error] {
+	return queryGrantsOfRole(ctx, conn, role, ObjTpUser)
+}
+
+func QueryGrantsOfRoleToRoles(ctx context.Context, conn *sql.DB, role semantics.Ident) iter.Seq2[Grant, error] {
+	return queryGrantsOfRole(ctx, conn, role, ObjTpRole)
+}
+
+func queryGrantsOfRole(ctx context.Context, conn *sql.DB, role semantics.Ident, objTp ObjType) iter.Seq2[Grant, error] {
 	// only used to query grants of product dtap roles, so, grantedRoleStartsWithPrefix will be true
 	return func(yield func(Grant, error) bool) {
 		rows, err := conn.QueryContext(ctx, fmt.Sprintf(`SHOW GRANTS OF ROLE IDENTIFIER('%v') ->>
@@ -266,7 +274,7 @@ SELECT
     "grantee_name" AS grantee_name
   , "granted_by" AS granted_by
 FROM $1
-WHERE "granted_to" = USER`, role))
+WHERE "granted_to" = %v`, role, objTp))
 		if err != nil {
 			yield(Grant{}, err)
 			return

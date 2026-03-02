@@ -127,14 +127,14 @@ func (g *Grupin) setDBRoleGrants(ctx context.Context, synCnf *syntax.Config, cnf
 		// - Read database roles of interfaces that pd consumes
 		if grantedDBRole.ProductID == pd.ProductID {
 			if grantedDBRole.InterfaceID != "" {
-				pd.revokeGrantFromRead(grant)
+				pd.revokeGrantToRead(grant)
 				continue
 			}
 			// grantedDBRole.InterfaceID == ""
 			if dbObjs, ok := pd.Interface.aggAccountObjects.DBs[grant.Database]; ok {
 				dbObjs.isDBRoleGrantedToProductRead = true
 			} else if pd.Interface.ObjectMatchers.DisjointFromDB(grant.Database) {
-				pd.revokeGrantFromRead(grant)
+				pd.revokeGrantToRead(grant)
 			}
 			continue // leave this grant be, it is correct, even if it is unexpected that it exists
 		}
@@ -142,7 +142,7 @@ func (g *Grupin) setDBRoleGrants(ctx context.Context, synCnf *syntax.Config, cnf
 		// grantedDBRole.ProductID != pd.ProductID
 		if grantedDBRole.InterfaceID == "" {
 			// we have no business with the product level interface of another product
-			pd.revokeGrantFromRead(grant)
+			pd.revokeGrantToRead(grant)
 			continue
 		}
 
@@ -150,12 +150,12 @@ func (g *Grupin) setDBRoleGrants(ctx context.Context, synCnf *syntax.Config, cnf
 		sourceDTAP, ok := pd.Consumes[syntax.InterfaceID{ID: grantedDBRole.InterfaceID, ProductID: grantedDBRole.ProductID}]
 		if !ok {
 			// we do not consume that interface from that product
-			pd.revokeGrantFromRead(grant)
+			pd.revokeGrantToRead(grant)
 			continue
 		}
 		if sourceDTAP != grantedDBRole.DTAP {
 			// we do consume that interface from that product, but not that dtap though
-			pd.revokeGrantFromRead(grant)
+			pd.revokeGrantToRead(grant)
 			continue
 		}
 		// sourceDTAP == grantedDBRole.DTAP
@@ -166,7 +166,7 @@ func (g *Grupin) setDBRoleGrants(ctx context.Context, synCnf *syntax.Config, cnf
 
 		// But, is it true that the database in which the granted role was created still has objects that belong to that interface?
 		if sourceI.ObjectMatchers.DisjointFromDB(grantedDBRole.Database) {
-			pd.revokeGrantFromRead(grant)
+			pd.revokeGrantToRead(grant)
 			continue
 		}
 

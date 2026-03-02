@@ -20,7 +20,7 @@ func newAggSchemaObjs(o SchemaObjs) AggSchemaObjs {
 		MatchAllObjects: o.MatchAllObjects,
 	}
 	for k, v := range o.Objects {
-		r.Objects[k] = AggObjAttr{ObjectType: v.ObjectType}
+		r.Objects[k] = AggObjAttr{ObjectType: v.ObjectType, Owner: v.Owner}
 	}
 	return r
 }
