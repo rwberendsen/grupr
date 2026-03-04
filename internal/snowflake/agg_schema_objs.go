@@ -66,8 +66,20 @@ func (o AggSchemaObjs) setGrantTo(m Mode, g Grant) AggSchemaObjs {
 	return o
 }
 
-func (o AggSchemaObjs) hasGrantTo(m Mode, p Privilege) bool {
-	return m == ModeRead && p == PrvUsage && o.isUsageGrantedToRead
+func (o AggSchemaObjs) hasGrantTo(m Mode, p PrivilegeComplete) bool {
+	switch m {
+	case ModeRead:
+		switch p.Privilege {
+		case PrvUsage:
+			return o.isUsageGrantedToRead
+		}
+	case ModeWrite:
+		switch p.Privilege {
+		case PrvCreate:
+			return o.isCreateGrantedToWrite[p.CreateObjectType.getIdxObjectLevel()]
+		}
+	}
+	return false
 }
 
 func (o AggSchemaObjs) pushToDoFutureGrants(yield func(FutureGrant) bool, dbRole DatabaseRole, schema semantics.Ident) bool {
@@ -99,7 +111,7 @@ func (o AggSchemaObjs) pushToDoFutureGrants(yield func(FutureGrant) bool, dbRole
 }
 
 func (o AggSchemaObjs) pushToDoGrants(yield func(Grant) bool, dbRole DatabaseRole, schema semantics.Ident) bool {
-	if !o.hasGrantTo(ModeRead, PrvUsage) {
+	if !o.hasGrantTo(ModeRead, PrivilegeComplete{Privilege: PrvUsage}) {
 		if !yield(Grant{
 			Privileges:        []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage}},
 			GrantedOn:         ObjTpSchema,

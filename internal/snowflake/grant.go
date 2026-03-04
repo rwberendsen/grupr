@@ -59,6 +59,10 @@ func (g Grant) buildSQLGrant(revoke bool) string {
 
 	// GRANT <privileges> ... TO ROLE
 	privilegeClause := strings.Join(util.FmtSliceElements[PrivilegeComplete](g.Privileges...), `, `)
+	var modifierClause string
+	if len(g.Privileges == 1) && g.Privileges[0].Privilege == PrvOwnership {
+		modifierClause = ' COPY CURRENT GRANTS'
+	}
 
 	var objectClause string
 	switch g.GrantedOn {
@@ -71,7 +75,7 @@ func (g Grant) buildSQLGrant(revoke bool) string {
 	default:
 		panic("Not implemented")
 	}
-	return fmt.Sprintf(`%s %s ON %s %s %s`, verb, privilegeClause, objectClause, preposition, granteeClause)
+	return fmt.Sprintf(`%s %s ON %s %s %s%s`, verb, privilegeClause, objectClause, preposition, granteeClause, modifierClause)
 }
 
 func newGrantToRole(privilege string, createObjType string, grantedOn string, name string, grantedRoleStartsWithPrefix bool, grantedTo ObjType,

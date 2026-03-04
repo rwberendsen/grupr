@@ -29,7 +29,8 @@ type AggDBObjs struct {
 	// 0: ObjTable
 	// 1: ObjView
 	//
-	isPrivilegeGrantedToFutureObject [2][2]bool
+	isPrivilegeOnFutureObjectGranted            [2][2]bool
+	isCreateObjectOnFutureSchemasGrantedToWrite [2]bool // 0: ObjTable, 1: ObjView
 }
 
 func newAggDBObjs(o DBObjs) AggDBObjs {
@@ -53,7 +54,7 @@ func (o AggDBObjs) hasObject(s semantics.Ident, obj semantics.Ident) bool {
 	return o.hasSchema(s) && o.Schemas[s].hasObject(obj)
 }
 
-// Specifically for AggDBObjs.isPrivilegeGrantedToFutureObject
+// Specifically for AggDBObjs.isPrivilegeOnFutureObjectGranted
 func (_ AggDBObjs) getPrivilegeIdx(p Privilege) int {
 	switch p {
 	case PrvSelect:
@@ -65,35 +66,59 @@ func (_ AggDBObjs) getPrivilegeIdx(p Privilege) int {
 	}
 }
 
-func (o AggDBObjs) setFutureGrantTo(_ Mode, g FutureGrant) AggDBObjs {
-	switch g.GrantedOn {
-	case ObjTpSchema:
-		switch g.Privileges[0].Privilege {
-		case PrvUsage:
-			o.isUsageGrantedToFutureSchemas = true
+func (o AggDBObjs) setFutureGrantTo(m Mode, g FutureGrant) AggDBObjs {
+	switch m {
+	case ModeRead:
+		switch g.GrantedOn {
+		case ObjTpSchema:
+			switch g.Privileges[0].Privilege {
+			case PrvUsage:
+				o.isUsageGrantedToFutureSchemas = true
+			}
+			// Ignore; unmanaged grant
+		case ObjTpTable, ObjTpView:
+			switch g.Privileges[0].Privilege {
+			case PrvSelect, PrvReferences:
+				o.isPrivilegeOnFutureObjectGranted[g.GrantedOn.getIdxObjectLevel()][g.Privileges[0].Privilege.getIdxObjectLevel()] = true
+			}
+			// Ignore; unmanaged grant
 		}
-		// Ignore; unmanaged grant
-	case ObjTpTable, ObjTpView:
-		switch g.Privileges[0].Privilege {
-		case PrvSelect, PrvReferences:
-			o.isPrivilegeGrantedToFutureObject[g.GrantedOn.getIdxObjectLevel()][g.Privileges[0].Privilege.getIdxObjectLevel()] = true
+	case ModeWrite:
+		switch g.GrantedOn {
+		case ObjTpSchema:
+			switch g.Privileges[0].Privilege {
+			case PrvCreate:
+				o.isCreateObjectOnFutureSchemasGrantedToWrite[g.Privileges[0].CreateObjectType.getIdxObjectLevel()] = true
+			}
+			// Ignore, unmanaged grant
 		}
-		// Ignore; unmanaged grant
+		// Ignore, unmanaged grant
 	}
 	return o
 }
 
-func (o AggDBObjs) hasFutureGrantTo(m Mode, grantedOn ObjType, p Privilege) bool {
-	switch grantedOn {
-	case ObjTpSchema:
-		switch p {
-		case PrvUsage:
-			return o.isUsageGrantedToFutureSchemas
+func (o AggDBObjs) hasFutureGrantTo(m Mode, grantedOn ObjType, p PrivilegeComplete) bool {
+	switch m {
+	case ModeRead:
+		switch grantedOn {
+		case ObjTpSchema:
+			switch p.Privilege {
+			case PrvUsage:
+				return o.isUsageGrantedToFutureSchemas
+			}
+		case ObjTpTable, ObjTpView:
+			switch p.Privilege {
+			case PrvSelect, PrvReferences:
+				return o.isPrivilegeOnFutureObjectGranted[grantedOn.getIdxObjectLevel()][p.getIdxObjectLevel()]
+			}
 		}
-	case ObjTpTable, ObjTpView:
-		switch p {
-		case PrvSelect, PrvReferences:
-			return o.isPrivilegeGrantedToFutureObject[grantedOn.getIdxObjectLevel()][p.getIdxObjectLevel()]
+	case ModeWrite:
+		switch grantedOn {
+		case ObjTpSchema:
+			switch p.Privilege {
+			case PrvCreate:
+				return o.isCreateObjectOnFutureSchemasGrantedToWrite[grantedOn.getIdxObjectLevel()]
+			}
 		}
 	}
 	return false
@@ -205,6 +230,62 @@ func (o AggDBObjs) setFutureGrants(ctx context.Context, synCnf *syntax.Config, c
 	return o, nil
 }
 
+func (o AggDBObjs) setFutureGrantsToWrite(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, pID string, dtap string,
+	db semantics.Ident, oms semantics.ObjMatchers) (AggDBObjs, error) {
+	o.revokeFutureGrantsToWrite = []FutureGrant{}
+		for g, err := range QueryFutureGrantsToDBRoleFiltered(ctx, conn, db, o.dbRole.Name, cnf.DatabaseRolePrivileges[ModeRead], nil) {
+			if err != nil {
+				return o, err
+			}
+
+			if g.Database != db {
+				// This grant should not be granted to this particular database role
+				o = o.setRevokeFutureGrantTo(ModeRead, g)
+				continue
+			}
+
+			switch g.GrantedIn {
+			case ObjTpDatabase:
+				switch g.GrantedOn {
+				case ObjTpSchema:
+					if o.MatchAllSchemas {
+						o = o.setFutureGrantTo(ModeRead, g)
+					} else {
+						o = o.setRevokeFutureGrantTo(ModeRead, g)
+					}
+				case ObjTpTable, ObjTpView:
+					if o.MatchAllObjects {
+						o = o.setFutureGrantTo(ModeRead, g)
+					} else {
+						o = o.setRevokeFutureGrantTo(ModeRead, g)
+					}
+				}
+				// Ignore this grant, it's not in grupr its scope (unmanaged grant)
+			case ObjTpSchema:
+				if o.hasSchema(g.Schema) {
+					if o.Schemas[g.Schema].MatchAllObjects {
+						o.Schemas[g.Schema] = o.Schemas[g.Schema].setFutureGrantTo(ModeRead, g)
+					} else {
+						o = o.setRevokeFutureGrantTo(ModeRead, g)
+					}
+				} else {
+					// TODO: A rare oddity. A schema was added after we loaded account objects,
+					// and future grants were granted in it to our database role, no less.
+					// We could now check if indeed in that schema our expressions would
+					// match all or not, e.g., my_db.my_schema.*, or my_db.my*.* would be
+					// expressions that match all objects in my_db.my_schema; if there is
+					// any such om in oms, we could decide the leave the future grant alive
+					// But for now, we'll add it to our grants to revoke
+					o = o.setRevokeFutureGrantTo(ModeRead, g)
+				}
+			default:
+				panic("unsupported granted_in object type in future grant")
+			}
+		}
+	}
+	return o, nil
+}
+
 func (o AggDBObjs) setGrants(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, db semantics.Ident, oms semantics.ObjMatchers) (AggDBObjs, error) {
 	o.revokeGrantsToRead = []Grant{}
 	if !o.isDBRoleNew {
@@ -256,7 +337,7 @@ func (o AggDBObjs) setConsumedByGranted(pdID semantics.ProductDTAPID) AggDBObjs 
 
 func (o AggDBObjs) pushToDoFutureGrants(yield func(FutureGrant) bool) bool {
 	if o.MatchAllSchemas {
-		if !o.hasFutureGrantTo(ModeRead, ObjTpSchema, PrvUsage) {
+		if !o.hasFutureGrantTo(ModeRead, ObjTpSchema, PrivilegeComplete{Privilege: PrvUsage}) {
 			if !yield(FutureGrant{
 				Privileges:        []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage}},
 				GrantedOn:         ObjTpSchema,
@@ -273,9 +354,9 @@ func (o AggDBObjs) pushToDoFutureGrants(yield func(FutureGrant) bool) bool {
 	if o.MatchAllObjects {
 		for _, ot := range [2]ObjType{ObjTpTable, ObjTpView} {
 			prvs := []PrivilegeComplete{}
-			for _, p := range [2]Privilege{PrvSelect, PrvReferences} {
+			for _, p := range [2]PrivilegeComplete{PrivilegeComplete{Privilege: PrvSelect}, PrivilegeComplete{Privilege: PrvReferences}} {
 				if !o.hasFutureGrantTo(ModeRead, ot, p) {
-					prvs = append(prvs, PrivilegeComplete{Privilege: p})
+					prvs = append(prvs, p)
 				}
 			}
 			if len(prvs) > 0 {
