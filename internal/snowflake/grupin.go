@@ -209,6 +209,15 @@ func (g *Grupin) getToDoProductRoleGrants(doProd bool) iter.Seq[Grant] {
 	}
 }
 
+func (g* Grupin) DisjointFromObject(db semantics.Ident, schema semantics.Ident, obj semantics.Ident) bool {
+	for _, pd := range g.ProductDTAPs {
+		if !pd.Interface.ObjectMatchers.DisjointFromObject(db, schema, obj) {
+			return false
+		}
+	}
+	return true
+}
+
 func (g *Grupin) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, doProd bool) error {
 	// The bulk of the grants are granting objects to roles, we do it concurrently per product-dtap
 	eg, egCtx := errgroup.WithContext(ctx)
@@ -216,7 +225,10 @@ func (g *Grupin) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, 
 	for _, pd := range g.ProductDTAPs {
 		if doProd == pd.IsProd {
 			eg.Go(func() error {
-				return pd.grant(egCtx, synCnf, cnf, conn, g.productRoles, g.createDBRoleGrants, g.accountCache)
+				return pd.grant(egCtx, synCnf, cnf, conn, g.productRoles, g.createDBRoleGrants, 
+				func(db semantics.Ident, schema semantics.Ident, obj semantics.Ident) bool {
+					return g.DisjointFromObject(db, schema, obj)
+				}, g.accountCache)
 			})
 		}
 	}
