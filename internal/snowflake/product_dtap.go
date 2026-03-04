@@ -7,6 +7,7 @@ import (
 	"iter"
 	"log"
 	"slices"
+	"strings"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
 	"github.com/rwberendsen/grupr/internal/syntax"
@@ -23,16 +24,16 @@ type ProductDTAP struct {
 	WriteRole  ProductRole
 	DeployedBy map[semantics.Ident]bool // initially set to false, then to true if GRANTS are found in Snowflake
 
-	isReadGrantedToWrite           bool
-	writeGrantedToUserManagedRoles map[semantics.Ident]struct{}{}
-	refreshCount                   int // how many times has this ProductDTAP been refreshed: populated with Snowflake objects
-	matchedAccountObjects          map[semantics.ObjExpr]*matchedAccountObjs
-	revokeGrantsToRead             []Grant
-	revokeFutureGrantsToWrite      []FutureGrant
-	revokeGrantsToWrite            []Grant
-	revokeRolesFromWrite           []Grant
-	revokeGrantsOfWriteToUsers     []Grant
-	transferOwnership              []Grant // ownership grants we no longer want based on the YAML
+	isReadGrantedToWrite               bool
+	writeRoleGrantedToUserManagedRoles map[semantics.Ident]struct{}{}
+	refreshCount                       int // how many times has this ProductDTAP been refreshed: populated with Snowflake objects
+	matchedAccountObjects              map[semantics.ObjExpr]*matchedAccountObjs
+	revokeGrantsToRead                 []Grant
+	revokeFutureGrantsToWrite          []FutureGrant
+	revokeGrantsToWrite                []Grant
+	revokeRolesFromWrite               []Grant
+	revokeGrantsOfWriteToUsers         []Grant
+	transferOwnership                  []Grant // ownership grants we no longer want based on the YAML
 }
 
 func NewProductDTAP(pdID semantics.ProductDTAPID, isProd bool, pSem semantics.Product, userGroupMappings map[string]semantics.UserGroupMapping,
@@ -142,6 +143,19 @@ func (pd *ProductDTAP) createProductRoles(ctx context.Context, synCnf *syntax.Co
 	return nil
 }
 
+func (pd *ProductDTAP) setWriteRoleGrantedToUserManagedRoles(ctx context.Context, cnf *Config, conn *sql.DB) error {
+	for g, err := QueryGrantsOfRoleToRoles(ctx, conn, pd.WriteRole.ID) {
+		if err != nil {
+			return err
+		}
+		if strings.HasPrefix(g.GrantedToName, cnf.ObjectPrefix) {
+			return fmt.Errorf("product dtap write role '%s' granted to other grupr managed role, please take action to correct")
+		}
+		pd.writeRoleGrantedToUserManagedRoles[g.GrantedToName] = struct{}{}
+	}
+	return nil
+}
+
 func (pd *ProductDTAP) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{},
 	createDBRoleGrants map[semantics.Ident]struct{}, grupinDisjointFromObject func(semantics.Ident, semantics.Ident, semantics.Ident) bool,
 	c *accountCache) error {
@@ -199,13 +213,15 @@ func (pd *ProductDTAP) grant(ctx context.Context, synCnf *syntax.Config, cnf *Co
 	// had ownership before on these objects do not lose ownership (this could cause downtime in workloads)
 	// Instead, sysadmins and developers are expected to use the product write role for their workloads.
 	// When everything works, they can then revoke the product write role from their user managed role
-	if err := pd.setWriteGrantedToRoles(ctx, cnf, conn); err != nil {
+	if err := pd.setWriteRoleGrantedToUserManagedRoles(ctx, cnf, conn); err != nil {
 		return err
 	}
 
-	// Now we handle grants on objects like databases, schemas, tables, and views, that may be created or dropped concurrently
-	// We retry granting all privileges on such objects correctly a number of times if we encounter errors due to objects we expect
-	// to exist having been dropped concurrently
+	// Now we handle grants on objects like databases, schemas, tables, and
+	// views, that may be created or dropped concurrently
+	// We retry granting all privileges on such objects a number until we
+	// encounter something else than an error about objects we expect to
+	// exist having been dropped concurrently; 
 	for {
 		if err := pd.grant_(ctx, synCnf, cnf, conn, productRoles, createDBRoleGrants, grupinDisjointFromObject, c); err != ErrObjectNotExistOrAuthorized {
 			return err
@@ -320,6 +336,36 @@ func (pd *ProductDTAP) setGrantsToWrite(ctx context.Context, cnf *Config, conn *
 	}
 }
 
+func (pd *ProductDTAP) getToDoGrantsOfWriteRoleToUserManagedRoles(cnf *Config) iter.Seq[Grant] {
+	currentUserManagedRoleOwners := map[semantics.Ident]struct{}{}
+	for _, dbObjs := range pd.Interface.aggAccountObjects.DBs {
+		for _, schemaObjs := range dbObjs.Schemas {
+			for _, aggObjAttr := range schemaObjs.Objects {
+				if !strings.HasPrefix(aggObjAttr.Owner, cnf.ObjectPrefix) {
+					currentUserManagedRoleOwners[aggObjAttr.Owner] = struct{}{}
+				}
+				// Else, this object belonged to a different grupr managed product write role before;
+				// in this case, yeah, there will be downtime, we can't avoid it,
+				// we are not going to enable the spaghetti you would get if we start granting
+				// product write roles to each other.
+			}
+		}
+	}
+	return func(yield func(Grant) bool) {
+		for r := range currentUserManagedRoleOwners {
+			if !yield(Grant{
+				Privileges:    []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage}},
+				GrantedOn:     ObjTpRole,
+				GrantedRole:   pd.WriteRole.ID,
+				GrantedTo:     ObjTpRole,
+				GrantedToName: r,
+			}) {
+				return
+			}
+		}
+	}
+}
+
 func (pd *ProductDTAP) grant_(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{},
 	createDBRoleGrants map[semantics.Ident]struct{}, grupinDisjointFromObject func(semantics.Ident, semantics.Ident, semantics.Ident) bool,
 	c *accountCache) error {
@@ -352,13 +398,14 @@ func (pd *ProductDTAP) grant_(ctx context.Context, synCnf *syntax.Config, cnf *C
 
 	// Before we actually grant ownership to the write role, grant the write role itself to all the current owners of the objects
 	// of interest. This way, they will not lose ownership, in fact, they will not lose any privilege, and running grupr will
-	// not mess up any processes that may be running.
+	// not mess up any other processes that may be running.
 	// We never revoke from any role; that is the job of sysadmins: when they are done with those roles, they can drop them,
 	// or if the roles need to be retained for other purposes, they can revoke this product dtap role from that other role.
-	if err := DoGrants(ctx, cnf, conn, pd.getToDoWriteGrantsToRoles()); err != nil {
+	if err := DoGrants(ctx, cnf, conn, pd.getToDoGrantsOfWriteRoleToUserManagedRoles()); err != nil {
 		return err
 	}
 	// Then, make a second pass over the objects, and grant ownership to the write role.
+	// WIP TODO FROM HERE
 	if err := DoGrantsRetry(ctx, cnf, conn, pd.getToDoOwnershipGrants()); err != nil {
 		return err
 	}
