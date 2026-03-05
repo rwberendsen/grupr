@@ -310,6 +310,15 @@ func DoGrantsSkipErrors(ctx context.Context, cnf *Config, conn *sql.DB, grants i
 	return doGrantsSkipErrors(ctx, cnf, conn, grants, false)
 }
 
+func DoGrantsIndividually(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[Grant]) error {
+	for g := range grants {
+		if err := runSQL(ctx, cnf, conn, g.buildSQLGrant(false)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func DoRevokes(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[Grant]) error {
 	return doGrants(ctx, cnf, conn, grants, true)
 }

@@ -11,7 +11,7 @@ type AggObjAttr struct {
 	// set when grant() is called on AggDBObjs
 	isSelectGrantedToRead     bool
 	isReferencesGrantedToRead bool
-	isOwnedByWrite            bool
+	isOwnedByWriteRole        bool
 }
 
 func (o AggObjAttr) setGrantTo(m Mode, g Grant) AggObjAttr {
@@ -27,7 +27,7 @@ func (o AggObjAttr) setGrantTo(m Mode, g Grant) AggObjAttr {
 	case ModeWrite:
 		switch g.Privileges[0].Privilege {
 		case PrvOwnership:
-			o.isOwnedByWrite = true
+			o.isOwnedByWriteRole = true
 		}
 		// Ignore; unmanaged grant
 	default:
