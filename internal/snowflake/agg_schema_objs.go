@@ -59,7 +59,7 @@ func (o AggSchemaObjs) setGrantTo(m Mode, g Grant) AggSchemaObjs {
 		o.isUsageGrantedToRead = true
 	}
 	if m == ModeWrite && g.Privileges[0].Privilege == PrvCreate &&
-	(g.Privileges[0].CreateObjectType == ObjTpTable || g.Privileges[0].CreateObjectType == ObjTpView) {
+		(g.Privileges[0].CreateObjectType == ObjTpTable || g.Privileges[0].CreateObjectType == ObjTpView) {
 		o.isCreateGrantedToWrite[g.Privileges[0].CreateObjectType.getIdxObjectLevel()] = true
 	}
 	// Ignore; unmanaged grant

@@ -61,7 +61,7 @@ func (g Grant) buildSQLGrant(revoke bool) string {
 	privilegeClause := strings.Join(util.FmtSliceElements[PrivilegeComplete](g.Privileges...), `, `)
 	var modifierClause string
 	if len(g.Privileges == 1) && g.Privileges[0].Privilege == PrvOwnership {
-		modifierClause = ' COPY CURRENT GRANTS'
+		modifierClause = ` COPY CURRENT GRANTS`
 	}
 
 	var objectClause string
@@ -133,13 +133,13 @@ func newGrantToRole(privilege string, createObjType string, grantedOn string, na
 
 func newGrantOfRole(role semantics.Ident, granteeName semantics.Ident, grantedBy semantics.Ident) Grant {
 	return Grant{
-		Privileges: []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage}},
-		GrantedOn: ObjTpRole,
-		GrantedRole: role,
+		Privileges:                  []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage}},
+		GrantedOn:                   ObjTpRole,
+		GrantedRole:                 role,
 		GrantedRoleStartsWithPrefix: true, // only used for product dtap roles at this point
-		GrantedTo: ObjTpUser,
-		GrantedToName: granteeName,
-		GrantedBy: grantedBy,
+		GrantedTo:                   ObjTpUser,
+		GrantedToName:               granteeName,
+		GrantedBy:                   grantedBy,
 	}
 }
 

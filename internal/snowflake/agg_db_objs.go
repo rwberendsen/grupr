@@ -14,13 +14,13 @@ type AggDBObjs struct {
 	MatchAllObjects bool
 
 	// set when (future) grants are set
-	dbRole                        DatabaseRole
-	isDBRoleNew                   bool // if true, then no need to query grants
-	revokeFutureGrantsToRead      []FutureGrant
-	revokeGrantsToRead            []Grant
-	isUsageGrantedToRead          bool
-	isUsageGrantedToFutureSchemas bool
-	isDBRoleGrantedToProductRead  bool
+	dbRole                           DatabaseRole
+	isDBRoleNew                      bool // if true, then no need to query grants
+	revokeFutureGrantsToReadRole     []FutureGrant
+	revokeGrantsToReadRole           []Grant
+	isUsageGrantedToReadRole         bool
+	isUsageGrantedToFutureSchemas    bool
+	isDBRoleGrantedToProductReadRole bool
 	// has the database role corresponding to this AggDBObjs been granted to the consuming ProductDTAPs already?
 	consumedByGranted map[semantics.ProductDTAPID]bool
 
@@ -29,8 +29,8 @@ type AggDBObjs struct {
 	// 0: ObjTable
 	// 1: ObjView
 	//
-	isPrivilegeOnFutureObjectGranted            [2][2]bool
-	isCreateObjectOnFutureSchemasGrantedToWrite [2]bool // 0: ObjTable, 1: ObjView
+	isPrivilegeOnFutureObjectGrantedToReadRole             [2][2]bool
+	isCreateObjectOnFutureSchemasGrantedToProductWriteRole [2]bool // 0: ObjTable, 1: ObjView
 }
 
 func newAggDBObjs(o DBObjs) AggDBObjs {
@@ -54,7 +54,7 @@ func (o AggDBObjs) hasObject(s semantics.Ident, obj semantics.Ident) bool {
 	return o.hasSchema(s) && o.Schemas[s].hasObject(obj)
 }
 
-// Specifically for AggDBObjs.isPrivilegeOnFutureObjectGranted
+// Specifically for AggDBObjs.isPrivilegeOnFutureObjectGrantedToReadRole
 func (_ AggDBObjs) getPrivilegeIdx(p Privilege) int {
 	switch p {
 	case PrvSelect:
@@ -79,7 +79,7 @@ func (o AggDBObjs) setFutureGrantTo(m Mode, g FutureGrant) AggDBObjs {
 		case ObjTpTable, ObjTpView:
 			switch g.Privileges[0].Privilege {
 			case PrvSelect, PrvReferences:
-				o.isPrivilegeOnFutureObjectGranted[g.GrantedOn.getIdxObjectLevel()][g.Privileges[0].Privilege.getIdxObjectLevel()] = true
+				o.isPrivilegeOnFutureObjectGrantedToReadRole[g.GrantedOn.getIdxObjectLevel()][g.Privileges[0].Privilege.getIdxObjectLevel()] = true
 			}
 			// Ignore; unmanaged grant
 		}
@@ -88,7 +88,7 @@ func (o AggDBObjs) setFutureGrantTo(m Mode, g FutureGrant) AggDBObjs {
 		case ObjTpSchema:
 			switch g.Privileges[0].Privilege {
 			case PrvCreate:
-				o.isCreateObjectOnFutureSchemasGrantedToWrite[g.Privileges[0].CreateObjectType.getIdxObjectLevel()] = true
+				o.isCreateObjectOnFutureSchemasGrantedToProductWriteRole[g.Privileges[0].CreateObjectType.getIdxObjectLevel()] = true
 			}
 			// Ignore, unmanaged grant
 		}
@@ -109,7 +109,7 @@ func (o AggDBObjs) hasFutureGrantTo(m Mode, grantedOn ObjType, p PrivilegeComple
 		case ObjTpTable, ObjTpView:
 			switch p.Privilege {
 			case PrvSelect, PrvReferences:
-				return o.isPrivilegeOnFutureObjectGranted[grantedOn.getIdxObjectLevel()][p.getIdxObjectLevel()]
+				return o.isPrivilegeOnFutureObjectGrantedToReadRole[grantedOn.getIdxObjectLevel()][p.getIdxObjectLevel()]
 			}
 		}
 	case ModeWrite:
@@ -117,7 +117,7 @@ func (o AggDBObjs) hasFutureGrantTo(m Mode, grantedOn ObjType, p PrivilegeComple
 		case ObjTpSchema:
 			switch p.Privilege {
 			case PrvCreate:
-				return o.isCreateObjectOnFutureSchemasGrantedToWrite[grantedOn.getIdxObjectLevel()]
+				return o.isCreateObjectOnFutureSchemasGrantedToProductWriteRole[grantedOn.getIdxObjectLevel()]
 			}
 		}
 	}
@@ -128,39 +128,34 @@ func (o AggDBObjs) setRevokeFutureGrantTo(m Mode, g FutureGrant) AggDBObjs {
 	if m != ModeRead {
 		panic("not implemented")
 	}
-	o.revokeFutureGrantsToRead = append(o.revokeFutureGrantsToRead, g)
+	o.revokeFutureGrantsToReadRole = append(o.revokeFutureGrantsToReadRole, g)
 	return o
 }
 
 func (o AggDBObjs) setGrantTo(m Mode, g Grant) AggDBObjs {
 	if m == ModeRead && g.Privileges[0].Privilege == PrvUsage {
-		o.isUsageGrantedToRead = true
+		o.isUsageGrantedToReadRole = true
 	}
 	// Ignore; unmanaged grant
 	return o
 }
 
 func (o AggDBObjs) hasGrantTo(m Mode, p Privilege) bool {
-	return m == ModeRead && p == PrvUsage && o.isUsageGrantedToRead
+	return m == ModeRead && p == PrvUsage && o.isUsageGrantedToReadRole
 }
 
 func (o AggDBObjs) setRevokeGrantTo(m Mode, g Grant) AggDBObjs {
 	if m != ModeRead {
 		panic("not implemented")
 	}
-	o.revokeGrantsToRead = append(o.revokeGrantsToRead, g)
+	o.revokeGrantsToReadRole = append(o.revokeGrantsToReadRole, g)
 	return o
 }
 
 func (o AggDBObjs) setDatabaseRole(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, pID string, dtap string, iID string,
-	db semantics.Ident, createDBRoleGrants map[semantics.Ident]struct{}, databaseRoles map[DatabaseRole]struct{}) (AggDBObjs, error) {
+	db semantics.Ident, databaseRoles map[DatabaseRole]struct{}) (AggDBObjs, error) {
 	o.dbRole = NewDatabaseRole(synCnf, cnf, pID, dtap, iID, ModeRead, db)
 	if _, ok := databaseRoles[o.dbRole]; !ok {
-		if _, ok = createDBRoleGrants[db]; !ok {
-			if err := GrantCreateDatabaseRoleToSelf(ctx, cnf, conn, db); err != nil {
-				return o, err
-			}
-		}
 		if err := o.dbRole.Create(ctx, cnf, conn); err != nil {
 			return o, err
 		}
@@ -170,12 +165,12 @@ func (o AggDBObjs) setDatabaseRole(ctx context.Context, synCnf *syntax.Config, c
 }
 
 func (o AggDBObjs) setFutureGrants(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, pID string, dtap string, iID string,
-	db semantics.Ident, oms semantics.ObjMatchers, createDBRoleGrants map[semantics.Ident]struct{}, databaseRoles map[DatabaseRole]struct{}) (AggDBObjs, error) {
-	o, err := o.setDatabaseRole(ctx, synCnf, cnf, conn, pID, dtap, iID, db, createDBRoleGrants, databaseRoles)
+	db semantics.Ident, oms semantics.ObjMatchers, databaseRoles map[DatabaseRole]struct{}) (AggDBObjs, error) {
+	o, err := o.setDatabaseRole(ctx, synCnf, cnf, conn, pID, dtap, iID, db, databaseRoles)
 	if err != nil {
 		return o, err
 	}
-	o.revokeFutureGrantsToRead = []FutureGrant{}
+	o.revokeFutureGrantsToReadRole = []FutureGrant{}
 	if !o.isDBRoleNew {
 		for g, err := range QueryFutureGrantsToDBRoleFiltered(ctx, conn, db, o.dbRole.Name, cnf.DatabaseRolePrivileges[ModeRead], nil) {
 			if err != nil {
@@ -230,64 +225,63 @@ func (o AggDBObjs) setFutureGrants(ctx context.Context, synCnf *syntax.Config, c
 	return o, nil
 }
 
-func (o AggDBObjs) setFutureGrantsToWrite(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, pID string, dtap string,
+func (o AggDBObjs) setFutureGrantsToWriteRole(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, pID string, dtap string,
 	db semantics.Ident, oms semantics.ObjMatchers) (AggDBObjs, error) {
 	o.revokeFutureGrantsToWrite = []FutureGrant{}
-		for g, err := range QueryFutureGrantsToDBRoleFiltered(ctx, conn, db, o.dbRole.Name, cnf.DatabaseRolePrivileges[ModeRead], nil) {
-			if err != nil {
-				return o, err
-			}
+	for g, err := range QueryFutureGrantsToDBRoleFiltered(ctx, conn, db, o.dbRole.Name, cnf.DatabaseRolePrivileges[ModeRead], nil) {
+		if err != nil {
+			return o, err
+		}
 
-			if g.Database != db {
-				// This grant should not be granted to this particular database role
-				o = o.setRevokeFutureGrantTo(ModeRead, g)
-				continue
-			}
+		if g.Database != db {
+			// This grant should not be granted to this particular database role
+			o = o.setRevokeFutureGrantTo(ModeRead, g)
+			continue
+		}
 
-			switch g.GrantedIn {
-			case ObjTpDatabase:
-				switch g.GrantedOn {
-				case ObjTpSchema:
-					if o.MatchAllSchemas {
-						o = o.setFutureGrantTo(ModeRead, g)
-					} else {
-						o = o.setRevokeFutureGrantTo(ModeRead, g)
-					}
-				case ObjTpTable, ObjTpView:
-					if o.MatchAllObjects {
-						o = o.setFutureGrantTo(ModeRead, g)
-					} else {
-						o = o.setRevokeFutureGrantTo(ModeRead, g)
-					}
-				}
-				// Ignore this grant, it's not in grupr its scope (unmanaged grant)
+		switch g.GrantedIn {
+		case ObjTpDatabase:
+			switch g.GrantedOn {
 			case ObjTpSchema:
-				if o.hasSchema(g.Schema) {
-					if o.Schemas[g.Schema].MatchAllObjects {
-						o.Schemas[g.Schema] = o.Schemas[g.Schema].setFutureGrantTo(ModeRead, g)
-					} else {
-						o = o.setRevokeFutureGrantTo(ModeRead, g)
-					}
+				if o.MatchAllSchemas {
+					o = o.setFutureGrantTo(ModeRead, g)
 				} else {
-					// TODO: A rare oddity. A schema was added after we loaded account objects,
-					// and future grants were granted in it to our database role, no less.
-					// We could now check if indeed in that schema our expressions would
-					// match all or not, e.g., my_db.my_schema.*, or my_db.my*.* would be
-					// expressions that match all objects in my_db.my_schema; if there is
-					// any such om in oms, we could decide the leave the future grant alive
-					// But for now, we'll add it to our grants to revoke
 					o = o.setRevokeFutureGrantTo(ModeRead, g)
 				}
-			default:
-				panic("unsupported granted_in object type in future grant")
+			case ObjTpTable, ObjTpView:
+				if o.MatchAllObjects {
+					o = o.setFutureGrantTo(ModeRead, g)
+				} else {
+					o = o.setRevokeFutureGrantTo(ModeRead, g)
+				}
 			}
+			// Ignore this grant, it's not in grupr its scope (unmanaged grant)
+		case ObjTpSchema:
+			if o.hasSchema(g.Schema) {
+				if o.Schemas[g.Schema].MatchAllObjects {
+					o.Schemas[g.Schema] = o.Schemas[g.Schema].setFutureGrantTo(ModeRead, g)
+				} else {
+					o = o.setRevokeFutureGrantTo(ModeRead, g)
+				}
+			} else {
+				// TODO: A rare oddity. A schema was added after we loaded account objects,
+				// and future grants were granted in it to our database role, no less.
+				// We could now check if indeed in that schema our expressions would
+				// match all or not, e.g., my_db.my_schema.*, or my_db.my*.* would be
+				// expressions that match all objects in my_db.my_schema; if there is
+				// any such om in oms, we could decide the leave the future grant alive
+				// But for now, we'll add it to our grants to revoke
+				o = o.setRevokeFutureGrantTo(ModeRead, g)
+			}
+		default:
+			panic("unsupported granted_in object type in future grant")
 		}
 	}
 	return o, nil
 }
 
 func (o AggDBObjs) setGrants(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, db semantics.Ident, oms semantics.ObjMatchers) (AggDBObjs, error) {
-	o.revokeGrantsToRead = []Grant{}
+	o.revokeGrantsToReadRole = []Grant{}
 	if !o.isDBRoleNew {
 		for g, err := range QueryGrantsToDBRoleFiltered(ctx, cnf, conn, db, o.dbRole.Name, true, cnf.DatabaseRolePrivileges[ModeRead], nil) {
 			if err != nil {
@@ -404,7 +398,7 @@ func (o AggDBObjs) pushToDoGrants(yield func(Grant) bool) bool {
 }
 
 func (o AggDBObjs) pushToDoFutureRevokes(yield func(FutureGrant) bool) bool {
-	for _, g := range o.revokeFutureGrantsToRead {
+	for _, g := range o.revokeFutureGrantsToReadRole {
 		if !yield(g) {
 			return false
 		}
@@ -413,7 +407,7 @@ func (o AggDBObjs) pushToDoFutureRevokes(yield func(FutureGrant) bool) bool {
 }
 
 func (o AggDBObjs) pushToDoRevokes(yield func(Grant) bool) bool {
-	for _, g := range o.revokeGrantsToRead {
+	for _, g := range o.revokeGrantsToReadRole {
 		if !yield(g) {
 			return false
 		}

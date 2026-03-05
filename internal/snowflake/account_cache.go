@@ -163,7 +163,9 @@ func (c *accountCache) addDB(ctx context.Context, synCnf *syntax.Config, cnf *Co
 	if _, ok := c.dbs[k]; !ok {
 		c.dbs[k] = &dbCache{}
 	}
-	// After a DB has been dropped and recreated, DB roles may have been dropped
+	// After a DB has been dropped and recreated, DB roles may have been dropped;
+	// Also, the privilege CREATE DATABASE ROLE that the grupr role should have may have been revoked.
+	// But, if this is the first time the DB was added, those things may be in place.
 	if err := c.dbs[k].refreshDBRoles(ctx, synCnf, cnf, conn, k); err != nil {
 		return err
 	}

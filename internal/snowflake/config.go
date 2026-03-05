@@ -195,20 +195,20 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 			GrantedRoleStartsWithPrefix: util.NewTrue(),
 		}: {},
 		GrantTemplate{
-			PrivilegeComplete:           PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpTable},
-			GrantedOn:                   ObjTpSchema,
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpTable},
+			GrantedOn:         ObjTpSchema,
 		}: {},
 		GrantTemplate{
-			PrivilegeComplete:           PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpView},
-			GrantedOn:                   ObjTpSchema,
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpView},
+			GrantedOn:         ObjTpSchema,
 		}: {},
 		GrantTemplate{
-			PrivilegeComplete:           PrivilegeComplete{Privilege: PrvOwnership},
-			GrantedOn:                   ObjTpTable,
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvOwnership},
+			GrantedOn:         ObjTpTable,
 		}: {},
 		GrantTemplate{
-			PrivilegeComplete:           PrivilegeComplete{Privilege: PrvOwnership},
-			GrantedOn:                   ObjTpView,
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvOwnership},
+			GrantedOn:         ObjTpView,
 		}: {},
 	}
 

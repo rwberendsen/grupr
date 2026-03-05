@@ -15,11 +15,12 @@ import (
 )
 
 type dbCache struct {
-	mu           sync.RWMutex // guards schemas, schemaExists, and version
-	version      int
-	schemas      map[semantics.Ident]*schemaCache // nil: never requested; empty: none found
-	schemaExists map[semantics.Ident]bool
-	dbRoles      map[DatabaseRole]struct{}
+	mu                    sync.RWMutex // guards schemas, schemaExists, and version
+	version               int
+	schemas               map[semantics.Ident]*schemaCache // nil: never requested; empty: none found
+	schemaExists          map[semantics.Ident]bool
+	dbRoles               map[DatabaseRole]struct{}
+	isCreateDBRoleGranted bool
 }
 
 func (c *dbCache) addSchema(k semantics.Ident) {
@@ -78,6 +79,9 @@ func (c *dbCache) refreshSchemas(ctx context.Context, conn *sql.DB, db semantics
 }
 
 func (c *dbCache) refreshDBRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, db semantics.Ident) error {
+	if err := GrantCreateDatabaseRoleToSelf(ctx, cnf, conn, db); err != nil {
+		return err
+	}
 	c.dbRoles = map[DatabaseRole]struct{}{} // overwrite if c.dbRoles already had a value
 	for r, err := range QueryDatabaseRoles(ctx, synCnf, cnf, conn, db) {
 		if err != nil {

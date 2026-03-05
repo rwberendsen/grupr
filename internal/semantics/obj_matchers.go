@@ -149,8 +149,8 @@ func (oms ObjMatchers) DisjointFromObject(db Ident, schema Ident, object Ident) 
 }
 
 func (oms ObjMatchers) MatchAllSchemasInDB(db Ident) bool {
-	for _, om : range oms {
-		if om.MatchAllSchemasInDB(db Ident) {
+	for _, om := range oms {
+		if om.MatchAllSchemasInDB(db) {
 			return true
 		}
 	}
