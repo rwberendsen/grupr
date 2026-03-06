@@ -60,7 +60,7 @@ func (g Grant) buildSQLGrant(revoke bool) string {
 	// GRANT <privileges> ... TO ROLE
 	privilegeClause := strings.Join(util.FmtSliceElements[PrivilegeComplete](g.Privileges...), `, `)
 	var modifierClause string
-	if len(g.Privileges == 1) && g.Privileges[0].Privilege == PrvOwnership {
+	if len(g.Privileges) == 1 && g.Privileges[0].Privilege == PrvOwnership {
 		modifierClause = ` COPY CURRENT GRANTS`
 	}
 

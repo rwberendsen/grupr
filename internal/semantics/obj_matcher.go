@@ -108,13 +108,12 @@ func (om ObjMatcher) MatchAllSchemasInDB(db Ident) bool {
 	if !om.Include.Schema().MatchAll() {
 		return false
 	}
-	matchAllSchemas = true
 	for excludeExpr := range om.Exclude {
 		if excludeExpr.MatchesAllObjectsInAnySchemaInDB(db) {
-			matchAllSchemas = false
+			return false
 		}
 	}
-	return matchAllSchemas
+	return true
 }
 
 func (lhs ObjMatcher) Equal(rhs ObjMatcher) bool {

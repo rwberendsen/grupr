@@ -164,7 +164,7 @@ func (i *Interface) pushToDoDBRoleGrants(yield func(Grant) bool, doProd bool, m 
 						Privileges:    []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage}},
 						GrantedOn:     ObjTpDatabaseRole,
 						Database:      db,
-						GrantedRole:   dbObjs.dbRole.Name,
+						GrantedRole:   dbObjs.readDBRole.Name,
 						GrantedTo:     ObjTpRole,
 						GrantedToName: m[pdID].ReadRole.ID,
 					}) {

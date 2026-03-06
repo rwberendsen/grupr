@@ -87,9 +87,9 @@ func (g *Grupin) addZombieProductDTAPs() {
 	}
 }
 
-func (g *Grupin) dropZombieProductDTAPs() {
+func (g *Grupin) dropZombieProductDTAPs(ctx context.Context, cnf *Config, conn *sql.DB) {
 	for _, pd := range g.ProductDTAPs {
-		pd.dropProductRolesIfZombie()
+		pd.dropProductRolesIfZombie(ctx, cnf, conn)
 	}
 }
 
@@ -115,7 +115,7 @@ func (g *Grupin) ManageAccess(ctx context.Context, synCnf *syntax.Config, cnf *C
 	}
 
 	// Now we drop zombie product roles, via the zombie product dtap objects
-	g.dropZombieProductDTAPs()
+	g.dropZombieProductDTAPs(ctx, cnf, conn)
 
 	// Finally, we drop zombie database roles; they do not have ownership
 	// grants, are therefore easier to deal with, so we do not bother to
@@ -150,7 +150,7 @@ func (g *Grupin) setDBRoleGrants(ctx context.Context, synCnf *syntax.Config, cnf
 			}
 			// grantedDBRole.InterfaceID == ""
 			if dbObjs, ok := pd.Interface.aggAccountObjects.DBs[grant.Database]; ok {
-				dbObjs.isDBRoleGrantedToProductReadRole = true
+				dbObjs.isReadDBRoleGrantedToProductReadRole = true
 			} else if pd.Interface.ObjectMatchers.DisjointFromDB(grant.Database) {
 				pd.revokeGrantToReadRole(grant)
 			}
@@ -260,10 +260,8 @@ func (g *Grupin) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, 
 	// We do not do this concurrently, because this concerns relationships between product dtaps, no need to overcomplicate
 	for _, pd := range g.ProductDTAPs {
 		if doProd == pd.IsProd {
-			if !pd.isReadRoleNew {
-				if err := g.setDBRoleGrants(ctx, synCnf, cnf, conn, pd); err != nil {
-					return err
-				}
+			if err := g.setDBRoleGrants(ctx, synCnf, cnf, conn, pd); err != nil {
+				return err
 			}
 		}
 	}
@@ -278,10 +276,8 @@ func (g *Grupin) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, 
 	// TODO: if this becomes a performance bottleneck, parallelize it, should be straightforward
 	for _, pd := range g.ProductDTAPs {
 		if doProd == pd.IsProd {
-			if !pd.isReadRoleNew {
-				if err := pd.setGrantedUsers(ctx, conn); err != nil {
-					return err
-				}
+			if err := pd.setGrantedUsers(ctx, conn); err != nil {
+				return err
 			}
 		}
 	}
@@ -295,7 +291,10 @@ func (g *Grupin) revoke(ctx context.Context, synCnf *syntax.Config, cnf *Config,
 	for _, pd := range g.ProductDTAPs {
 		if doProd == pd.IsProd {
 			eg.Go(func() error {
-				return pd.revoke(ctx, synCnf, cnf, conn, g.productRoles, g.accountCache)
+				return pd.revoke(ctx, synCnf, cnf, conn, g.productRoles,
+					func(db semantics.Ident, schema semantics.Ident, obj semantics.Ident) bool {
+						return g.DisjointFromObject(db, schema, obj)
+					}, g.accountCache)
 			})
 		}
 	}
