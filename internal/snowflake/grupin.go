@@ -276,7 +276,7 @@ func (g *Grupin) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, 
 	// TODO: if this becomes a performance bottleneck, parallelize it, should be straightforward
 	for _, pd := range g.ProductDTAPs {
 		if doProd == pd.IsProd {
-			if err := pd.setGrantedUsers(ctx, conn); err != nil {
+			if err := pd.setGrantedUsers(ctx, cnf, conn, g.productRoles); err != nil {
 				return err
 			}
 		}

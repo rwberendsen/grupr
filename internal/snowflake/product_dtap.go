@@ -145,7 +145,11 @@ func (pd *ProductDTAP) createProductRoles(ctx context.Context, synCnf *syntax.Co
 	return nil
 }
 
-func (pd *ProductDTAP) setWriteRoleGrantedToUserManagedRoles(ctx context.Context, cnf *Config, conn *sql.DB) error {
+func (pd *ProductDTAP) setWriteRoleGrantedToUserManagedRoles(ctx context.Context, cnf *Config, conn *sql.DB,
+	productRoles map[ProductRole]struct{}) error {
+	if _, ok := productRoles[pd.WriteRole]; !ok && cnf.DryRun {
+		return nil
+	}
 	pd.writeRoleGrantedToUserManagedRoles = map[semantics.Ident]struct{}{}
 	for g, err := range QueryGrantsOfRoleToRoles(ctx, conn, pd.WriteRole.ID) {
 		if err != nil {
@@ -154,20 +158,27 @@ func (pd *ProductDTAP) setWriteRoleGrantedToUserManagedRoles(ctx context.Context
 		if strings.HasPrefix(string(g.GrantedToName), cnf.ObjectPrefix) {
 			return fmt.Errorf("product dtap write role '%s' granted to other grupr managed role, please take action to correct")
 		}
+		if slices.Contains([]semantics.Ident{
+			semantics.Ident("GLOBALORGADMIN"),
+			semantics.Ident("ORGADMIN"),
+			semantics.Ident("ACCOUNTADMIN"),
+			semantics.Ident("SYSADMIN"),
+			semantics.Ident("PUBLIC"),
+			semantics.Ident("SECURITYADMIN"),
+			semantics.Ident("USERADMIN"),
+		}, g.GrantedToName) {
+			continue
+		}
 		pd.writeRoleGrantedToUserManagedRoles[g.GrantedToName] = struct{}{}
 	}
 	return nil
 }
 
-func (pd *ProductDTAP) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{},
-	grupinDisjointFromObject func(semantics.Ident, semantics.Ident, semantics.Ident) bool,
-	c *accountCache) error {
-	// Create the product roles if necessary (read, write)
-	if err := pd.createProductRoles(ctx, synCnf, cnf, conn, productRoles); err != nil {
-		return err
+func (pd *ProductDTAP) setIsReadRoleGrantedToWriteRole(ctx context.Context, cnf *Config, conn *sql.DB,
+	productRoles map[ProductRole]struct{}) error {
+	if _, ok := productRoles[pd.WriteRole]; !ok && cnf.DryRun {
+		return nil
 	}
-
-	// Check (once) if we already granted the read role to the write role; if not, do it
 	for grant, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, pd.WriteRole.ID, true, map[GrantTemplate]struct{}{
 		GrantTemplate{
 			PrivilegeComplete:           PrivilegeComplete{Privilege: PrvUsage},
@@ -196,6 +207,21 @@ func (pd *ProductDTAP) grant(ctx context.Context, synCnf *syntax.Config, cnf *Co
 			// Ignore; unmanaged grant (we might also panic, since we queried for managed grants only, so it would be unexpected if it did not match anything)
 		}
 	}
+	return nil
+}
+
+func (pd *ProductDTAP) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{},
+	grupinDisjointFromObject func(semantics.Ident, semantics.Ident, semantics.Ident) bool,
+	c *accountCache) error {
+	// Create the product roles if necessary (read, write)
+	if err := pd.createProductRoles(ctx, synCnf, cnf, conn, productRoles); err != nil {
+		return err
+	}
+
+	// Check (once) if we already granted the read role to the write role; if not, do it
+	if err := pd.setIsReadRoleGrantedToWriteRole(ctx, cnf, conn, productRoles); err != nil {
+		return err
+	}
 
 	if !pd.isReadRoleGrantedToWriteRole {
 		DoGrants(ctx, cnf, conn, func(yield func(Grant) bool) {
@@ -216,7 +242,7 @@ func (pd *ProductDTAP) grant(ctx context.Context, synCnf *syntax.Config, cnf *Co
 	// had ownership before on these objects do not lose ownership (this could cause downtime in workloads)
 	// Instead, sysadmins and developers are expected to use the product write role for their workloads.
 	// When everything works, they can then revoke the product write role from their user managed role
-	if err := pd.setWriteRoleGrantedToUserManagedRoles(ctx, cnf, conn); err != nil {
+	if err := pd.setWriteRoleGrantedToUserManagedRoles(ctx, cnf, conn, productRoles); err != nil {
 		return err
 	}
 
@@ -232,7 +258,10 @@ func (pd *ProductDTAP) grant(ctx context.Context, synCnf *syntax.Config, cnf *Co
 	}
 }
 
-func (pd *ProductDTAP) setFutureGrantsToWriteRole(ctx context.Context, cnf *Config, conn *sql.DB) error {
+func (pd *ProductDTAP) setFutureGrantsToWriteRole(ctx context.Context, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{}) error {
+	if _, ok := productRoles[pd.WriteRole]; !ok && cnf.DryRun {
+		return nil
+	} 
 	for g, err := range QueryFutureGrantsToRoleFiltered(ctx, conn, pd.WriteRole.ID, map[GrantTemplate]struct{}{
 		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpTable},
@@ -278,7 +307,10 @@ func (pd *ProductDTAP) setFutureGrantsToWriteRole(ctx context.Context, cnf *Conf
 }
 
 func (pd *ProductDTAP) setGrantsToWriteRole(ctx context.Context, cnf *Config, conn *sql.DB,
-	grupinDisjointFromObject func(semantics.Ident, semantics.Ident, semantics.Ident) bool) error {
+	grupinDisjointFromObject func(semantics.Ident, semantics.Ident, semantics.Ident) bool, productRoles map[ProductRole]struct{}) error {
+	if _, ok := productRoles[pd.WriteRole]; !ok && cnf.DryRun {
+		return nil
+	} 
 	for g, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, pd.WriteRole.ID, true, map[GrantTemplate]struct{}{
 		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpTable},
@@ -405,7 +437,7 @@ func (pd *ProductDTAP) grant_(ctx context.Context, synCnf *syntax.Config, cnf *C
 
 	// Write grants go first, so that we do not have to copy all the read privileges we're about to set when granting ownership.
 	// As with read grants, future grants go first
-	if err := pd.setFutureGrantsToWriteRole(ctx, cnf, conn); err != nil {
+	if err := pd.setFutureGrantsToWriteRole(ctx, cnf, conn, productRoles); err != nil {
 		return err
 	}
 	if err := DoFutureGrants(ctx, cnf, conn, pd.getToDoFutureGrantsToWriteRole()); err != nil {
@@ -413,7 +445,7 @@ func (pd *ProductDTAP) grant_(ctx context.Context, synCnf *syntax.Config, cnf *C
 	}
 
 	// Now, regular grants to the write role
-	if err := pd.setGrantsToWriteRole(ctx, cnf, conn, grupinDisjointFromObject); err != nil {
+	if err := pd.setGrantsToWriteRole(ctx, cnf, conn, grupinDisjointFromObject, productRoles); err != nil {
 		return err
 	}
 	if err := DoGrants(ctx, cnf, conn, pd.getToDoGrantsToWriteRole()); err != nil {
@@ -602,7 +634,10 @@ func (pd *ProductDTAP) pushToDoProductRoleGrants(yield func(Grant) bool) bool {
 	return true
 }
 
-func (pd *ProductDTAP) setGrantedUsers(ctx context.Context, conn *sql.DB) error {
+func (pd *ProductDTAP) setGrantedUsers(ctx context.Context, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{}) error {
+	if _, ok := productRoles[pd.WriteRole]; !ok && cnf.DryRun {
+		return nil
+	}
 	for grant, err := range QueryGrantsOfRoleToUsers(ctx, conn, pd.WriteRole.ID) {
 		if err != nil {
 			return err

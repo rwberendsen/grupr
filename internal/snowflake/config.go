@@ -212,5 +212,13 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 		}: {},
 	}
 
+	if dryRun, ok := os.LookupEnv("GRUPR_SNOWFLAKE_DRY_RUN"); ok {
+		if b, err := strconv.ParseBool(dryRun); err != nil {
+			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_DRY_RUN: %w", err)
+		} else {
+			cnf.DryRun = b
+		}
+	}
+
 	return cnf, nil
 }
