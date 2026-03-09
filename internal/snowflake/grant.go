@@ -40,11 +40,11 @@ func (g Grant) buildSQLGrant(revoke bool) string {
 	var granteeClause string
 	switch g.GrantedTo {
 	case ObjTpRole:
-		granteeClause = fmt.Sprintf(`ROLE IDENTIFIER('%s')`, g.GrantedToName)
+		granteeClause = fmt.Sprintf(`ROLE IDENTIFIER($$%s$$)`, g.GrantedToName)
 	case ObjTpDatabaseRole:
-		granteeClause = fmt.Sprintf(`DATABASE ROLE IDENTIFIER('%s.%s')`, g.GrantedToDatabase, g.GrantedToName)
+		granteeClause = fmt.Sprintf(`DATABASE ROLE IDENTIFIER($$%s.%s$$)`, g.GrantedToDatabase, g.GrantedToName)
 	case ObjTpUser:
-		granteeClause = fmt.Sprintf(`USER IDENTIFIER('%s')`, g.GrantedToName)
+		granteeClause = fmt.Sprintf(`USER IDENTIFIER($$%s$$)`, g.GrantedToName)
 	default:
 		panic("Not implemented")
 	}
@@ -52,10 +52,9 @@ func (g Grant) buildSQLGrant(revoke bool) string {
 	// GRANT ROLE ... / GRANT DATABASE ROLE ...
 	switch g.GrantedOn {
 	case ObjTpRole:
-		// TODO: check what happens if an identifier contains a single quote
-		return fmt.Sprintf(`%s ROLE IDENTIFIER('%s') %s %s`, verb, g.GrantedRole, preposition, granteeClause)
+		return fmt.Sprintf(`%s ROLE IDENTIFIER($$%s$$) %s %s`, verb, g.GrantedRole, preposition, granteeClause)
 	case ObjTpDatabaseRole:
-		return fmt.Sprintf(`%s DATABASE ROLE IDENTIFIER('%s.%s') %s %s`, verb, g.Database, g.GrantedRole, preposition, granteeClause)
+		return fmt.Sprintf(`%s DATABASE ROLE IDENTIFIER($$%s.%s$$) %s %s`, verb, g.Database, g.GrantedRole, preposition, granteeClause)
 	}
 
 	// GRANT <privileges> ... TO ROLE
@@ -68,11 +67,11 @@ func (g Grant) buildSQLGrant(revoke bool) string {
 	var objectClause string
 	switch g.GrantedOn {
 	case ObjTpDatabase:
-		objectClause = fmt.Sprintf(`%v IDENTIFIER('%s')`, g.GrantedOn, g.Database)
+		objectClause = fmt.Sprintf(`%v IDENTIFIER($$%s$$)`, g.GrantedOn, g.Database)
 	case ObjTpSchema:
-		objectClause = fmt.Sprintf(`%v IDENTIFIER('%s.%s')`, g.GrantedOn, g.Database, g.Schema)
+		objectClause = fmt.Sprintf(`%v IDENTIFIER($$%s.%s$$)`, g.GrantedOn, g.Database, g.Schema)
 	case ObjTpTable, ObjTpView:
-		objectClause = fmt.Sprintf(`%v IDENTIFIER('%s.%s.%s')`, g.GrantedOn, g.Database, g.Schema, g.Object)
+		objectClause = fmt.Sprintf(`%v IDENTIFIER($$%s.%s.%s$$)`, g.GrantedOn, g.Database, g.Schema, g.Object)
 	default:
 		panic("Not implemented")
 	}
@@ -188,7 +187,7 @@ func buildSQLQueryGrantsToRole(db semantics.Ident, role semantics.Ident, match m
 		whereClause = fmt.Sprintf("\nWHERE\n  %s", strings.ReplaceAll(clauseStr, "\n", "\n  "))
 	}
 
-	query := fmt.Sprintf(`SHOW GRANTS TO %sROLE IDENTIFIER('%s')
+	query := fmt.Sprintf(`SHOW GRANTS TO %sROLE IDENTIFIER($$%s$$)
 ->> SELECT
     CASE
     WHEN STARTSWITH("privilege", 'CREATE ')
@@ -274,7 +273,7 @@ func QueryGrantsOfRoleToRoles(ctx context.Context, conn *sql.DB, role semantics.
 func queryGrantsOfRole(ctx context.Context, conn *sql.DB, role semantics.Ident, objTp ObjType) iter.Seq2[Grant, error] {
 	// only used to query grants of product dtap roles, so, grantedRoleStartsWithPrefix will be true
 	return func(yield func(Grant, error) bool) {
-		rows, err := conn.QueryContext(ctx, fmt.Sprintf(`SHOW GRANTS OF ROLE IDENTIFIER('%v') ->>
+		rows, err := conn.QueryContext(ctx, fmt.Sprintf(`SHOW GRANTS OF ROLE IDENTIFIER($$%v$$) ->>
 SELECT
     "grantee_name" AS grantee_name
   , "granted_by" AS granted_by

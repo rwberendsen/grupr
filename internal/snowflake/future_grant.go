@@ -37,9 +37,9 @@ func (g FutureGrant) buildSQLGrant(revoke bool) string {
 	var granteeClause string
 	switch g.GrantedTo {
 	case ObjTpRole:
-		granteeClause = fmt.Sprintf(`%s ROLE IDENTIFIER('%s')`, preposition, g.GrantedToName)
+		granteeClause = fmt.Sprintf(`%s ROLE IDENTIFIER($$%s$$)`, preposition, g.GrantedToName)
 	case ObjTpDatabaseRole:
-		granteeClause = fmt.Sprintf(`%s DATABASE ROLE IDENTIFIER('%s.%s')`, preposition, g.GrantedToDatabase, g.GrantedToName)
+		granteeClause = fmt.Sprintf(`%s DATABASE ROLE IDENTIFIER($$%s.%s$$)`, preposition, g.GrantedToDatabase, g.GrantedToName)
 	default:
 		panic("Not implemented")
 	}
@@ -58,9 +58,9 @@ func (g FutureGrant) buildSQLGrant(revoke bool) string {
 	case ObjTpTable, ObjTpView:
 		switch g.GrantedIn {
 		case ObjTpDatabase:
-			inClause += fmt.Sprintf(`%v IDENTIFIER('%s')`, g.GrantedIn, g.Database)
+			inClause += fmt.Sprintf(`%v IDENTIFIER($$%s$$)`, g.GrantedIn, g.Database)
 		case ObjTpSchema:
-			inClause += fmt.Sprintf(`%v IDENTIFIER('%s.%s')`, g.GrantedIn, g.Database, g.Schema)
+			inClause += fmt.Sprintf(`%v IDENTIFIER($$%s.%s$$)`, g.GrantedIn, g.Database, g.Schema)
 		default:
 			panic("Not implemented")
 		}
@@ -154,7 +154,7 @@ func buildSQLQueryFutureGrants(db semantics.Ident, role semantics.Ident, match m
 		whereClause = fmt.Sprintf("\nWHERE\n  %s", strings.ReplaceAll(clauseStr, "\n", "\n  "))
 	}
 
-	query := fmt.Sprintf(`SHOW FUTURE GRANTS TO %sROLE IDENTIFIER('%s')
+	query := fmt.Sprintf(`SHOW FUTURE GRANTS TO %sROLE IDENTIFIER($$%s$$)
 ->> SELECT
     CASE
     WHEN STARTSWITH("privilege", 'CREATE ') THEN 'CREATE'

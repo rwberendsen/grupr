@@ -65,7 +65,7 @@ func newDatabaseRoleFromString(synCnf *syntax.Config, cnf *Config, db semantics.
 
 func QueryDatabaseRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, db semantics.Ident) iter.Seq2[DatabaseRole, error] {
 	return func(yield func(DatabaseRole, error) bool) {
-		rows, err := conn.QueryContext(ctx, fmt.Sprintf(`SHOW DATABASE ROLES IN DATABASE IDENTIFIER('%s')
+		rows, err := conn.QueryContext(ctx, fmt.Sprintf(`SHOW DATABASE ROLES IN DATABASE IDENTIFIER($$%s$$)
 	->> SELECT "name" FROM $1 WHERE "owner" = '%s'`, db, cnf.Role))
 		if err != nil {
 			if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo

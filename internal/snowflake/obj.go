@@ -35,7 +35,7 @@ func QueryObjs(ctx context.Context, conn *sql.DB, db semantics.Ident, schema sem
 		var fromClause string
 		limit := 10000
 		for mayHaveMore {
-			rows, err := conn.QueryContext(ctx, fmt.Sprintf(`SHOW OBJECTS IN SCHEMA IDENTIFIER('%s.%s') LIMIT %d%s ->>
+			rows, err := conn.QueryContext(ctx, fmt.Sprintf(`SHOW OBJECTS IN SCHEMA IDENTIFIER($$%s.%s$$) LIMIT %d%s ->>
 SELECT
     NULL AS n
   , "name" AS name
