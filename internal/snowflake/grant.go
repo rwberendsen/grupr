@@ -279,7 +279,7 @@ SELECT
     "grantee_name" AS grantee_name
   , "granted_by" AS granted_by
 FROM $1
-WHERE "granted_to" = %v`, role, objTp))
+WHERE "granted_to" = '%v'`, role, objTp))
 		if err != nil {
 			yield(Grant{}, err)
 			return

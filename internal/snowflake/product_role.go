@@ -42,8 +42,6 @@ func newProductRoleFromString(synCnf *syntax.Config, cnf *Config, role semantics
 	r.DTAP = parts[1]
 	if mode, err := ParseMode(parts[2]); err != nil {
 		return r, fmt.Errorf("invalid role: '%s': %w", r, err)
-	} else if mode != ModeRead {
-		return r, fmt.Errorf("unimplemented mode '%s' for role '%s'", mode, r)
 	} else {
 		r.Mode = mode
 	}
