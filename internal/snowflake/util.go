@@ -40,14 +40,17 @@ func runMultipleSQL(ctx context.Context, cnf *Config, conn *sql.DB, sql string, 
 }
 
 func printSQL(sql string, params ...any) {
-	fmt.Print(sql, "; ")
+	s := fmt.Sprint(sql, "; ")
 	l := util.FmtSliceElements(params...)
-	fmt.Print(strings.Join(l, ", "))
-	fmt.Print("\n")
+	s += fmt.Sprint(strings.Join(l, ", "))
+	s += fmt.Sprint("\n")
+	fmt.Print(s)
 }
 
 func printMultipleSQL(sql string) {
+	var s string
 	for _, l := range strings.Split(sql, ";") {
-		fmt.Println(l)
+		s += fmt.Sprintln(l)
 	}
+	fmt.Print(s)
 }

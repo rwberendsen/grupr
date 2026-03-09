@@ -52,9 +52,10 @@ func (g Grant) buildSQLGrant(revoke bool) string {
 	// GRANT ROLE ... / GRANT DATABASE ROLE ...
 	switch g.GrantedOn {
 	case ObjTpRole:
-		return fmt.Sprintf(`%s ROLE %s %s %s`, verb, g.GrantedRole, preposition, granteeClause)
+		// TODO: check what happens if an identifier contains a single quote
+		return fmt.Sprintf(`%s ROLE IDENTIFIER('%s') %s %s`, verb, g.GrantedRole, preposition, granteeClause)
 	case ObjTpDatabaseRole:
-		return fmt.Sprintf(`%s DATABASE ROLE %s.%s %s %s`, verb, g.Database, g.GrantedRole, preposition, granteeClause)
+		return fmt.Sprintf(`%s DATABASE ROLE IDENTIFIER('%s.%s') %s %s`, verb, g.Database, g.GrantedRole, preposition, granteeClause)
 	}
 
 	// GRANT <privileges> ... TO ROLE
@@ -67,11 +68,11 @@ func (g Grant) buildSQLGrant(revoke bool) string {
 	var objectClause string
 	switch g.GrantedOn {
 	case ObjTpDatabase:
-		objectClause = fmt.Sprintf(`%v %s`, g.GrantedOn, g.Database)
+		objectClause = fmt.Sprintf(`%v IDENTIFIER('%s')`, g.GrantedOn, g.Database)
 	case ObjTpSchema:
-		objectClause = fmt.Sprintf(`%v %s.%s`, g.GrantedOn, g.Database, g.Schema)
+		objectClause = fmt.Sprintf(`%v IDENTIFIER('%s.%s')`, g.GrantedOn, g.Database, g.Schema)
 	case ObjTpTable, ObjTpView:
-		objectClause = fmt.Sprintf(`%v %s.%s.%s`, g.GrantedOn, g.Database, g.Schema, g.Object)
+		objectClause = fmt.Sprintf(`%v IDENTIFIER('%s.%s.%s')`, g.GrantedOn, g.Database, g.Schema, g.Object)
 	default:
 		panic("Not implemented")
 	}

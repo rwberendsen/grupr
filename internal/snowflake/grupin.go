@@ -131,6 +131,9 @@ func (g *Grupin) setDBRoleGrants(ctx context.Context, synCnf *syntax.Config, cnf
 	// Loop over all granted grupr-managed database roles, and:
 	// - store which ones we already have been granted.
 	// - store which ones we should later revoke (when we have done a first granting loop over all products)
+	if _, ok := g.productRoles[pd.ReadRole]; !ok && cnf.DryRun {
+		return nil
+	}
 	for grant, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, pd.ReadRole.ID, true, cnf.ProductRolePrivileges[ModeRead], nil) {
 		if err != nil {
 			return err

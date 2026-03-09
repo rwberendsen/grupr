@@ -37,9 +37,9 @@ func (g FutureGrant) buildSQLGrant(revoke bool) string {
 	var granteeClause string
 	switch g.GrantedTo {
 	case ObjTpRole:
-		granteeClause = fmt.Sprintf(`%s ROLE %s`, preposition, g.GrantedToName)
+		granteeClause = fmt.Sprintf(`%s ROLE IDENTIFIER('%s')`, preposition, g.GrantedToName)
 	case ObjTpDatabaseRole:
-		granteeClause = fmt.Sprintf(`%s DATABASE ROLE %s.%s`, preposition, g.GrantedToDatabase, g.GrantedToName)
+		granteeClause = fmt.Sprintf(`%s DATABASE ROLE IDENTIFIER('%s.%s')`, preposition, g.GrantedToDatabase, g.GrantedToName)
 	default:
 		panic("Not implemented")
 	}
@@ -58,9 +58,9 @@ func (g FutureGrant) buildSQLGrant(revoke bool) string {
 	case ObjTpTable, ObjTpView:
 		switch g.GrantedIn {
 		case ObjTpDatabase:
-			inClause += fmt.Sprintf(`%v %s`, g.GrantedIn, g.Database)
+			inClause += fmt.Sprintf(`%v IDENTIFIER('%s')`, g.GrantedIn, g.Database)
 		case ObjTpSchema:
-			inClause += fmt.Sprintf(`%v %s.%s`, g.GrantedIn, g.Database, g.Schema)
+			inClause += fmt.Sprintf(`%v IDENTIFIER('%s.%s')`, g.GrantedIn, g.Database, g.Schema)
 		default:
 			panic("Not implemented")
 		}
