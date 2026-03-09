@@ -595,16 +595,18 @@ func (pd *ProductDTAP) getToDoDBRoleGrants(doProd bool, m map[semantics.ProductD
 func (pd *ProductDTAP) pushToDoDBRoleGrants(yield func(Grant) bool, doProd bool, m map[semantics.ProductDTAPID]*ProductDTAP) bool {
 	// First grant database roles of product-level interface role to product read role
 	for db, dbObjs := range pd.Interface.aggAccountObjects.DBs {
-		if !dbObjs.isReadDBRoleGrantedToProductReadRole {
-			if !yield(Grant{
-				Privileges:    []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage}},
-				GrantedOn:     ObjTpDatabaseRole,
-				Database:      db,
-				GrantedRole:   dbObjs.readDBRole.Name,
-				GrantedTo:     ObjTpRole,
-				GrantedToName: pd.ReadRole.ID,
-			}) {
-				return false
+		if doProd == pd.IsProd {
+			if !dbObjs.isReadDBRoleGrantedToProductReadRole {
+				if !yield(Grant{
+					Privileges:    []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage}},
+					GrantedOn:     ObjTpDatabaseRole,
+					Database:      db,
+					GrantedRole:   dbObjs.readDBRole.Name,
+					GrantedTo:     ObjTpRole,
+					GrantedToName: pd.ReadRole.ID,
+				}) {
+					return false
+				}
 			}
 		}
 	}

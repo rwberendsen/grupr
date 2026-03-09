@@ -194,6 +194,9 @@ func (g *Grupin) setDBRoleGrants(ctx context.Context, synCnf *syntax.Config, cnf
 		// Okay, so indeed this grant is legitimate. If indeed we did find objects in this DB, then we have an AggDBObjs for it,
 		// and we need to store in there that this grant has already been done, so that we don't make an unnecessary network request
 		// granting it again.
+
+		// We're setting the administration of is the consumption grant was done on the producer side; because that is where
+		// we have the correct (most up to date, anyway) information on which database roles actually exist.
 		if sourceAggDBObjs, ok := sourceI.aggAccountObjects.DBs[grantedDBRole.Database]; ok {
 			sourceI.aggAccountObjects.DBs[grantedDBRole.Database] = sourceAggDBObjs.setConsumedByGranted(pd.ProductDTAPID)
 		}
@@ -205,9 +208,15 @@ func (g *Grupin) doToDoDBRoleGrants(ctx context.Context, cnf *Config, conn *sql.
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(cnf.MaxProductDTAPThreads)
 	for _, pd := range g.ProductDTAPs {
+		// We are, for this product dtap, making sure that all consumers of its interfaces have been
+		// granted the correct database roles.
+		//
 		// Even if doProd == false, we still have to process also production product-dtaps, as their interfaces may be consumed by non-prod product-dtaps
 		// So if doProd == false, we want to process all product-dtaps; otherwise, only production ones.
-		if doProd == false || pd.IsProd {
+		//
+		// This does mean we visit production dtaps twice, because we also have to visit them when managing grants
+		// for non-production consumers.
+		if !doProd || pd.IsProd {
 			eg.Go(func() error {
 				return DoGrantsSkipErrors(ctx, cnf, conn, pd.getToDoDBRoleGrants(doProd, g.ProductDTAPs))
 			})
