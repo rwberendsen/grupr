@@ -20,7 +20,7 @@ type Grant struct {
 	Schema                        semantics.Ident
 	Object                        semantics.Ident
 	GrantedRole                   semantics.Ident
-	GrantedRoleStartsWithPrefix   bool
+	GrantedRoleStartsWithPrefix   *bool
 	GrantedTo                     ObjType
 	GrantedToDatabase             semantics.Ident
 	GrantedToName                 semantics.Ident
@@ -78,7 +78,7 @@ func (g Grant) buildSQLGrant(revoke bool) string {
 	return fmt.Sprintf(`%s %s ON %s %s %s%s`, verb, privilegeClause, objectClause, preposition, granteeClause, modifierClause)
 }
 
-func newGrantToRole(privilege string, createObjType string, grantedOn string, name string, grantedRoleStartsWithPrefix bool, grantedTo ObjType,
+func newGrantToRole(privilege string, createObjType string, grantedOn string, name string, grantedRoleStartsWithPrefix *bool, grantedTo ObjType,
 	grantedToDatabase semantics.Ident, grantedToName semantics.Ident, grantedToRoleStartsWithPrefix bool, grantOption bool, grantedBy semantics.Ident) (Grant, error) {
 	g := Grant{
 		Privileges:                    []PrivilegeComplete{ParsePrivilegeComplete(privilege, createObjType)},
@@ -136,7 +136,7 @@ func newGrantOfRole(role semantics.Ident, granteeName semantics.Ident, grantedBy
 		Privileges:                  []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage}},
 		GrantedOn:                   ObjTpRole,
 		GrantedRole:                 role,
-		GrantedRoleStartsWithPrefix: true, // only used for product dtap roles at this point
+		GrantedRoleStartsWithPrefix: util.NewTrue(), // only used for product dtap roles at this point
 		GrantedTo:                   ObjTpUser,
 		GrantedToName:               granteeName,
 		GrantedBy:                   grantedBy,
@@ -239,7 +239,7 @@ func queryGrantsToRole(ctx context.Context, cnf *Config, conn *sql.DB, db semant
 			var createObjectType string
 			var grantedOn string
 			var name string
-			var grantedRoleStartsWithPrefix bool
+			var grantedRoleStartsWithPrefix *bool
 			var grantOption bool
 			var grantedBy semantics.Ident
 			if err = rows.Scan(&privilege, &createObjectType, &grantedOn, &name, &grantedRoleStartsWithPrefix, &grantOption, &grantedBy); err != nil {
