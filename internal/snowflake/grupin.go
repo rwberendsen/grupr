@@ -23,11 +23,10 @@ type Grupin struct {
 	accountCache *accountCache
 }
 
-func NewGrupin(ctx context.Context, cnf *Config, conn *sql.DB, g semantics.Grupin) *Grupin {
+func NewGrupin(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, g semantics.Grupin) (*Grupin, error) {
 	r := &Grupin{
 		ProductDTAPs:      map[semantics.ProductDTAPID]*ProductDTAP{},
 		UserGroupMappings: g.UserGroupMappings,
-		accountCache:      &accountCache{},
 	}
 
 	for pID, pSem := range g.Products {
@@ -36,7 +35,14 @@ func NewGrupin(ctx context.Context, cnf *Config, conn *sql.DB, g semantics.Grupi
 			r.ProductDTAPs[pdID] = NewProductDTAP(pdID, isProd, pSem, r.UserGroupMappings, g.ServiceAccounts)
 		}
 	}
-	return r
+
+	if c, err := newAccountCache(ctx, synCnf, cnf, conn); err != nil {
+		return r, err
+	} else {
+		r.accountCache = c
+	}
+
+	return r, nil
 }
 
 func (g *Grupin) setObjects(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, doProd bool) error {
@@ -87,10 +93,13 @@ func (g *Grupin) addZombieProductDTAPs() {
 	}
 }
 
-func (g *Grupin) dropZombieProductDTAPs(ctx context.Context, cnf *Config, conn *sql.DB) {
+func (g *Grupin) dropZombieProductDTAPs(ctx context.Context, cnf *Config, conn *sql.DB) error {
 	for _, pd := range g.ProductDTAPs {
-		pd.dropProductRolesIfZombie(ctx, cnf, conn)
+		if err := pd.dropProductRolesIfZombie(ctx, cnf, conn); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func (g *Grupin) ManageAccess(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB) error {
@@ -115,7 +124,9 @@ func (g *Grupin) ManageAccess(ctx context.Context, synCnf *syntax.Config, cnf *C
 	}
 
 	// Now we drop zombie product roles, via the zombie product dtap objects
-	g.dropZombieProductDTAPs(ctx, cnf, conn)
+	if err := g.dropZombieProductDTAPs(ctx, cnf, conn); err != nil {
+		return err
+	}
 
 	// Finally, we drop zombie database roles; they do not have ownership
 	// grants, are therefore easier to deal with, so we do not bother to

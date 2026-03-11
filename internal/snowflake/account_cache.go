@@ -21,6 +21,15 @@ type accountCache struct {
 	dbExists map[semantics.Ident]bool
 }
 
+func newAccountCache(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB) (c *accountCache, err error) {
+	c = &accountCache{}
+	// We initialize at least the databases before we start.
+	// That way, even if no object expressions at all are in the YAML, at least we
+	// still have the information which database roles exist (and thus, have to be dropped)
+	err = c.refreshDBs(ctx, synCnf, cnf, conn)
+	return
+}
+
 func (c *accountCache) match(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, om semantics.ObjMatcher, o *matchedAccountObjs) error {
 	// will modify both c and o
 	err := c.matchDBs(ctx, synCnf, cnf, conn, om, o)
@@ -47,8 +56,7 @@ func (c *accountCache) matchDBs(ctx context.Context, synCnf *syntax.Config, cnf 
 	defer c.mu.Unlock()
 	if o.version == c.version {
 		// cache entry is stale
-		err := c.refreshDBs(ctx, synCnf, cnf, conn)
-		if err != nil {
+		if err := c.refreshDBs(ctx, synCnf, cnf, conn); err != nil {
 			return err
 		}
 	}
@@ -82,8 +90,7 @@ func (c *accountCache) matchSchemas(ctx context.Context, conn *sql.DB, db semant
 	defer c.dbs[db].mu.Unlock()
 	if o.version == c.dbs[db].version {
 		// cache entry is stale
-		err := c.dbs[db].refreshSchemas(ctx, conn, db)
-		if err != nil {
+		if err := c.dbs[db].refreshSchemas(ctx, conn, db); err != nil {
 			return err
 		}
 	}
@@ -116,8 +123,7 @@ func (c *accountCache) matchObjects(ctx context.Context, conn *sql.DB, db semant
 	defer c.dbs[db].schemas[schema].mu.Unlock()
 	if o.version == c.dbs[db].schemas[schema].version {
 		// cache entry is stale
-		err := c.dbs[db].schemas[schema].refreshObjects(ctx, conn, db, schema)
-		if err != nil {
+		if err := c.dbs[db].schemas[schema].refreshObjects(ctx, conn, db, schema); err != nil {
 			return err
 		}
 	}
@@ -133,8 +139,6 @@ func (c *accountCache) matchObjects(ctx context.Context, conn *sql.DB, db semant
 }
 
 func (c *accountCache) refreshDBs(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB) error {
-	// Do not directly call this function, meant to be called only via match and friends,
-	// which would have required appropriate write locks to mutexes
 	dbs, err := queryDBs(ctx, conn)
 	if err != nil {
 		return err
