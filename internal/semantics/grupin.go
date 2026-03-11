@@ -21,7 +21,7 @@ func NewGrupin(cnf *Config, gSyn syntax.Grupin) (Grupin, error) {
 	log.Printf("Validating deserialized YAML documents...\n")
 	gSem := Grupin{
 		Classes:           gSyn.Classes,
-		GlobalUserGroups:  newGlobalUserGroups(*gSyn.GlobalUserGroups),
+		GlobalUserGroups:  newGlobalUserGroups(gSyn.GlobalUserGroups),
 		UserGroupMappings: map[string]UserGroupMapping{},
 		Products:          map[string]Product{},
 		ServiceAccounts:   map[string]ServiceAccount{},

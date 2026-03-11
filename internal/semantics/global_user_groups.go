@@ -8,8 +8,11 @@ import (
 
 type GlobalUserGroups map[string]bool // true: current; false: historical
 
-func newGlobalUserGroups(globalUserGroups syntax.GlobalUserGroups) GlobalUserGroups {
+func newGlobalUserGroups(globalUserGroups *syntax.GlobalUserGroups) GlobalUserGroups {
 	gug := GlobalUserGroups{}
+	if globalUserGroups == nil {
+		return gug
+	}
 	for _, i := range globalUserGroups.Current {
 		gug[i] = true // current
 	}

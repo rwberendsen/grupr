@@ -77,6 +77,7 @@ func NewProductDTAP(pdID semantics.ProductDTAPID, isProd bool, pSem semantics.Pr
 func NewZombieProductDTAP(pdID semantics.ProductDTAPID) *ProductDTAP {
 	return &ProductDTAP{
 		ProductDTAPID: pdID,
+		Interface:     &Interface{},
 		isZombie:      true,
 	}
 }

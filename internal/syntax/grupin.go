@@ -43,6 +43,9 @@ func NewGrupin(cnf *Config, r io.Reader) (Grupin, error) {
 			return g, fmt.Errorf("decoding YAML: %w", err)
 		}
 	}
+	if g.Classes == nil {
+		return g, fmt.Errorf("no classes found")
+	}
 	t := time.Now()
 	log.Printf("Parsing YAML documents took %v\n", t.Sub(start))
 	return g, nil
