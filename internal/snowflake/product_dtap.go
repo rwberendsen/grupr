@@ -180,11 +180,11 @@ func (pd *ProductDTAP) setIsReadRoleGrantedToWriteRole(ctx context.Context, cnf 
 	if _, ok := productRoles[pd.WriteRole]; !ok && cnf.DryRun {
 		return nil
 	}
-	for grant, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, pd.WriteRole.ID, true, map[GrantTemplate]struct{}{
+	for grant, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, pd.WriteRole.ID, map[GrantTemplate]struct{}{
 		GrantTemplate{
 			PrivilegeComplete:           PrivilegeComplete{Privilege: PrvUsage},
 			GrantedOn:                   ObjTpRole,
-			GrantedRoleStartsWithPrefix: util.NewTrue(),
+			GrantedRoleIsGruprManaged:   util.NewTrue(),
 		}: {},
 	}, nil) {
 		if err != nil {
@@ -312,7 +312,7 @@ func (pd *ProductDTAP) setGrantsToWriteRole(ctx context.Context, cnf *Config, co
 	if _, ok := productRoles[pd.WriteRole]; !ok && cnf.DryRun {
 		return nil
 	} 
-	for g, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, pd.WriteRole.ID, true, map[GrantTemplate]struct{}{
+	for g, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, pd.WriteRole.ID, map[GrantTemplate]struct{}{
 		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpTable},
 			GrantedOn:         ObjTpSchema,

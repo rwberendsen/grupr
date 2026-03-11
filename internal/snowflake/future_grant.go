@@ -162,7 +162,7 @@ func buildSQLQueryFutureGrants(db semantics.Ident, role semantics.Ident, match m
     END AS privilege
   , CASE
     WHEN STARTSWITH("privilege", 'CREATE ') THEN SUBSTR("privilege", 8)
-    ELSE NULL
+    ELSE ''
     END AS create_object_type
   , "grant_on"		AS granted_on
   , "name"		AS name

@@ -145,7 +145,7 @@ func (g *Grupin) setDBRoleGrants(ctx context.Context, synCnf *syntax.Config, cnf
 	if _, ok := g.productRoles[pd.ReadRole]; !ok && cnf.DryRun {
 		return nil
 	}
-	for grant, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, pd.ReadRole.ID, true, cnf.ProductRolePrivileges[ModeRead], nil) {
+	for grant, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, pd.ReadRole.ID, cnf.ProductRolePrivileges[ModeRead], nil) {
 		if err != nil {
 			return err
 		}

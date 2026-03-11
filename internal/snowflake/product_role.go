@@ -59,7 +59,7 @@ func (r ProductRole) Create(ctx context.Context, cnf *Config, conn *sql.DB) erro
 }
 
 func (r ProductRole) hasUnmanagedPrivileges(ctx context.Context, cnf *Config, conn *sql.DB) (bool, error) {
-	for _, err := range QueryGrantsToRoleFilteredLimit(ctx, cnf, conn, r.ID, true, nil, cnf.ProductRolePrivileges[r.Mode], 1) {
+	for _, err := range QueryGrantsToRoleFilteredLimit(ctx, cnf, conn, r.ID, nil, cnf.ProductRolePrivileges[r.Mode], 1) {
 		if err != nil {
 			return true, err
 		}

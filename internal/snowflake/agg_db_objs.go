@@ -246,7 +246,7 @@ func (o AggDBObjs) setFutureGrants(ctx context.Context, synCnf *syntax.Config, c
 
 func (o AggDBObjs) setGrants(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, db semantics.Ident, oms semantics.ObjMatchers) (AggDBObjs, error) {
 	if !o.isReadDBRoleNew {
-		for g, err := range QueryGrantsToDBRoleFiltered(ctx, cnf, conn, db, o.readDBRole.Name, true, cnf.DatabaseRolePrivileges[ModeRead], nil) {
+		for g, err := range QueryGrantsToDBRoleFiltered(ctx, cnf, conn, db, o.readDBRole.Name, cnf.DatabaseRolePrivileges[ModeRead], nil) {
 			if err != nil {
 				return o, err
 			}

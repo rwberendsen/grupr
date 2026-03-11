@@ -105,7 +105,7 @@ func (r DatabaseRole) Create(ctx context.Context, cnf *Config, conn *sql.DB) err
 }
 
 func (r DatabaseRole) hasUnmanagedPrivileges(ctx context.Context, cnf *Config, conn *sql.DB) (bool, error) {
-	for _, err := range QueryGrantsToDBRoleFilteredLimit(ctx, cnf, conn, r.Database, r.Name, true, nil, cnf.DatabaseRolePrivileges[r.Mode], 1) {
+	for _, err := range QueryGrantsToDBRoleFilteredLimit(ctx, cnf, conn, r.Database, r.Name, nil, cnf.DatabaseRolePrivileges[r.Mode], 1) {
 		if err != nil {
 			return true, err
 		}
