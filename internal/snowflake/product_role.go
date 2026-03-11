@@ -42,8 +42,6 @@ func newProductRoleFromString(synCnf *syntax.Config, cnf *Config, role semantics
 	r.DTAP = parts[1]
 	if mode, err := ParseMode(parts[2]); err != nil {
 		return r, fmt.Errorf("invalid role: '%s': %w", r, err)
-	} else if mode != ModeRead {
-		return r, fmt.Errorf("unimplemented mode '%s' for role '%s'", mode, r)
 	} else {
 		r.Mode = mode
 	}
@@ -61,7 +59,7 @@ func (r ProductRole) Create(ctx context.Context, cnf *Config, conn *sql.DB) erro
 }
 
 func (r ProductRole) hasUnmanagedPrivileges(ctx context.Context, cnf *Config, conn *sql.DB) (bool, error) {
-	for _, err := range QueryGrantsToRoleFilteredLimit(ctx, cnf, conn, r.ID, true, nil, cnf.ProductRolePrivileges[r.Mode], 1) {
+	for _, err := range QueryGrantsToRoleFilteredLimit(ctx, cnf, conn, r.ID, nil, cnf.ProductRolePrivileges[r.Mode], 1) {
 		if err != nil {
 			return true, err
 		}

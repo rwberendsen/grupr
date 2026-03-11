@@ -82,7 +82,10 @@ func main() {
 	}
 
 	// Create Snowflake Grupin object, which will hold relevant account objects per data product
-	snowflakeNewGrupin := snowflake.NewGrupin(ctx, snowCnf, conn, newGrupin)
+	snowflakeNewGrupin, err := snowflake.NewGrupin(ctx, synCnf, snowCnf, conn, newGrupin)
+	if err != nil {
+		log.Fatalf("error NewGrupin: %v", err)
+	}
 
 	// Use it now to manage access
 	if err := snowflakeNewGrupin.ManageAccess(ctx, synCnf, snowCnf, conn); err != nil {

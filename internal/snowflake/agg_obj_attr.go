@@ -9,8 +9,9 @@ type AggObjAttr struct {
 	Owner      semantics.Ident
 
 	// set when grant() is called on AggDBObjs
-	isSelectGrantedToRead     bool
-	isReferencesGrantedToRead bool
+	isSelectGrantedToReadDBRole     bool
+	isReferencesGrantedToReadDBRole bool
+	isOwnedByProductWriteRole        bool
 }
 
 func (o AggObjAttr) setGrantTo(m Mode, g Grant) AggObjAttr {
@@ -18,12 +19,17 @@ func (o AggObjAttr) setGrantTo(m Mode, g Grant) AggObjAttr {
 	case ModeRead:
 		switch g.Privileges[0].Privilege {
 		case PrvSelect:
-			o.isSelectGrantedToRead = true
+			o.isSelectGrantedToReadDBRole = true
 		case PrvReferences:
-			o.isReferencesGrantedToRead = true
-		default:
-			panic("not implemented")
+			o.isReferencesGrantedToReadDBRole = true
 		}
+		// Ignore; unmanaged grant
+	case ModeWrite:
+		switch g.Privileges[0].Privilege {
+		case PrvOwnership:
+			o.isOwnedByProductWriteRole = true
+		}
+		// Ignore; unmanaged grant
 	default:
 		panic("not implemented")
 	}
@@ -35,9 +41,9 @@ func (o AggObjAttr) hasGrantTo(m Mode, p Privilege) bool {
 	case ModeRead:
 		switch p {
 		case PrvSelect:
-			return o.isSelectGrantedToRead
+			return o.isSelectGrantedToReadDBRole
 		case PrvReferences:
-			return o.isReferencesGrantedToRead
+			return o.isReferencesGrantedToReadDBRole
 		}
 	}
 	return false

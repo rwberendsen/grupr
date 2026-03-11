@@ -147,3 +147,21 @@ func (oms ObjMatchers) DisjointFromObject(db Ident, schema Ident, object Ident) 
 	}
 	return true
 }
+
+func (oms ObjMatchers) MatchAllSchemasInDB(db Ident) bool {
+	for _, om := range oms {
+		if om.MatchAllSchemasInDB(db) {
+			return true
+		}
+	}
+	return false
+}
+
+func (oms ObjMatchers) MatchAllObjectsInSchema(db Ident, schema Ident) bool {
+	for _, om := range oms {
+		if om.SupersetOfSchema(db, schema) {
+			return true
+		}
+	}
+	return false
+}

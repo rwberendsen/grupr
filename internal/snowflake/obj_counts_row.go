@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"iter"
+
+	"github.com/snowflakedb/gosnowflake"
 )
 
 type ObjCountsRow struct {
@@ -34,13 +36,13 @@ func StoreObjCountsRows(ctx context.Context, cnf *Config, conn *sql.DB, rows ite
 	}
 
 	sql := fmt.Sprintf(`
-CREATE OR REPLACE TABLE %v.%v.%vbasic_stats (
+CREATE OR REPLACE TABLE %v.%v.%vobject_counts (
 	product_id varchar,
 	dtap varchar,
 	interface_id varchar,
 	user_groups varchar,
 	table_count integer,
-	view_count integer,
+	view_count integer
 )
 `,
 		cnf.Database, cnf.Schema, cnf.ObjectPrefix)
@@ -60,7 +62,13 @@ INSERT INTO %v.%v.%vobject_counts (
 VALUES (?, ?, ?, ?, ?, ?)
 `,
 		cnf.Database, cnf.Schema, cnf.ObjectPrefix)
-	if err := runSQL(ctx, cnf, conn, sql, productIDs, interfaceIDs, dtaps, userGroups, tableCounts, viewCounts); err != nil {
+	if err := runSQL(ctx, cnf, conn, sql,
+	gosnowflake.Array(productIDs),
+	gosnowflake.Array(dtaps),
+	gosnowflake.Array(interfaceIDs),
+	gosnowflake.Array(userGroups),
+	gosnowflake.Array(tableCounts),
+	gosnowflake.Array(viewCounts)); err != nil {
 		return fmt.Errorf("insert stats: %v", err)
 	}
 	return nil

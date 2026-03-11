@@ -18,8 +18,8 @@ type ServiceAccount struct {
 
 func newServiceAccount(cnf *Config, svcSyn syntax.ServiceAccount, products map[string]Product) (ServiceAccount, error) {
 	svcSem := ServiceAccount{
-		ID: svcSyn.ID,
-		Idents: map[string]Ident{},
+		ID:      svcSyn.ID,
+		Idents:  map[string]Ident{},
 		Deploys: map[string]map[string]string{},
 	}
 

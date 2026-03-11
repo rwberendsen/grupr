@@ -17,18 +17,16 @@ type Grupin struct {
 	UserGroupMappings map[string]semantics.UserGroupMapping
 
 	// Some fetch-one time reference data on objects that exist in Snowflake already
-	productRoles       map[ProductRole]struct{}
-	createDBRoleGrants map[semantics.Ident]struct{}
+	productRoles map[ProductRole]struct{}
 
 	// The account cache, used to fetch objects by several concurrent threads, possibly from the same databases and schemas
 	accountCache *accountCache
 }
 
-func NewGrupin(ctx context.Context, cnf *Config, conn *sql.DB, g semantics.Grupin) *Grupin {
+func NewGrupin(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, g semantics.Grupin) (*Grupin, error) {
 	r := &Grupin{
 		ProductDTAPs:      map[semantics.ProductDTAPID]*ProductDTAP{},
 		UserGroupMappings: g.UserGroupMappings,
-		accountCache:      &accountCache{},
 	}
 
 	for pID, pSem := range g.Products {
@@ -37,7 +35,14 @@ func NewGrupin(ctx context.Context, cnf *Config, conn *sql.DB, g semantics.Grupi
 			r.ProductDTAPs[pdID] = NewProductDTAP(pdID, isProd, pSem, r.UserGroupMappings, g.ServiceAccounts)
 		}
 	}
-	return r
+
+	if c, err := newAccountCache(ctx, synCnf, cnf, conn); err != nil {
+		return r, err
+	} else {
+		r.accountCache = c
+	}
+
+	return r, nil
 }
 
 func (g *Grupin) setObjects(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, doProd bool) error {
@@ -75,15 +80,22 @@ func (g *Grupin) manageAccess(ctx context.Context, synCnf *syntax.Config, cnf *C
 	if err := g.revoke(ctx, synCnf, cnf, conn, doProd); err != nil {
 		return err
 	}
-	if doProd {
-		// If we do not have a product in the YAML anymore, we cannot
-		// tell whether or not dtaps we parsed from the (datbase) role
-		// name were production or not. Therefore, we drop all of them
-		// at the end of the production round.
-		if err := g.dropDatabaseRoles(ctx, cnf, conn); err != nil {
-			return err
+	return nil
+}
+
+func (g *Grupin) addZombieProductDTAPs() {
+	for r := range g.productRoles {
+		pdID := semantics.ProductDTAPID{ProductID: r.ProductID, DTAP: r.DTAP}
+		if _, ok := g.ProductDTAPs[pdID]; !ok {
+			// there are both read and write roles, but we only need one product dtap
+			g.ProductDTAPs[pdID] = NewZombieProductDTAP(pdID)
 		}
-		if err := g.dropProductRoles(ctx, cnf, conn); err != nil {
+	}
+}
+
+func (g *Grupin) dropZombieProductDTAPs(ctx context.Context, cnf *Config, conn *sql.DB) error {
+	for _, pd := range g.ProductDTAPs {
+		if err := pd.dropProductRolesIfZombie(ctx, cnf, conn); err != nil {
 			return err
 		}
 	}
@@ -91,19 +103,36 @@ func (g *Grupin) manageAccess(ctx context.Context, synCnf *syntax.Config, cnf *C
 }
 
 func (g *Grupin) ManageAccess(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB) error {
-	// Some global information we need to start managing access
+	// Find the product roles that are there, so we don't attempt to re-create them unnecessarilly
 	if err := g.setProductRoles(ctx, synCnf, cnf, conn); err != nil {
 		return err
 	}
-	if err := g.setCreateDBRoleGrants(ctx, cnf, conn); err != nil {
-		return err
-	}
+
+	// But, now that we have them, add the product roles that are not represented in the YAML
+	// as zombie objects without object matching expressions; this means while managing access
+	// grupr will attempt to tranfser ownership away from such roles, cleaning up.
+	// We will add them as non-prod, so they'll be dealt with after production.
+	g.addZombieProductDTAPs()
 
 	// First complete production
 	if err := g.manageAccess(ctx, synCnf, cnf, conn, true); err != nil {
 		return err
 	}
+	// Then, non-production
 	if err := g.manageAccess(ctx, synCnf, cnf, conn, false); err != nil {
+		return err
+	}
+
+	// Now we drop zombie product roles, via the zombie product dtap objects
+	if err := g.dropZombieProductDTAPs(ctx, cnf, conn); err != nil {
+		return err
+	}
+
+	// Finally, we drop zombie database roles; they do not have ownership
+	// grants, are therefore easier to deal with, so we do not bother to
+	// associate them with zombie interface objects of zombie product dtap
+	// objects.
+	if err := g.dropDatabaseRoles(ctx, cnf, conn); err != nil {
 		return err
 	}
 	return nil
@@ -113,7 +142,10 @@ func (g *Grupin) setDBRoleGrants(ctx context.Context, synCnf *syntax.Config, cnf
 	// Loop over all granted grupr-managed database roles, and:
 	// - store which ones we already have been granted.
 	// - store which ones we should later revoke (when we have done a first granting loop over all products)
-	for grant, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, pd.ReadRole.ID, true, cnf.ProductRolePrivileges[ModeRead], nil) {
+	if _, ok := g.productRoles[pd.ReadRole]; !ok && cnf.DryRun {
+		return nil
+	}
+	for grant, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, pd.ReadRole.ID, cnf.ProductRolePrivileges[ModeRead], nil) {
 		if err != nil {
 			return err
 		}
@@ -127,14 +159,14 @@ func (g *Grupin) setDBRoleGrants(ctx context.Context, synCnf *syntax.Config, cnf
 		// - Read database roles of interfaces that pd consumes
 		if grantedDBRole.ProductID == pd.ProductID {
 			if grantedDBRole.InterfaceID != "" {
-				pd.revokeGrantFromRead(grant)
+				pd.revokeGrantToReadRole(grant)
 				continue
 			}
 			// grantedDBRole.InterfaceID == ""
 			if dbObjs, ok := pd.Interface.aggAccountObjects.DBs[grant.Database]; ok {
-				dbObjs.isDBRoleGrantedToProductRead = true
+				dbObjs.isReadDBRoleGrantedToProductReadRole = true
 			} else if pd.Interface.ObjectMatchers.DisjointFromDB(grant.Database) {
-				pd.revokeGrantFromRead(grant)
+				pd.revokeGrantToReadRole(grant)
 			}
 			continue // leave this grant be, it is correct, even if it is unexpected that it exists
 		}
@@ -142,7 +174,7 @@ func (g *Grupin) setDBRoleGrants(ctx context.Context, synCnf *syntax.Config, cnf
 		// grantedDBRole.ProductID != pd.ProductID
 		if grantedDBRole.InterfaceID == "" {
 			// we have no business with the product level interface of another product
-			pd.revokeGrantFromRead(grant)
+			pd.revokeGrantToReadRole(grant)
 			continue
 		}
 
@@ -150,12 +182,12 @@ func (g *Grupin) setDBRoleGrants(ctx context.Context, synCnf *syntax.Config, cnf
 		sourceDTAP, ok := pd.Consumes[syntax.InterfaceID{ID: grantedDBRole.InterfaceID, ProductID: grantedDBRole.ProductID}]
 		if !ok {
 			// we do not consume that interface from that product
-			pd.revokeGrantFromRead(grant)
+			pd.revokeGrantToReadRole(grant)
 			continue
 		}
 		if sourceDTAP != grantedDBRole.DTAP {
 			// we do consume that interface from that product, but not that dtap though
-			pd.revokeGrantFromRead(grant)
+			pd.revokeGrantToReadRole(grant)
 			continue
 		}
 		// sourceDTAP == grantedDBRole.DTAP
@@ -166,13 +198,16 @@ func (g *Grupin) setDBRoleGrants(ctx context.Context, synCnf *syntax.Config, cnf
 
 		// But, is it true that the database in which the granted role was created still has objects that belong to that interface?
 		if sourceI.ObjectMatchers.DisjointFromDB(grantedDBRole.Database) {
-			pd.revokeGrantFromRead(grant)
+			pd.revokeGrantToReadRole(grant)
 			continue
 		}
 
 		// Okay, so indeed this grant is legitimate. If indeed we did find objects in this DB, then we have an AggDBObjs for it,
 		// and we need to store in there that this grant has already been done, so that we don't make an unnecessary network request
 		// granting it again.
+
+		// We're setting the administration of is the consumption grant was done on the producer side; because that is where
+		// we have the correct (most up to date, anyway) information on which database roles actually exist.
 		if sourceAggDBObjs, ok := sourceI.aggAccountObjects.DBs[grantedDBRole.Database]; ok {
 			sourceI.aggAccountObjects.DBs[grantedDBRole.Database] = sourceAggDBObjs.setConsumedByGranted(pd.ProductDTAPID)
 		}
@@ -184,9 +219,15 @@ func (g *Grupin) doToDoDBRoleGrants(ctx context.Context, cnf *Config, conn *sql.
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(cnf.MaxProductDTAPThreads)
 	for _, pd := range g.ProductDTAPs {
+		// We are, for this product dtap, making sure that all consumers of its interfaces have been
+		// granted the correct database roles.
+		//
 		// Even if doProd == false, we still have to process also production product-dtaps, as their interfaces may be consumed by non-prod product-dtaps
 		// So if doProd == false, we want to process all product-dtaps; otherwise, only production ones.
-		if doProd == false || pd.IsProd {
+		//
+		// This does mean we visit production dtaps twice, because we also have to visit them when managing grants
+		// for non-production consumers.
+		if !doProd || pd.IsProd {
 			eg.Go(func() error {
 				return DoGrantsSkipErrors(ctx, cnf, conn, pd.getToDoDBRoleGrants(doProd, g.ProductDTAPs))
 			})
@@ -209,6 +250,15 @@ func (g *Grupin) getToDoProductRoleGrants(doProd bool) iter.Seq[Grant] {
 	}
 }
 
+func (g *Grupin) DisjointFromObject(db semantics.Ident, schema semantics.Ident, obj semantics.Ident) bool {
+	for _, pd := range g.ProductDTAPs {
+		if !pd.Interface.ObjectMatchers.DisjointFromObject(db, schema, obj) {
+			return false
+		}
+	}
+	return true
+}
+
 func (g *Grupin) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, doProd bool) error {
 	// The bulk of the grants are granting objects to roles, we do it concurrently per product-dtap
 	eg, egCtx := errgroup.WithContext(ctx)
@@ -216,7 +266,10 @@ func (g *Grupin) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, 
 	for _, pd := range g.ProductDTAPs {
 		if doProd == pd.IsProd {
 			eg.Go(func() error {
-				return pd.grant(egCtx, synCnf, cnf, conn, g.productRoles, g.createDBRoleGrants, g.accountCache)
+				return pd.grant(egCtx, synCnf, cnf, conn, g.productRoles,
+					func(db semantics.Ident, schema semantics.Ident, obj semantics.Ident) bool {
+						return g.DisjointFromObject(db, schema, obj)
+					}, g.accountCache)
 			})
 		}
 	}
@@ -230,10 +283,8 @@ func (g *Grupin) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, 
 	// We do not do this concurrently, because this concerns relationships between product dtaps, no need to overcomplicate
 	for _, pd := range g.ProductDTAPs {
 		if doProd == pd.IsProd {
-			if !pd.isReadRoleNew {
-				if err := g.setDBRoleGrants(ctx, synCnf, cnf, conn, pd); err != nil {
-					return err
-				}
+			if err := g.setDBRoleGrants(ctx, synCnf, cnf, conn, pd); err != nil {
+				return err
 			}
 		}
 	}
@@ -242,16 +293,14 @@ func (g *Grupin) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, 
 		return err
 	}
 
-	// Find out for each product-dtap role which users it has been granted to; 
+	// Find out for each product-dtap role which users it has been granted to;
 	// Grant it to any remaining user based on the YAML,
 	// Revoke it from any user that is not in the YAML.
 	// TODO: if this becomes a performance bottleneck, parallelize it, should be straightforward
 	for _, pd := range g.ProductDTAPs {
 		if doProd == pd.IsProd {
-			if !pd.isReadRoleNew {
-				if err := pd.setGrantedUsers(ctx, conn); err != nil {
-					return err
-				}
+			if err := pd.setGrantedUsers(ctx, cnf, conn, g.productRoles); err != nil {
+				return err
 			}
 		}
 	}
@@ -265,7 +314,10 @@ func (g *Grupin) revoke(ctx context.Context, synCnf *syntax.Config, cnf *Config,
 	for _, pd := range g.ProductDTAPs {
 		if doProd == pd.IsProd {
 			eg.Go(func() error {
-				return pd.revoke(ctx, synCnf, cnf, conn, g.productRoles, g.createDBRoleGrants, g.accountCache)
+				return pd.revoke(ctx, synCnf, cnf, conn, g.productRoles,
+					func(db semantics.Ident, schema semantics.Ident, obj semantics.Ident) bool {
+						return g.DisjointFromObject(db, schema, obj)
+					}, g.accountCache)
 			})
 		}
 	}
@@ -292,35 +344,6 @@ func (g *Grupin) setProductRoles(ctx context.Context, synCnf *syntax.Config, cnf
 		}
 	}
 	return rows.Err()
-}
-
-func (g *Grupin) setCreateDBRoleGrants(ctx context.Context, cnf *Config, conn *sql.DB) error {
-	g.createDBRoleGrants = map[semantics.Ident]struct{}{}
-	for grant, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, cnf.Role, false,
-		map[GrantTemplate]struct{}{
-			GrantTemplate{
-				PrivilegeComplete: PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpDatabaseRole},
-				GrantedOn:         ObjTpDatabase,
-			}: {},
-		},
-		nil) {
-		if err != nil {
-			return err
-		}
-		g.createDBRoleGrants[grant.Database] = struct{}{}
-	}
-	return nil
-}
-
-func (g *Grupin) dropProductRoles(ctx context.Context, cnf *Config, conn *sql.DB) error {
-	for r := range g.productRoles {
-		if _, ok := g.ProductDTAPs[semantics.ProductDTAPID{ProductID: r.ProductID, DTAP: r.DTAP}]; !ok {
-			if err := r.Drop(ctx, cnf, conn); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
 
 func (g *Grupin) dropDatabaseRoles(ctx context.Context, cnf *Config, conn *sql.DB) error {

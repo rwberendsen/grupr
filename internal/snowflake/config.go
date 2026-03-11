@@ -185,8 +185,39 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 		GrantTemplate{
 			PrivilegeComplete:           PrivilegeComplete{Privilege: PrvUsage},
 			GrantedOn:                   ObjTpDatabaseRole,
-			GrantedRoleStartsWithPrefix: util.NewTrue(),
+			GrantedRoleIsGruprManaged:   util.NewTrue(),
 		}: {},
+	}
+	cnf.ProductRolePrivileges[ModeWrite] = map[GrantTemplate]struct{}{
+		GrantTemplate{
+			PrivilegeComplete:           PrivilegeComplete{Privilege: PrvUsage},
+			GrantedOn:                   ObjTpRole,
+			GrantedRoleIsGruprManaged:   util.NewTrue(),
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpTable},
+			GrantedOn:         ObjTpSchema,
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpView},
+			GrantedOn:         ObjTpSchema,
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvOwnership},
+			GrantedOn:         ObjTpTable,
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvOwnership},
+			GrantedOn:         ObjTpView,
+		}: {},
+	}
+
+	if dryRun, ok := os.LookupEnv("GRUPR_SNOWFLAKE_DRY_RUN"); ok {
+		if b, err := strconv.ParseBool(dryRun); err != nil {
+			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_DRY_RUN: %w", err)
+		} else {
+			cnf.DryRun = b
+		}
 	}
 
 	return cnf, nil

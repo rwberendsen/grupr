@@ -109,13 +109,12 @@ func (i *Interface) setAggAccountObjects() {
 	i.accountObjects = nil // reset, we do not need it anymore, and maps referenced inside this data structure may have been altered while summing
 }
 
-func (i *Interface) setFutureGrants(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, createDBRoleGrants map[semantics.Ident]struct{},
-	pID string, dtap string, iID string, c *accountCache) error {
+func (i *Interface) setFutureGrants(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, pID string, dtap string, iID string, c *accountCache) error {
 	for db, dbObjs := range i.aggAccountObjects.DBs {
 		if !c.hasDB(db) {
 			return ErrObjectNotExistOrAuthorized // db may have been dropped concurrently
 		}
-		dbObjs, err := dbObjs.setFutureGrants(ctx, synCnf, cnf, conn, pID, dtap, iID, db, i.ObjectMatchers, createDBRoleGrants, c.dbs[db].dbRoles)
+		dbObjs, err := dbObjs.setFutureGrants(ctx, synCnf, cnf, conn, pID, dtap, iID, db, i.ObjectMatchers, c.dbs[db].dbRoles)
 		if err != nil {
 			return err
 		}
@@ -165,7 +164,7 @@ func (i *Interface) pushToDoDBRoleGrants(yield func(Grant) bool, doProd bool, m 
 						Privileges:    []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage}},
 						GrantedOn:     ObjTpDatabaseRole,
 						Database:      db,
-						GrantedRole:   dbObjs.dbRole.Name,
+						GrantedRole:   dbObjs.readDBRole.Name,
 						GrantedTo:     ObjTpRole,
 						GrantedToName: m[pdID].ReadRole.ID,
 					}) {

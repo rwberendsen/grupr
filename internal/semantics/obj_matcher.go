@@ -101,6 +101,21 @@ func (lhs ObjMatcher) SupersetOfSchema(db Ident, schema Ident) bool {
 	return rhs.subsetOf(lhs)
 }
 
+func (om ObjMatcher) MatchAllSchemasInDB(db Ident) bool {
+	if om.DisjointFromDB(db) {
+		return false
+	}
+	if !om.Include.Schema().MatchAll() {
+		return false
+	}
+	for excludeExpr := range om.Exclude {
+		if excludeExpr.MatchesAllObjectsInAnySchemaInDB(db) {
+			return false
+		}
+	}
+	return true
+}
+
 func (lhs ObjMatcher) Equal(rhs ObjMatcher) bool {
 	return lhs.Include == rhs.Include &&
 		lhs.ObjExprAttr == lhs.ObjExprAttr &&

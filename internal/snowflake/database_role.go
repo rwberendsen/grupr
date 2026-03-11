@@ -65,8 +65,8 @@ func newDatabaseRoleFromString(synCnf *syntax.Config, cnf *Config, db semantics.
 
 func QueryDatabaseRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, db semantics.Ident) iter.Seq2[DatabaseRole, error] {
 	return func(yield func(DatabaseRole, error) bool) {
-		rows, err := conn.QueryContext(ctx, fmt.Sprintf(`SHOW DATABASE ROLES IN DATABASE IDENTIFIER('%s')
-	->> SELECT "name" FROM $1 WHERE "owner" = '%s'`, db, cnf.Role))
+		rows, err := conn.QueryContext(ctx, fmt.Sprintf(`SHOW DATABASE ROLES IN DATABASE IDENTIFIER($$%s$$)
+	->> SELECT "name" FROM $1 WHERE "owner" = '%s'`, db, string(cnf.Role)))
 		if err != nil {
 			if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
 				err = ErrObjectNotExistOrAuthorized
@@ -105,7 +105,7 @@ func (r DatabaseRole) Create(ctx context.Context, cnf *Config, conn *sql.DB) err
 }
 
 func (r DatabaseRole) hasUnmanagedPrivileges(ctx context.Context, cnf *Config, conn *sql.DB) (bool, error) {
-	for _, err := range QueryGrantsToDBRoleFilteredLimit(ctx, cnf, conn, r.Database, r.Name, true, nil, cnf.DatabaseRolePrivileges[r.Mode], 1) {
+	for _, err := range QueryGrantsToDBRoleFilteredLimit(ctx, cnf, conn, r.Database, r.Name, nil, cnf.DatabaseRolePrivileges[r.Mode], 1) {
 		if err != nil {
 			return true, err
 		}

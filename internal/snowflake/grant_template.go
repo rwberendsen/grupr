@@ -8,7 +8,7 @@ import (
 type GrantTemplate struct {
 	PrivilegeComplete
 	GrantedOn                   ObjType
-	GrantedRoleStartsWithPrefix *bool
+	GrantedRoleIsGruprManaged   *bool
 }
 
 func (g GrantTemplate) buildSQLFilter() (string, int) {
@@ -22,8 +22,8 @@ func (g GrantTemplate) buildSQLFilter() (string, int) {
 	if g.GrantedOn != ObjTpOther {
 		clauses = append(clauses, fmt.Sprintf("granted_on = '%v'", g.GrantedOn))
 	}
-	if (g.GrantedOn == ObjTpRole || g.GrantedOn == ObjTpDatabaseRole) && g.GrantedRoleStartsWithPrefix != nil {
-		clauses = append(clauses, "granted_role_starts_with_prefix")
+	if (g.GrantedOn == ObjTpRole || g.GrantedOn == ObjTpDatabaseRole) && g.GrantedRoleIsGruprManaged != nil {
+		clauses = append(clauses, "granted_role_is_grupr_managed")
 	}
 	return strings.Join(clauses, " AND "), len(clauses)
 }
