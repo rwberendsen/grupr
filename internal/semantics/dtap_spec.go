@@ -15,20 +15,12 @@ type DTAPSpec struct {
 	DTAPRenderings map[string]syntax.Rendering
 }
 
-func newDTAPSpec(cnf *Config, dsSyn *syntax.DTAPSpec, dtapRenderings map[string]syntax.Rendering) (DTAPSpec, error) {
+func newDTAPSpec(cnf *Config, dsSyn syntax.DTAPSpec, dtapRenderings map[string]syntax.Rendering) (DTAPSpec, error) {
 	var dsSem DTAPSpec
-	if dsSyn == nil {
-		// Not specifying any DTAP info means you will get a default DTAP spec, which has only a production DTAP
-		dsSem.Prod = &cnf.DefaultProdDTAPName
-	} else {
-		dsSem.Prod = dsSyn.Prod
-		if dsSyn.Prod != nil {
-			dsSem.Prod = dsSyn.Prod
-		}
-		dsSem.NonProd = make(map[string]struct{}, len(dsSyn.NonProd))
-		for _, d := range dsSyn.NonProd {
-			dsSem.NonProd[d] = struct{}{}
-		}
+	dsSem.Prod = dsSyn.Prod
+	dsSem.NonProd = make(map[string]struct{}, len(dsSyn.NonProd))
+	for _, d := range dsSyn.NonProd {
+		dsSem.NonProd[d] = struct{}{}
 	}
 	dsSem.DTAPRenderings = make(map[string]syntax.Rendering, len(dtapRenderings))
 	for k, r := range dtapRenderings {

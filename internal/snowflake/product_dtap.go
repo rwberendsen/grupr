@@ -63,6 +63,7 @@ func NewProductDTAP(pdID semantics.ProductDTAPID, isProd bool, pSem semantics.Pr
 		pd.matchedAccountObjects[k] = &matchedAccountObjs{}
 	}
 
+	pd.DeployedBy = map[semantics.Ident]bool{}
 	for _, svc := range svcs {
 		if dtapMapping, ok := svc.Deploys[pd.ProductID]; ok {
 			if svcDTAP, ok := dtapMapping[pd.DTAP]; ok {
@@ -356,6 +357,7 @@ func (pd *ProductDTAP) setGrantsToWriteRole(ctx context.Context, cnf *Config, co
 				if !pd.Interface.ObjectMatchers.DisjointFromObject(g.Database, g.Schema, g.Object) {
 					if schemaObjs, ok := pd.Interface.aggAccountObjects.GetSchema(g.Database, g.Schema); ok {
 						if aggObjAttr, ok := schemaObjs.Objects[g.Object]; ok {
+							fmt.Printf("'%s' already has ownership of '%s.%s.%s'\n", pd.WriteRole.ID, g.Database, g.Schema, g.Object)
 							schemaObjs.Objects[g.Object] = aggObjAttr.setGrantTo(ModeWrite, g)
 						}
 					}
@@ -378,7 +380,8 @@ func (pd *ProductDTAP) getToDoGrantsOfWriteRoleToUserManagedRoles(cnf *Config) i
 	for _, dbObjs := range pd.Interface.aggAccountObjects.DBs {
 		for _, schemaObjs := range dbObjs.Schemas {
 			for _, aggObjAttr := range schemaObjs.Objects {
-				if !strings.HasPrefix(string(aggObjAttr.Owner), cnf.ObjectPrefix) {
+				// TODO make ObjectPrefix a semantics.Ident in Config already
+				if !strings.HasPrefix(aggObjAttr.Owner, cnf.ObjectPrefix) {
 					if _, ok := pd.writeRoleGrantedToUserManagedRoles[aggObjAttr.Owner]; !ok {
 						currentUserManagedRoleOwners[aggObjAttr.Owner] = struct{}{}
 					}
@@ -626,7 +629,7 @@ func (pd *ProductDTAP) pushToDoProductRoleGrants(yield func(Grant) bool) bool {
 			if !yield(Grant{
 				Privileges:    []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage}},
 				GrantedOn:     ObjTpRole,
-				GrantedRole:   pd.ReadRole.ID,
+				GrantedRole:   pd.WriteRole.ID,
 				GrantedTo:     ObjTpUser,
 				GrantedToName: svc,
 			}) {

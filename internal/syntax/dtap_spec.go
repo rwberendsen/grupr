@@ -9,33 +9,29 @@ type DTAPSpec struct {
 	Prod    *string  `yaml:",omitempty"`
 }
 
-func (d *DTAPSpec) validate(cnf *Config) error {
-	if d == nil {
-		return nil
+func (d DTAPSpec) validateNormalize(cnf *Config) (DTAPSpec, error) {
+	// If there are values, they need to be valid ID parts, and unique.
+	// A completely empty dtap spec is also okay, but will be replaced with a default
+	// DTAPSpec consisting of a single production DTAP called cnf.DefaultProdDTAPName
+	if d.Prod == nil && len(d.NonProd) == 0 {
+		d.Prod = &cnf.DefaultProdDTAPName
 	}
 	dtaps := map[string]bool{}
 	if d.Prod != nil {
 		if err := ValidateIDPart(cnf, *d.Prod); err != nil {
-			return fmt.Errorf("prod DTAP id: %w", err)
+			return d, fmt.Errorf("prod DTAP id: %w", err)
 		}
 		dtaps[*d.Prod] = true
 	}
 	for _, i := range d.NonProd {
 		if err := ValidateIDPart(cnf, i); err != nil {
-			return fmt.Errorf("non prod DTAP id: %w", err)
+			return d, fmt.Errorf("non prod DTAP id: %w", err)
 		}
 		if _, ok := dtaps[i]; ok {
-			return &FormattingError{fmt.Sprintf("duplicate DTAP: %s", i)}
+			return d, &FormattingError{fmt.Sprintf("duplicate DTAP: %s", i)}
 		}
 	}
-	if d.isEmpty() {
-		return &FormattingError{fmt.Sprintf("empty dtap spec")}
-	}
-	return nil
-}
-
-func (d DTAPSpec) isEmpty() bool {
-	return d.Prod == nil && len(d.NonProd) == 0
+	return d, nil
 }
 
 func (d DTAPSpec) HasDTAP(dtap string) bool {

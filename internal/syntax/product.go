@@ -6,10 +6,10 @@ import (
 )
 
 type Product struct {
-	ID                  string            `yaml:"id"`
-	DTAPs               *DTAPSpec         `yaml:"dtaps,flow,omitempty"`
-	Consumes            []ConsumptionSpec `yaml:"consumes",omitempty"`
-	InterfaceMetadata   `yaml:",inline"`
+	ID                  string               `yaml:"id"`
+	DTAPs               DTAPSpec             `yaml:"dtaps,flow,omitempty"`
+	Consumes            []ConsumptionSpec    `yaml:"consumes",omitempty"`
+	InterfaceMetadata                        `yaml:",inline"`
 	DTAPRenderings      map[string]Rendering `yaml:"dtap_renderings,omitempty"`
 	UserGroupMappingID  string               `yaml:"user_group_mapping,omitempty"`
 	UserGroupRenderings map[string]Rendering `yaml:"user_group_renderings,omitempty"`
@@ -20,11 +20,13 @@ func (p *Product) validate(cnf *Config) error {
 	if err := ValidateIDPart(cnf, p.ID); err != nil {
 		return err
 	}
-	if err := p.DTAPs.validate(cnf); err != nil {
+	if dtaps, err := p.DTAPs.validateNormalize(cnf); err != nil {
 		return fmt.Errorf("product id: %s, DTAPs: %w", p.ID, err)
+	} else {
+		p.DTAPs = dtaps
 	}
 	for _, cs := range p.Consumes {
-		if err := cs.validate(cnf, *p.DTAPs); err != nil {
+		if err := cs.validate(cnf, p.DTAPs); err != nil {
 			return err
 		}
 	}
@@ -49,7 +51,7 @@ func (p *Product) validate(cnf *Config) error {
 			return fmt.Errorf("product '%s', user_group_rendering: '%s': %w", p.ID, k, err)
 		}
 		for ug := range v {
-			if !slices.Contains(p.UserGroups, k) {
+			if !slices.Contains(p.UserGroups, ug) {
 				return fmt.Errorf("product '%s', user_group_rendering: '%s': unknown user group:  %w", p.ID, k, ug)
 			}
 		}

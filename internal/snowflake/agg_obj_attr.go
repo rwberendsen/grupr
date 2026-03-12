@@ -11,7 +11,7 @@ type AggObjAttr struct {
 	// set when grant() is called on AggDBObjs
 	isSelectGrantedToReadDBRole     bool
 	isReferencesGrantedToReadDBRole bool
-	isOwnedByProductWriteRole        bool
+	isOwnedByProductWriteRole       bool
 }
 
 func (o AggObjAttr) setGrantTo(m Mode, g Grant) AggObjAttr {
