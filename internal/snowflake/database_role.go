@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
-	"github.com/rwberendsen/grupr/internal/syntax"
 )
 
 type DatabaseRole struct {
@@ -21,7 +20,7 @@ type DatabaseRole struct {
 	Name        semantics.Ident
 }
 
-func NewDatabaseRole(synCnf *syntax.Config, cnf *Config, productID string, dtap string, interfaceID string, mode Mode, db semantics.Ident) DatabaseRole {
+func NewDatabaseRole(semCnf *semantics.Config, productID string, dtap string, interfaceID string, mode Mode, db semantics.Ident) DatabaseRole {
 	r := DatabaseRole{
 		ProductID:   productID,
 		DTAP:        dtap,
@@ -29,33 +28,37 @@ func NewDatabaseRole(synCnf *syntax.Config, cnf *Config, productID string, dtap 
 		Mode:        mode,
 		Database:    db,
 	}
+	productIdent = NewIdentUnquoted(productID)
+	dtapIdent = NewIdentUnquoted(dtap)
+	interfaceIdent = NewIdentUnquoted(interfaceID)
+	modeIdent = NewIdentUnquoted(mode.String())
 	if interfaceID == "" {
-		r.Name = semantics.NewIdentUnquoted(fmt.Sprintf("%s%s%s%s%s%v", cnf.ObjectPrefix, productID, synCnf.Infix, dtap, synCnf.Infix, mode))
+		r.Name = semCnf.Prefix + productIdent + semCnf.Infix + dtapIdent + semCnf.Infix + modeIdent
 	} else {
-		r.Name = semantics.NewIdentUnquoted(fmt.Sprintf("%s%s%s%s%s%s%s%v", cnf.ObjectPrefix, productID, synCnf.Infix, dtap, synCnf.Infix, interfaceID, synCnf.Infix, mode))
+		r.Name = semCnf.Prefix + productIdent + semCnf.Infix + dtapIdent + semCnf.Infix + interfaceIdent + semCnf.Infix + modeIdent
 	}
 	return r
 }
 
-func newDatabaseRoleFromString(synCnf *syntax.Config, cnf *Config, db semantics.Ident, role semantics.Ident) (DatabaseRole, error) {
+func newDataBaseRoleFromIdent(semCnf *semantics.Config, db semantics.Ident, role semantics.Ident) (DatabaseRole, error) {
 	r := DatabaseRole{Name: role, Database: db}
-	roleStr := strings.ToLower(string(role))
-	if !strings.HasPrefix(roleStr, cnf.ObjectPrefix) {
+	roleStr := string(role)
+	if !strings.HasPrefix(roleStr, string(semCnf.Prefix)) {
 		return r, fmt.Errorf("role does not start with Grupr prefix: '%s'", r)
 	}
-	roleStr = strings.TrimPrefix(roleStr, cnf.ObjectPrefix)
-	parts := strings.Split(roleStr, synCnf.Infix)
+	roleStr = strings.TrimPrefix(roleStr, string(semCnf.Prefix))
+	parts := strings.Split(roleStr, string(semCnf.Infix))
 	if len(parts) != 3 && len(parts) != 4 {
 		return r, fmt.Errorf("role does not have three or four parts: '%s'", r)
 	}
-	r.ProductID = parts[0]
-	r.DTAP = parts[1]
+	r.ProductID = strings.ToLower(parts[0])
+	r.DTAP = strings.ToLower(parts[1])
 	posMode := 2
 	if len(parts) == 4 {
-		r.InterfaceID = parts[2]
+		r.InterfaceID = strings.ToLower(parts[2])
 		posMode += 1
 	}
-	if mode, err := ParseMode(parts[posMode]); err != nil {
+	if mode, err := ParseMode(strings.ToLower(parts[posMode])); err != nil {
 		return r, fmt.Errorf("invalid role: '%s': %w", r, err)
 	} else if mode != ModeRead {
 		return r, fmt.Errorf("unimplemented mode '%s' for role '%s'", mode, r)
@@ -63,7 +66,7 @@ func newDatabaseRoleFromString(synCnf *syntax.Config, cnf *Config, db semantics.
 	return r, nil
 }
 
-func QueryDatabaseRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, db semantics.Ident) iter.Seq2[DatabaseRole, error] {
+func QueryDatabaseRoles(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, db semantics.Ident) iter.Seq2[DatabaseRole, error] {
 	return func(yield func(DatabaseRole, error) bool) {
 		rows, err := conn.QueryContext(ctx, fmt.Sprintf(`SHOW DATABASE ROLES IN DATABASE IDENTIFIER($$%s$$)
 	->> SELECT "name" FROM $1 WHERE "owner" = '%s'`, db, string(cnf.Role)))
@@ -81,7 +84,7 @@ func QueryDatabaseRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config,
 				yield(DatabaseRole{}, err)
 				return
 			}
-			if r, err := newDatabaseRoleFromString(synCnf, cnf, db, roleName); err != nil {
+			if r, err := newDataBaseRoleFromIdent(semCnf, db, roleName); err != nil {
 				yield(DatabaseRole{}, err)
 				return
 			} else {

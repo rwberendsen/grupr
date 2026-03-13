@@ -13,19 +13,6 @@ type ServiceAccount struct {
 }
 
 func (svc *ServiceAccount) validate(cnf *Config) error {
-	if err := ValidateIDPart(cnf, svc.ID); err != nil {
-		return err
-	}
-	if dtaps, err := svc.DTAPs.validateNormalize(cnf); err != nil {
-		return fmt.Errorf("service account id: %s, DTAPs: %w", svc.ID, err)
-	} else {
-		svc.DTAPs = dtaps
-	}
-	for _, ds := range svc.Deploys {
-		if err := ds.validate(cnf, svc.DTAPs); err != nil {
-			return err
-		}
-	}
 	for k, v := range svc.DTAPRenderings {
 		if err := v.validate(); err != nil {
 			return fmt.Errorf("service account '%s', dtap_rendering: '%s': %w", svc.ID, k, err)

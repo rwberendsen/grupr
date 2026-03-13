@@ -2,8 +2,6 @@ package semantics
 
 import (
 	"fmt"
-	"log"
-	"time"
 
 	"github.com/rwberendsen/grupr/internal/syntax"
 )
@@ -17,15 +15,25 @@ type Grupin struct {
 }
 
 func NewGrupin(cnf *Config, gSyn syntax.Grupin) (Grupin, error) {
-	start := time.Now()
-	log.Printf("Validating deserialized YAML documents...\n")
 	gSem := Grupin{
 		Classes:           gSyn.Classes,
-		GlobalUserGroups:  newGlobalUserGroups(gSyn.GlobalUserGroups),
 		UserGroupMappings: map[string]UserGroupMapping{},
 		Products:          map[string]Product{},
 		ServiceAccounts:   map[string]ServiceAccount{},
 	}
+	// Validate class labels; they should be valid ids
+	for k, _ := range gSem.Classes {
+		if _, err := NewID(cnf, k); err != nil {
+			return gSem, fmt.Errorf("classes: %w", err)
+	}
+
+	// Validate global user groups, they should be valid ids
+	if gug, err := newGlobalUserGroups(cnf, gSyn.GlobalUserGroups); err != nil {
+		return gSem, err
+	} else {
+		gSem.GlobalUserGroups = gug
+	}
+
 	// Validate user group mappings
 	// Add identity mapping for ease of reference
 	gSem.UserGroupMappings[""] = UserGroupMapping{}
@@ -33,6 +41,9 @@ func NewGrupin(cnf *Config, gSyn syntax.Grupin) (Grupin, error) {
 		gSem.UserGroupMappings[""][k] = k
 	}
 	for k, v := range gSyn.UserGroupMappings {
+		if _, ok := gSem.UserGroupMappings[k]; ok {
+			return gSem, fmt.Errorf("duplicate user group mapping")
+		}
 		if ugm, err := newUserGroupMapping(v, gSem.GlobalUserGroups); err != nil {
 			return gSem, err
 		} else {
@@ -49,6 +60,9 @@ func NewGrupin(cnf *Config, gSyn syntax.Grupin) (Grupin, error) {
 	}
 	// Validate interface specs
 	for iid, v := range gSyn.Interfaces {
+		if _, err := NewID(cnf, iid.ID); err != nil {
+			return gSem, &SetLogicError{fmt.Sprintf("interface id '%s' its ID field: %w", iid, err)}
+		}
 		if parentProduct, ok := gSem.Products[iid.ProductID]; !ok {
 			return gSem, &SetLogicError{fmt.Sprintf("interface id '%s': product not found", iid)}
 		} else {
@@ -85,8 +99,6 @@ func NewGrupin(cnf *Config, gSyn syntax.Grupin) (Grupin, error) {
 			gSem.ServiceAccounts[k] = svc
 		}
 	}
-	t := time.Now()
-	log.Printf("Validating deserialized YAML documents took %v\n", t.Sub(start))
 	return gSem, nil
 }
 

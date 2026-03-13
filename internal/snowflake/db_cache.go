@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
-	"github.com/rwberendsen/grupr/internal/syntax"
 )
 
 type dbCache struct {
@@ -78,12 +77,12 @@ func (c *dbCache) refreshSchemas(ctx context.Context, conn *sql.DB, db semantics
 	return nil
 }
 
-func (c *dbCache) refreshDBRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, db semantics.Ident) error {
+func (c *dbCache) refreshDBRoles(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, db semantics.Ident) error {
 	if err := GrantCreateDatabaseRoleToSelf(ctx, cnf, conn, db); err != nil {
 		return err
 	}
 	c.dbRoles = map[DatabaseRole]struct{}{} // overwrite if c.dbRoles already had a value
-	for r, err := range QueryDatabaseRoles(ctx, synCnf, cnf, conn, db) {
+	for r, err := range QueryDatabaseRoles(ctx, semCnf, cnf, conn, db) {
 		if err != nil {
 			return err
 		}

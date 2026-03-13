@@ -4,28 +4,29 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 )
 
 type Ident string
 
-func NewIdent(cnf *Config, s string, isQuoted bool) (Ident, error) {
+func NewIdent(s string, isQuoted bool, validQuotedExpr, validUnquotedExpr *regexp.Regexp) (Ident, error) {
 	var id Ident
 	if isQuoted {
-		if !cnf.ValidQuotedExpr.MatchString(s) {
+		if !validQuotedExpr.MatchString(s) {
 			return id, fmt.Errorf("invalid quoted identifier string")
 		}
 		id = Ident(s)
 	} else {
-		if !cnf.ValidUnquotedExpr.MatchString(s) {
+		if !validUnquotedExpr.MatchString(s) {
 			return id, fmt.Errorf("invalid unquoted identifier string")
 		}
-		id = Ident(strings.ToUpper(s))
+		id = Ident(strings.ToUpper(s)) // in-memory, we use uppercase identifiers, just like in ANSI SQL databases.
 	}
 	return id, nil
 }
 
-func NewIdentStripQuotesIfAny(cnf *Config, s string) (Ident, error) {
+func NewIdentStripQuotesIfAny(s string, validQuotedEpxr, validUnquotedExpr *regexp.Regexp) (Ident, error) {
 	var isQuoted bool
 	if strings.HasPrefix(s, `"`) {
 		if len(s) < 3 || !strings.HasSuffix(s, `"`) {
@@ -45,7 +46,7 @@ func NewIdentStripQuotesIfAny(cnf *Config, s string) (Ident, error) {
 			panic("parsing did not result in single record")
 		}
 	}
-	return NewIdent(cnf, s, isQuoted)
+	return NewIdent(s, isQuoted, validQuotedExpr, validUnquotedExpr)
 }
 
 func NewIdentUnquoted(s string) Ident {

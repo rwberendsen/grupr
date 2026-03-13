@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
-	"github.com/rwberendsen/grupr/internal/syntax"
 )
 
 // caching objects in Snowflake locally
@@ -21,18 +20,18 @@ type accountCache struct {
 	dbExists map[semantics.Ident]bool
 }
 
-func newAccountCache(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB) (c *accountCache, err error) {
+func newAccountCache(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB) (c *accountCache, err error) {
 	c = &accountCache{}
 	// We initialize at least the databases before we start.
 	// That way, even if no object expressions at all are in the YAML, at least we
 	// still have the information which database roles exist (and thus, have to be dropped)
-	err = c.refreshDBs(ctx, synCnf, cnf, conn)
+	err = c.refreshDBs(ctx, semCnf, cnf, conn)
 	return
 }
 
-func (c *accountCache) match(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, om semantics.ObjMatcher, o *matchedAccountObjs) error {
+func (c *accountCache) match(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, om semantics.ObjMatcher, o *matchedAccountObjs) error {
 	// will modify both c and o
-	err := c.matchDBs(ctx, synCnf, cnf, conn, om, o)
+	err := c.matchDBs(ctx, semCnf, cnf, conn, om, o)
 	if err != nil {
 		return err
 	}
@@ -51,12 +50,12 @@ func (c *accountCache) match(ctx context.Context, synCnf *syntax.Config, cnf *Co
 	return nil
 }
 
-func (c *accountCache) matchDBs(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, om semantics.ObjMatcher, o *matchedAccountObjs) error {
+func (c *accountCache) matchDBs(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, om semantics.ObjMatcher, o *matchedAccountObjs) error {
 	c.mu.Lock() // block till all another writer or any active readers are done, get a write lock, now you are the only one modifying the tree
 	defer c.mu.Unlock()
 	if o.version == c.version {
 		// cache entry is stale
-		if err := c.refreshDBs(ctx, synCnf, cnf, conn); err != nil {
+		if err := c.refreshDBs(ctx, semCnf, cnf, conn); err != nil {
 			return err
 		}
 	}
@@ -138,7 +137,7 @@ func (c *accountCache) matchObjects(ctx context.Context, conn *sql.DB, db semant
 	return nil
 }
 
-func (c *accountCache) refreshDBs(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB) error {
+func (c *accountCache) refreshDBs(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB) error {
 	dbs, err := queryDBs(ctx, conn)
 	if err != nil {
 		return err
@@ -150,7 +149,7 @@ func (c *accountCache) refreshDBs(ctx context.Context, synCnf *syntax.Config, cn
 	}
 	for k := range dbs {
 		if !c.hasDB(k) {
-			if err := c.addDB(ctx, synCnf, cnf, conn, k); err != nil {
+			if err := c.addDB(ctx, semCnf, cnf, conn, k); err != nil {
 				return err
 			}
 		}
@@ -159,7 +158,7 @@ func (c *accountCache) refreshDBs(ctx context.Context, synCnf *syntax.Config, cn
 	return nil
 }
 
-func (c *accountCache) addDB(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, k semantics.Ident) error {
+func (c *accountCache) addDB(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, k semantics.Ident) error {
 	if c.dbs == nil {
 		c.dbs = map[semantics.Ident]*dbCache{}
 		c.dbExists = map[semantics.Ident]bool{}
@@ -170,7 +169,7 @@ func (c *accountCache) addDB(ctx context.Context, synCnf *syntax.Config, cnf *Co
 	// After a DB has been dropped and recreated, DB roles may have been dropped;
 	// Also, the privilege CREATE DATABASE ROLE that the grupr role should have may have been revoked.
 	// But, if this is the first time the DB was added, those things may be in place.
-	if err := c.dbs[k].refreshDBRoles(ctx, synCnf, cnf, conn, k); err != nil {
+	if err := c.dbs[k].refreshDBRoles(ctx, semCnf, cnf, conn, k); err != nil {
 		return err
 	}
 	c.dbExists[k] = true

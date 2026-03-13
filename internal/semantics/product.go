@@ -23,8 +23,13 @@ func newProduct(cnf *Config, pSyn syntax.Product, classes map[string]syntax.Clas
 	userGroupMappings map[string]UserGroupMapping) (Product, error) {
 	// Initialize
 	pSem := Product{
-		ID:         pSyn.ID,
 		Interfaces: map[string]InterfaceMetadata{},
+	}
+
+	if _, err := NewID(cnf, pSyn.ID); err != nil {
+		return pSem, err
+	} else {
+		pSem.ID = pSyn.ID
 	}
 
 	// Set DTAPs
@@ -57,6 +62,12 @@ func newProduct(cnf *Config, pSyn syntax.Product, classes map[string]syntax.Clas
 				}
 			}
 		}
+		// Also check whether there were any dtaps in the mapping that the product does not have
+		for dtap, _ := range cs.DTAPMapping {
+			if !pSem.DTAPs.HasDTAP(dtap) {
+				return pSem, fmt.Errorf("product '%s': consumes: unknown dtap '%s'", pSem.ID, dtap)
+			}
+		}
 	}
 
 	// Set UsergroupMappingID
@@ -87,6 +98,16 @@ func newProduct(cnf *Config, pSyn syntax.Product, classes map[string]syntax.Clas
 	// Set UserGroupColumn (this requires InterfaceMetadata its ObjectMatchers to be set)
 	if err := pSem.setUserGroupColumn(cnf, pSyn); err != nil {
 		return pSem, err
+	}
+
+	// Some last sanity checks
+	if len(pSem.Usergroups) == 0 {
+		if pSem.UserGroupMappingID != 0 {
+			return pSem, fmt.Errorf("product '%s': no usergroups, but user_group_mapping_id specified")
+		}
+		if len(pSem.UserGroupRenderings) > 0 {
+			return pSem, fmt.Errorf("product '%s': no usergroups, but user_group_renderings specified")
+		}
 	}
 
 	return pSem, nil

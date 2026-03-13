@@ -23,7 +23,7 @@ type Grupin struct {
 	accountCache *accountCache
 }
 
-func NewGrupin(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, g semantics.Grupin) (*Grupin, error) {
+func NewGrupin(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, g semantics.Grupin) (*Grupin, error) {
 	r := &Grupin{
 		ProductDTAPs:      map[semantics.ProductDTAPID]*ProductDTAP{},
 		UserGroupMappings: g.UserGroupMappings,
@@ -36,7 +36,7 @@ func NewGrupin(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sq
 		}
 	}
 
-	if c, err := newAccountCache(ctx, synCnf, cnf, conn); err != nil {
+	if c, err := newAccountCache(ctx, semCnf, cnf, conn); err != nil {
 		return r, err
 	} else {
 		r.accountCache = c
@@ -45,39 +45,39 @@ func NewGrupin(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sq
 	return r, nil
 }
 
-func (g *Grupin) setObjects(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, doProd bool) error {
+func (g *Grupin) setObjects(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, doProd bool) error {
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(cnf.MaxProductDTAPThreads)
 	for _, pd := range g.ProductDTAPs {
 		if doProd == pd.IsProd {
-			eg.Go(func() error { return pd.refresh(ctx, synCnf, cnf, conn, g.accountCache) })
+			eg.Go(func() error { return pd.refresh(ctx, semCnf, cnf, conn, g.accountCache) })
 		}
 	}
 	return eg.Wait()
 }
 
-func (g *Grupin) SetObjects(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB) error {
+func (g *Grupin) SetObjects(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB) error {
 	// Calculating objects can be a time-consuming activity.
 	// Since we care most about production, generally, we'll do it first.
-	if err := g.setObjects(ctx, synCnf, cnf, conn, true); err != nil {
+	if err := g.setObjects(ctx, semCnf, cnf, conn, true); err != nil {
 		return err
 	}
-	if err := g.setObjects(ctx, synCnf, cnf, conn, false); err != nil {
+	if err := g.setObjects(ctx, semCnf, cnf, conn, false); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (g *Grupin) manageAccess(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, doProd bool) error {
+func (g *Grupin) manageAccess(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, doProd bool) error {
 	// First process grants, then revokes, to minimize downtime
 	// First process write rights, then read rights, otherwise COPY GRANTS on GRANT OWNERSHIP statements
 	//   may copy unnecessarily many grants
 	// Whether granting or revoking, first process FUTURE GRANTS, then usual grants; otherwise concurrently created
 	//   objects may be missed out in a run.
-	if err := g.grant(ctx, synCnf, cnf, conn, doProd); err != nil {
+	if err := g.grant(ctx, semCnf, cnf, conn, doProd); err != nil {
 		return err
 	}
-	if err := g.revoke(ctx, synCnf, cnf, conn, doProd); err != nil {
+	if err := g.revoke(ctx, semCnf, cnf, conn, doProd); err != nil {
 		return err
 	}
 	return nil
@@ -102,9 +102,9 @@ func (g *Grupin) dropZombieProductDTAPs(ctx context.Context, cnf *Config, conn *
 	return nil
 }
 
-func (g *Grupin) ManageAccess(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB) error {
+func (g *Grupin) ManageAccess(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB) error {
 	// Find the product roles that are there, so we don't attempt to re-create them unnecessarilly
-	if err := g.setProductRoles(ctx, synCnf, cnf, conn); err != nil {
+	if err := g.setProductRoles(ctx, semCnf, cnf, conn); err != nil {
 		return err
 	}
 
@@ -115,11 +115,11 @@ func (g *Grupin) ManageAccess(ctx context.Context, synCnf *syntax.Config, cnf *C
 	g.addZombieProductDTAPs()
 
 	// First complete production
-	if err := g.manageAccess(ctx, synCnf, cnf, conn, true); err != nil {
+	if err := g.manageAccess(ctx, semCnf, cnf, conn, true); err != nil {
 		return err
 	}
 	// Then, non-production
-	if err := g.manageAccess(ctx, synCnf, cnf, conn, false); err != nil {
+	if err := g.manageAccess(ctx, semCnf, cnf, conn, false); err != nil {
 		return err
 	}
 
@@ -138,7 +138,7 @@ func (g *Grupin) ManageAccess(ctx context.Context, synCnf *syntax.Config, cnf *C
 	return nil
 }
 
-func (g *Grupin) setDBRoleGrants(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, pd *ProductDTAP) error {
+func (g *Grupin) setDBRoleGrants(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, pd *ProductDTAP) error {
 	// Loop over all granted grupr-managed database roles, and:
 	// - store which ones we already have been granted.
 	// - store which ones we should later revoke (when we have done a first granting loop over all products)
@@ -149,7 +149,7 @@ func (g *Grupin) setDBRoleGrants(ctx context.Context, synCnf *syntax.Config, cnf
 		if err != nil {
 			return err
 		}
-		grantedDBRole, err := newDatabaseRoleFromString(synCnf, cnf, grant.Database, grant.GrantedRole)
+		grantedDBRole, err := newDatabaseRoleFromString(semCnf, cnf, grant.Database, grant.GrantedRole)
 		if err != nil {
 			return err
 		}
@@ -259,14 +259,14 @@ func (g *Grupin) DisjointFromObject(db semantics.Ident, schema semantics.Ident, 
 	return true
 }
 
-func (g *Grupin) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, doProd bool) error {
+func (g *Grupin) grant(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, doProd bool) error {
 	// The bulk of the grants are granting objects to roles, we do it concurrently per product-dtap
 	eg, egCtx := errgroup.WithContext(ctx)
 	eg.SetLimit(cnf.MaxProductDTAPThreads)
 	for _, pd := range g.ProductDTAPs {
 		if doProd == pd.IsProd {
 			eg.Go(func() error {
-				return pd.grant(egCtx, synCnf, cnf, conn, g.productRoles,
+				return pd.grant(egCtx, semCnf, cnf, conn, g.productRoles,
 					func(db semantics.Ident, schema semantics.Ident, obj semantics.Ident) bool {
 						return g.DisjointFromObject(db, schema, obj)
 					}, g.accountCache)
@@ -283,7 +283,7 @@ func (g *Grupin) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, 
 	// We do not do this concurrently, because this concerns relationships between product dtaps, no need to overcomplicate
 	for _, pd := range g.ProductDTAPs {
 		if doProd == pd.IsProd {
-			if err := g.setDBRoleGrants(ctx, synCnf, cnf, conn, pd); err != nil {
+			if err := g.setDBRoleGrants(ctx, semCnf, cnf, conn, pd); err != nil {
 				return err
 			}
 		}
@@ -308,13 +308,13 @@ func (g *Grupin) grant(ctx context.Context, synCnf *syntax.Config, cnf *Config, 
 	return DoGrantsSkipErrors(ctx, cnf, conn, g.getToDoProductRoleGrants(doProd))
 }
 
-func (g *Grupin) revoke(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, doProd bool) error {
+func (g *Grupin) revoke(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, doProd bool) error {
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(cnf.MaxProductDTAPThreads)
 	for _, pd := range g.ProductDTAPs {
 		if doProd == pd.IsProd {
 			eg.Go(func() error {
-				return pd.revoke(ctx, synCnf, cnf, conn, g.productRoles,
+				return pd.revoke(ctx, semCnf, cnf, conn, g.productRoles,
 					func(db semantics.Ident, schema semantics.Ident, obj semantics.Ident) bool {
 						return g.DisjointFromObject(db, schema, obj)
 					}, g.accountCache)
@@ -324,10 +324,10 @@ func (g *Grupin) revoke(ctx context.Context, synCnf *syntax.Config, cnf *Config,
 	return eg.Wait()
 }
 
-func (g *Grupin) setProductRoles(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB) error {
+func (g *Grupin) setProductRoles(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB) error {
 	g.productRoles = map[ProductRole]struct{}{}
 	// TODO: move query to product_role.go, working in similar way like grant.go or obj.go
-	rows, err := conn.QueryContext(ctx, fmt.Sprintf(`SHOW TERSE ROLES LIKE '%s' ->> SELECT "name" FROM $1`, strings.ToUpper(cnf.ObjectPrefix+"%")))
+	rows, err := conn.QueryContext(ctx, fmt.Sprintf(`SHOW ROLES ->> SELECT "name" FROM $1 WHERE "owner" = '%s'`, string(cnf.Role)))
 	if err != nil {
 		return err
 	}
@@ -337,7 +337,7 @@ func (g *Grupin) setProductRoles(ctx context.Context, synCnf *syntax.Config, cnf
 		if err = rows.Scan(&roleName); err != nil {
 			return err
 		}
-		if r, err := newProductRoleFromString(synCnf, cnf, roleName); err != nil {
+		if r, err := newProductRoleFromString(semCnf, roleName); err != nil {
 			return err
 		} else {
 			g.productRoles[r] = struct{}{}

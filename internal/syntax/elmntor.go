@@ -21,9 +21,6 @@ func (e ElmntOr) validateAndAdd(cnf *Config, g *Grupin) error {
 		}
 		n_elements += 1
 		for k, v := range e.Classes {
-			if err := ValidateID(k); err != nil {
-				return fmt.Errorf("classes: invalid class id: '%s'", k)
-			}
 			if err := v.validate(); err != nil {
 				return fmt.Errorf("classes: class id '%s': %w", k, err)
 			}
@@ -35,16 +32,10 @@ func (e ElmntOr) validateAndAdd(cnf *Config, g *Grupin) error {
 		if g.GlobalUserGroups != nil {
 			return &FormattingError{"user_groups specified more than once"}
 		}
-		if err := e.GlobalUserGroups.validate(); err != nil {
-			return err
-		}
 		g.GlobalUserGroups = e.GlobalUserGroups
 	}
 	if e.UserGroupMapping != nil {
 		n_elements += 1
-		if err := e.UserGroupMapping.validate(); err != nil {
-			return err
-		}
 		if _, ok := g.UserGroupMappings[e.UserGroupMapping.ID]; ok {
 			return &FormattingError{fmt.Sprintf("duplicate user group mapping: '%s'", e.UserGroupMapping.ID)}
 		}
@@ -62,9 +53,6 @@ func (e ElmntOr) validateAndAdd(cnf *Config, g *Grupin) error {
 	}
 	if e.Interface != nil {
 		n_elements += 1
-		if err := e.Interface.validate(cnf); err != nil {
-			return err
-		}
 		iid := InterfaceID{
 			ID:        e.Interface.ID,
 			ProductID: e.Interface.ProductID,

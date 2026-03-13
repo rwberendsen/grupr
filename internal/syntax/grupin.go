@@ -3,9 +3,7 @@ package syntax
 import (
 	"fmt"
 	"io"
-	"log"
 	"strings"
-	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -20,8 +18,6 @@ type Grupin struct {
 }
 
 func NewGrupin(cnf *Config, r io.Reader) (Grupin, error) {
-	start := time.Now()
-	log.Printf("Parsing YAML documents...\n")
 	dec := yaml.NewDecoder(r)
 	dec.KnownFields(true)
 	g := Grupin{
@@ -46,8 +42,6 @@ func NewGrupin(cnf *Config, r io.Reader) (Grupin, error) {
 	if g.Classes == nil {
 		return g, fmt.Errorf("no classes found")
 	}
-	t := time.Now()
-	log.Printf("Parsing YAML documents took %v\n", t.Sub(start))
 	return g, nil
 }
 

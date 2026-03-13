@@ -5,7 +5,6 @@ import (
 	"database/sql"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
-	"github.com/rwberendsen/grupr/internal/syntax"
 )
 
 type AggDBObjs struct {
@@ -174,9 +173,9 @@ func (o AggDBObjs) setRevokeGrantTo(m Mode, g Grant) AggDBObjs {
 	return o
 }
 
-func (o AggDBObjs) setDatabaseRole(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, pID string, dtap string, iID string,
+func (o AggDBObjs) setDatabaseRole(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, pID string, dtap string, iID string,
 	db semantics.Ident, databaseRoles map[DatabaseRole]struct{}) (AggDBObjs, error) {
-	o.readDBRole = NewDatabaseRole(synCnf, cnf, pID, dtap, iID, ModeRead, db)
+	o.readDBRole = NewDatabaseRole(semCnf, pID, dtap, iID, ModeRead, db)
 	if _, ok := databaseRoles[o.readDBRole]; !ok {
 		if err := o.readDBRole.Create(ctx, cnf, conn); err != nil {
 			return o, err
@@ -186,9 +185,9 @@ func (o AggDBObjs) setDatabaseRole(ctx context.Context, synCnf *syntax.Config, c
 	return o, nil
 }
 
-func (o AggDBObjs) setFutureGrants(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, pID string, dtap string, iID string,
+func (o AggDBObjs) setFutureGrants(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, pID string, dtap string, iID string,
 	db semantics.Ident, oms semantics.ObjMatchers, databaseRoles map[DatabaseRole]struct{}) (AggDBObjs, error) {
-	o, err := o.setDatabaseRole(ctx, synCnf, cnf, conn, pID, dtap, iID, db, databaseRoles)
+	o, err := o.setDatabaseRole(ctx, semCnf, cnf, conn, pID, dtap, iID, db, databaseRoles)
 	if err != nil {
 		return o, err
 	}
@@ -244,7 +243,7 @@ func (o AggDBObjs) setFutureGrants(ctx context.Context, synCnf *syntax.Config, c
 	return o, nil
 }
 
-func (o AggDBObjs) setGrants(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, db semantics.Ident, oms semantics.ObjMatchers) (AggDBObjs, error) {
+func (o AggDBObjs) setGrants(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, db semantics.Ident, oms semantics.ObjMatchers) (AggDBObjs, error) {
 	if !o.isReadDBRoleNew {
 		for g, err := range QueryGrantsToDBRoleFiltered(ctx, cnf, conn, db, o.readDBRole.Name, cnf.DatabaseRolePrivileges[ModeRead], nil) {
 			if err != nil {

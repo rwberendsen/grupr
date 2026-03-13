@@ -17,9 +17,26 @@ type DTAPSpec struct {
 
 func newDTAPSpec(cnf *Config, dsSyn syntax.DTAPSpec, dtapRenderings map[string]syntax.Rendering) (DTAPSpec, error) {
 	var dsSem DTAPSpec
-	dsSem.Prod = dsSyn.Prod
+	if dsSyn.Prod == nil && len(dsSyn.NonProd) == 0 {
+		dsSem.Prod = &cnf.DefaultProdDTAPName
+	} else {
+		dsSem.Prod = dsSyn.Prod
+	}
+	allDTAPs := map[string]bool{}
+	if dsSem.Prod != nil {
+		if _, err := NewID(cnf, *dsSem.Prod); err != nil {
+			return dsSem, fmt.Errorf("dtap spec: %w", err)
+		}
+		allDTAPs[*dsSem.Prod] = true
+	}
 	dsSem.NonProd = make(map[string]struct{}, len(dsSyn.NonProd))
 	for _, d := range dsSyn.NonProd {
+		if _, err := NewID(cnf, d); err != nil {
+			return dsSem, fmt.Errorf("dtap spec: %w", err)
+		}
+		if _, ok := allDTAPs[d]; ok {
+			return dsSem, fmt.Errorf("duplicate dtap: '%s'", d)
+		}
 		dsSem.NonProd[d] = struct{}{}
 	}
 	dsSem.DTAPRenderings = make(map[string]syntax.Rendering, len(dtapRenderings))

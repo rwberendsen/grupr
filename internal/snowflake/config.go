@@ -19,13 +19,13 @@ type Config struct {
 	Schema                  semantics.Ident
 	UseSQLOpen              bool
 	RSAKeyPath              string
-	ObjectPrefix            semantics.Ident // for objects (roles) created by Grupr in Snowflake
 	MaxOpenConns            int
 	MaxIdleConns            int
 	MaxProductDTAPThreads   int
 	StmtBatchSize           int
 	MaxProductDTAPRefreshes int
 	Modes                   [1]Mode
+	SystemDefinedRoles      []semantics.Ident
 	DatabaseRolePrivileges  map[Mode]map[GrantTemplate]struct{}
 	ProductRolePrivileges   map[Mode]map[GrantTemplate]struct{}
 	DryRun                  bool
@@ -34,13 +34,21 @@ type Config struct {
 func GetConfig(semCnf *semantics.Config) (*Config, error) {
 	cnf := &Config{
 		UseSQLOpen:              false,
-		ObjectPrefix:            semantics.Ident("_X_"),
 		MaxOpenConns:            0, // unlimited
 		MaxIdleConns:            3, // MaxProductDTAPThreads - 1 (sometimes we use only one conn before quickly fanning out again)
 		MaxProductDTAPThreads:   4,
 		StmtBatchSize:           100,
 		MaxProductDTAPRefreshes: 4,
 		Modes:                   [1]Mode{ModeRead},
+		SystemDefinedRoles       []semantics.Ident{
+			semantics.Ident("GLOBALORGADMIN"),
+			semantics.Ident("ORGADMIN"),
+			semantics.Ident("ACCOUNTADMIN"),
+			semantics.Ident("SYSADMIN"),
+			semantics.Ident("PUBLIC"),
+			semantics.Ident("SECURITYADMIN"),
+			semantics.Ident("USERADMIN"),
+		},
 		DryRun:                  true,
 	}
 
@@ -100,14 +108,6 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 
 	if rsaKeyPath, ok := os.LookupEnv("GRUPR_SNOWFLAKE_RSA_KEY_PATH"); ok {
 		cnf.RSAKeyPath = rsaKeyPath
-	}
-
-	if objectPrefix, ok := os.LookupEnv("GRUPR_SNOWFLAKE_OBJECT_PREFIX"); ok {
-		if err := syntax.ValidateID(objectPrefix); err != nil {
-			return nil, fmt.Errorf("invalid value for GRUPR_SNOWFLAKE_OBJECT_PREFIX")
-		}
-		// TODO think this through a bit better
-		cnf.ObjectPrefix = semantics.NewIdent(cnf, objectPrefix, false)
 	}
 
 	if maxOpenConns, ok := os.LookupEnv("GRUPR_SNOWFLAKE_MAX_OPEN_CONNS"); ok {

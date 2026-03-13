@@ -36,7 +36,7 @@ func StoreObjCountsRows(ctx context.Context, cnf *Config, conn *sql.DB, rows ite
 	}
 
 	sql := fmt.Sprintf(`
-CREATE OR REPLACE TABLE %v.%v.%vobject_counts (
+CREATE OR REPLACE TABLE %v.%v.object_counts (
 	product_id varchar,
 	dtap varchar,
 	interface_id varchar,
@@ -45,13 +45,13 @@ CREATE OR REPLACE TABLE %v.%v.%vobject_counts (
 	view_count integer
 )
 `,
-		cnf.Database, cnf.Schema, cnf.ObjectPrefix)
+		cnf.Database, cnf.Schema)
 	if err := runSQL(ctx, cnf, conn, sql); err != nil {
 		return fmt.Errorf("create table: %v", err)
 	}
 
 	sql = fmt.Sprintf(`
-INSERT INTO %v.%v.%vobject_counts (
+INSERT INTO %v.%v.object_counts (
 	product_id,
 	dtap,
 	interface_id,
@@ -61,7 +61,7 @@ INSERT INTO %v.%v.%vobject_counts (
 )
 VALUES (?, ?, ?, ?, ?, ?)
 `,
-		cnf.Database, cnf.Schema, cnf.ObjectPrefix)
+		cnf.Database, cnf.Schema)
 	if err := runSQL(ctx, cnf, conn, sql,
 	gosnowflake.Array(productIDs),
 	gosnowflake.Array(dtaps),
