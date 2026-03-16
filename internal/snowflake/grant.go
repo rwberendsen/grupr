@@ -14,18 +14,18 @@ import (
 )
 
 type Grant struct {
-	Privileges                    []PrivilegeComplete
-	GrantedOn                     ObjType
-	Database                      semantics.Ident
-	Schema                        semantics.Ident
-	Object                        semantics.Ident
-	GrantedRole                   semantics.Ident
-	GrantedRoleIsGruprManaged     *bool
-	GrantedTo                     ObjType
-	GrantedToDatabase             semantics.Ident
-	GrantedToName                 semantics.Ident
-	GrantOption                   bool // TODO: if we re-grant the same grant with a different grant option, does it get overwritten? Could be a way to correct such mishaps
-	GrantedBy                     semantics.Ident
+	Privileges                []PrivilegeComplete
+	GrantedOn                 ObjType
+	Database                  semantics.Ident
+	Schema                    semantics.Ident
+	Object                    semantics.Ident
+	GrantedRole               semantics.Ident
+	GrantedRoleIsGruprManaged *bool
+	GrantedTo                 ObjType
+	GrantedToDatabase         semantics.Ident
+	GrantedToName             semantics.Ident
+	GrantOption               bool // TODO: if we re-grant the same grant with a different grant option, does it get overwritten? Could be a way to correct such mishaps
+	GrantedBy                 semantics.Ident
 	// TODO: consider using struct packing to align better and have more compact memory layout
 }
 
@@ -80,14 +80,14 @@ func (g Grant) buildSQLGrant(revoke bool) string {
 func newGrantToRole(privilege string, createObjType string, grantedOn string, name string, grantedRoleIsGruprManaged *bool, grantedTo ObjType,
 	grantedToDatabase semantics.Ident, grantedToName semantics.Ident, grantOption bool, grantedBy semantics.Ident) (Grant, error) {
 	g := Grant{
-		Privileges:                    []PrivilegeComplete{ParsePrivilegeComplete(privilege, createObjType)},
-		GrantedOn:                     ParseObjType(grantedOn),
-		GrantedRoleIsGruprManaged:     grantedRoleIsGruprManaged,
-		GrantedTo:                     grantedTo,
-		GrantedToDatabase:             grantedToDatabase,
-		GrantedToName:                 grantedToName,
-		GrantOption:                   grantOption,
-		GrantedBy:                     grantedBy,
+		Privileges:                []PrivilegeComplete{ParsePrivilegeComplete(privilege, createObjType)},
+		GrantedOn:                 ParseObjType(grantedOn),
+		GrantedRoleIsGruprManaged: grantedRoleIsGruprManaged,
+		GrantedTo:                 grantedTo,
+		GrantedToDatabase:         grantedToDatabase,
+		GrantedToName:             grantedToName,
+		GrantOption:               grantOption,
+		GrantedBy:                 grantedBy,
 	}
 	fpr := map[ObjType]int{
 		ObjTpAccount:      1,
@@ -131,13 +131,13 @@ func newGrantToRole(privilege string, createObjType string, grantedOn string, na
 
 func newGrantOfRole(role semantics.Ident, granteeName semantics.Ident, grantedBy semantics.Ident) Grant {
 	return Grant{
-		Privileges:                  []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage}},
-		GrantedOn:                   ObjTpRole,
-		GrantedRole:                 role,
-		GrantedRoleIsGruprManaged:   util.NewTrue(), // only used for product dtap roles at this point
-		GrantedTo:                   ObjTpUser,
-		GrantedToName:               granteeName,
-		GrantedBy:                   grantedBy,
+		Privileges:                []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage}},
+		GrantedOn:                 ObjTpRole,
+		GrantedRole:               role,
+		GrantedRoleIsGruprManaged: util.NewTrue(), // only used for product dtap roles at this point
+		GrantedTo:                 ObjTpUser,
+		GrantedToName:             granteeName,
+		GrantedBy:                 grantedBy,
 	}
 }
 

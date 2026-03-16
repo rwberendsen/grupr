@@ -11,7 +11,6 @@ import (
 
 	"github.com/rwberendsen/grupr/internal/semantics"
 	"github.com/rwberendsen/grupr/internal/snowflake"
-	"github.com/rwberendsen/grupr/internal/syntax"
 )
 
 func main() {
@@ -39,12 +38,15 @@ func main() {
 	// temp key in S3 and then copy them; S3 CopyObject does support condtional write
 	// headers; most likely they would be applied on the target object for the copy
 	// operation. So, yeah, most likely this would work.
-	synCnf := syntax.GetConfig()
-	semCnf := semantics.GetConfig()
-	newGrupin, err := getGrupinFromPath(synCnf, semCnf, flag.Arg(0))
+	semCnf, err := semantics.GetConfig()
+	if err != nil {
+		log.Fatalf("get semantics config: %v", err)
+	}
+	newGrupin, err := getGrupinFromPath(semCnf, flag.Arg(0))
 	if err != nil {
 		log.Fatalf("get new grupin: %v", err)
 	}
+	log.Println("Deserialized YAML")
 
 	/* TODO: consider implementing GrupinDiff
 	if *oldFlag != "" {
@@ -80,17 +82,23 @@ func main() {
 	if err != nil {
 		log.Fatalf("error creating db connection: %v", err)
 	}
+	log.Println("Connected to the database")
 
-	// Create Snowflake Grupin object, which will hold relevant account objects per data product
-	snowflakeNewGrupin, err := snowflake.NewGrupin(ctx, synCnf, snowCnf, conn, newGrupin)
+	// Create Snowflake Grupin object, which will hold, later, all relevant account objects per data product
+	// Still, this call already initializes the account cache, which will already have all databases that exist,
+	// and the database roles that grupr is managing; we might move this initialisation to the ManageAccess call,
+	// in which case we would not need to pass in `conn` below at all
+	snowflakeNewGrupin, err := snowflake.NewGrupin(ctx, semCnf, snowCnf, conn, newGrupin)
 	if err != nil {
 		log.Fatalf("error NewGrupin: %v", err)
 	}
+	log.Println("Created snowflake.Grupin object")
 
-	// Use it now to manage access
-	if err := snowflakeNewGrupin.ManageAccess(ctx, synCnf, snowCnf, conn); err != nil {
+	// Use it now to manage access; this will also query Snowflake for which objects exist
+	if err := snowflakeNewGrupin.ManageAccess(ctx, semCnf, snowCnf, conn); err != nil {
 		log.Fatalf("ManageAccess: %v", err)
 	}
+	log.Println("Managed access")
 
 	// And, after managing access, which may have resulted in numerous refreshes of which objects exist,
 	// let's store the latest object counts

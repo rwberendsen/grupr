@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
-	"github.com/rwberendsen/grupr/internal/syntax"
 	"github.com/rwberendsen/grupr/internal/util"
 )
 
@@ -19,13 +18,13 @@ type Config struct {
 	Schema                  semantics.Ident
 	UseSQLOpen              bool
 	RSAKeyPath              string
-	ObjectPrefix            string // for objects (roles) created by Grupr in Snowflake
 	MaxOpenConns            int
 	MaxIdleConns            int
 	MaxProductDTAPThreads   int
 	StmtBatchSize           int
 	MaxProductDTAPRefreshes int
 	Modes                   [1]Mode
+	SystemDefinedRoles      []semantics.Ident
 	DatabaseRolePrivileges  map[Mode]map[GrantTemplate]struct{}
 	ProductRolePrivileges   map[Mode]map[GrantTemplate]struct{}
 	DryRun                  bool
@@ -34,20 +33,28 @@ type Config struct {
 func GetConfig(semCnf *semantics.Config) (*Config, error) {
 	cnf := &Config{
 		UseSQLOpen:              false,
-		ObjectPrefix:            "_x_",
 		MaxOpenConns:            0, // unlimited
 		MaxIdleConns:            3, // MaxProductDTAPThreads - 1 (sometimes we use only one conn before quickly fanning out again)
 		MaxProductDTAPThreads:   4,
 		StmtBatchSize:           100,
 		MaxProductDTAPRefreshes: 4,
 		Modes:                   [1]Mode{ModeRead},
-		DryRun:                  true,
+		SystemDefinedRoles: []semantics.Ident{
+			semantics.Ident("GLOBALORGADMIN"),
+			semantics.Ident("ORGADMIN"),
+			semantics.Ident("ACCOUNTADMIN"),
+			semantics.Ident("SYSADMIN"),
+			semantics.Ident("PUBLIC"),
+			semantics.Ident("SECURITYADMIN"),
+			semantics.Ident("USERADMIN"),
+		},
+		DryRun: true,
 	}
 
 	if user, ok := os.LookupEnv("GRUPR_SNOWFLAKE_USER"); !ok {
 		return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_USER")
 	} else {
-		if user, err := semantics.NewIdentStripQuotesIfAny(semCnf, user); err != nil {
+		if user, err := semantics.NewIdentStripQuotesIfAny(user, semCnf.ValidQuotedExpr, semCnf.ValidUnquotedExpr); err != nil {
 			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_USER: Invalid user name")
 		} else {
 			cnf.User = user
@@ -57,7 +64,7 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 	if role, ok := os.LookupEnv("GRUPR_SNOWFLAKE_ROLE"); !ok {
 		return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_USER")
 	} else {
-		if role, err := semantics.NewIdentStripQuotesIfAny(semCnf, role); err != nil {
+		if role, err := semantics.NewIdentStripQuotesIfAny(role, semCnf.ValidQuotedExpr, semCnf.ValidUnquotedExpr); err != nil {
 			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_ROLE: Invalid role name")
 		} else {
 			cnf.Role = role
@@ -73,7 +80,7 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 	if database, ok := os.LookupEnv("GRUPR_SNOWFLAKE_DB"); !ok {
 		return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_DB")
 	} else {
-		if database, err := semantics.NewIdentStripQuotesIfAny(semCnf, database); err != nil {
+		if database, err := semantics.NewIdentStripQuotesIfAny(database, semCnf.ValidQuotedExpr, semCnf.ValidUnquotedExpr); err != nil {
 			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_DB: Invalid database name")
 		} else {
 			cnf.Database = database
@@ -83,7 +90,7 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 	if schema, ok := os.LookupEnv("GRUPR_SNOWFLAKE_SCHEMA"); !ok {
 		return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_SCHEMA")
 	} else {
-		if schema, err := semantics.NewIdentStripQuotesIfAny(semCnf, schema); err != nil {
+		if schema, err := semantics.NewIdentStripQuotesIfAny(schema, semCnf.ValidQuotedExpr, semCnf.ValidUnquotedExpr); err != nil {
 			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_SCHEMA: Invalid schema name")
 		} else {
 			cnf.Schema = schema
@@ -100,13 +107,6 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 
 	if rsaKeyPath, ok := os.LookupEnv("GRUPR_SNOWFLAKE_RSA_KEY_PATH"); ok {
 		cnf.RSAKeyPath = rsaKeyPath
-	}
-
-	if objectPrefix, ok := os.LookupEnv("GRUPR_SNOWFLAKE_OBJECT_PREFIX"); ok {
-		if err := syntax.ValidateID(objectPrefix); err != nil {
-			return nil, fmt.Errorf("invalid value for GRUPR_SNOWFLAKE_OBJECT_PREFIX")
-		}
-		cnf.ObjectPrefix = strings.ToLower(objectPrefix)
 	}
 
 	if maxOpenConns, ok := os.LookupEnv("GRUPR_SNOWFLAKE_MAX_OPEN_CONNS"); ok {
@@ -183,16 +183,16 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 	cnf.ProductRolePrivileges = map[Mode]map[GrantTemplate]struct{}{}
 	cnf.ProductRolePrivileges[ModeRead] = map[GrantTemplate]struct{}{
 		GrantTemplate{
-			PrivilegeComplete:           PrivilegeComplete{Privilege: PrvUsage},
-			GrantedOn:                   ObjTpDatabaseRole,
-			GrantedRoleIsGruprManaged:   util.NewTrue(),
+			PrivilegeComplete:         PrivilegeComplete{Privilege: PrvUsage},
+			GrantedOn:                 ObjTpDatabaseRole,
+			GrantedRoleIsGruprManaged: util.NewTrue(),
 		}: {},
 	}
 	cnf.ProductRolePrivileges[ModeWrite] = map[GrantTemplate]struct{}{
 		GrantTemplate{
-			PrivilegeComplete:           PrivilegeComplete{Privilege: PrvUsage},
-			GrantedOn:                   ObjTpRole,
-			GrantedRoleIsGruprManaged:   util.NewTrue(),
+			PrivilegeComplete:         PrivilegeComplete{Privilege: PrvUsage},
+			GrantedOn:                 ObjTpRole,
+			GrantedRoleIsGruprManaged: util.NewTrue(),
 		}: {},
 		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpTable},

@@ -15,20 +15,29 @@ type DTAPSpec struct {
 	DTAPRenderings map[string]syntax.Rendering
 }
 
-func newDTAPSpec(cnf *Config, dsSyn *syntax.DTAPSpec, dtapRenderings map[string]syntax.Rendering) (DTAPSpec, error) {
+func newDTAPSpec(cnf *Config, dsSyn syntax.DTAPSpec, dtapRenderings map[string]syntax.Rendering) (DTAPSpec, error) {
 	var dsSem DTAPSpec
-	if dsSyn == nil {
-		// Not specifying any DTAP info means you will get a default DTAP spec, which has only a production DTAP
+	if dsSyn.Prod == nil && len(dsSyn.NonProd) == 0 {
 		dsSem.Prod = &cnf.DefaultProdDTAPName
 	} else {
 		dsSem.Prod = dsSyn.Prod
-		if dsSyn.Prod != nil {
-			dsSem.Prod = dsSyn.Prod
+	}
+	allDTAPs := map[string]bool{}
+	if dsSem.Prod != nil {
+		if _, err := NewID(cnf, *dsSem.Prod); err != nil {
+			return dsSem, fmt.Errorf("dtap spec, prod: %w", err)
 		}
-		dsSem.NonProd = make(map[string]struct{}, len(dsSyn.NonProd))
-		for _, d := range dsSyn.NonProd {
-			dsSem.NonProd[d] = struct{}{}
+		allDTAPs[*dsSem.Prod] = true
+	}
+	dsSem.NonProd = make(map[string]struct{}, len(dsSyn.NonProd))
+	for _, d := range dsSyn.NonProd {
+		if _, err := NewID(cnf, d); err != nil {
+			return dsSem, fmt.Errorf("dtap spec, non-prod: %w", err)
 		}
+		if _, ok := allDTAPs[d]; ok {
+			return dsSem, fmt.Errorf("duplicate dtap: '%s'", d)
+		}
+		dsSem.NonProd[d] = struct{}{}
 	}
 	dsSem.DTAPRenderings = make(map[string]syntax.Rendering, len(dtapRenderings))
 	for k, r := range dtapRenderings {

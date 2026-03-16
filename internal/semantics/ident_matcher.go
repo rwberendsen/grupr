@@ -48,7 +48,7 @@ func NewIdentMatcher(cnf *Config, s string, isQuoted bool) (IdentMatcher, error)
 	} else {
 		// after stripping the optional wildcard, we still have a string left,
 		// this is an identifier, for all practical purposes, unquoted or quoted.
-		if ident, err := NewIdent(cnf, s, isQuoted); err != nil {
+		if ident, err := NewIdent(s, isQuoted, cnf.ValidQuotedExpr, cnf.ValidUnquotedExpr); err != nil {
 			return idm, err
 		} else {
 			idm.S = ident

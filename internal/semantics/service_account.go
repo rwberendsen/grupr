@@ -18,14 +18,19 @@ type ServiceAccount struct {
 
 func newServiceAccount(cnf *Config, svcSyn syntax.ServiceAccount, products map[string]Product) (ServiceAccount, error) {
 	svcSem := ServiceAccount{
-		ID:      svcSyn.ID,
 		Idents:  map[string]Ident{},
 		Deploys: map[string]map[string]string{},
+	}
+	// Set ID
+	if _, err := NewID(cnf, svcSyn.ID); err != nil {
+		return svcSem, fmt.Errorf("service account: %w", err)
+	} else {
+		svcSem.ID = svcSyn.ID
 	}
 
 	// Set DTAPs
 	if dtaps, err := newDTAPSpec(cnf, svcSyn.DTAPs, svcSyn.DTAPRenderings); err != nil {
-		return svcSem, err
+		return svcSem, fmt.Errorf("service account: %w", err)
 	} else {
 		svcSem.DTAPs = dtaps
 	}
@@ -43,7 +48,7 @@ func newServiceAccount(cnf *Config, svcSyn syntax.ServiceAccount, products map[s
 			return svcSem, fmt.Errorf("not exactly one DTAP for rendered identifier expression")
 		}
 		for ea := range m {
-			if ident, err := NewIdentStripQuotesIfAny(cnf, s); err != nil {
+			if ident, err := NewIdentStripQuotesIfAny(s, cnf.ValidQuotedExpr, cnf.ValidUnquotedExpr); err != nil {
 				return svcSem, err
 			} else {
 				svcSem.Idents[ea.DTAP] = ident
@@ -64,15 +69,14 @@ func newServiceAccount(cnf *Config, svcSyn syntax.ServiceAccount, products map[s
 
 		for dtapProduct, dtapSVC := range ds.DTAPMapping {
 			if !pSem.DTAPs.HasDTAP(dtapProduct) {
-				return svcSem, fmt.Errorf("deploy spec: product id '%s': unknown dtap '%s'", pSem.ID, dtapProduct)
+				return svcSem, fmt.Errorf("deploy spec: product id '%s': unknown product dtap '%s'", pSem.ID, dtapProduct)
 			}
 			if pSem.DTAPs.IsProd(dtapProduct) {
-				return svcSem, fmt.Errorf("deploy spec: product id '%s': non prod dtap '%s' not allowed to deploy prod product dtap '%s'", pSem.ID, dtapSVC, dtapProduct)
+				return svcSem, fmt.Errorf("deploy spec: product id '%s': no need to specify prod dtap '%s' of product in dtap mapping, can only be deployed by prd svc account anyway", pSem.ID, dtapProduct)
 			}
-		}
-
-		if !ds.DoesNotDeployProd && !pSem.DTAPs.HasProd() {
-			return svcSem, fmt.Errorf("deploy spec: product id '%s' has no prod dtap", pSem.ID)
+			if !svcSem.DTAPs.HasDTAP(dtapSVC) {
+				return svcSem, fmt.Errorf("deploy spec: product id '%s': unknown service account dtap '%s'", pSem.ID, dtapSVC)
+			}
 		}
 
 		for _, dtapProduct := range ds.DoesNotDeployNonProd {
@@ -81,10 +85,14 @@ func newServiceAccount(cnf *Config, svcSyn syntax.ServiceAccount, products map[s
 			}
 		}
 
+		svcSem.Deploys[pSem.ID] = map[string]string{}
 		for dtapProduct, isProd := range pSem.DTAPs.All() {
 			if isProd {
 				if !ds.DoesNotDeployProd {
-					svcSem.Deploys[pSem.ID][*pSem.DTAPs.Prod] = *svcSem.DTAPs.Prod // it was checked in syntax that svc has prod dtap
+					if !svcSem.DTAPs.HasProd() {
+						return svcSem, fmt.Errorf("deploy spec: svc account does not have prod dtap, so cannot deploy prod dtap '%s' of product '%s'", dtapProduct, pSem.ID)
+					}
+					svcSem.Deploys[pSem.ID][*pSem.DTAPs.Prod] = *svcSem.DTAPs.Prod
 				}
 				continue
 			}
@@ -92,8 +100,8 @@ func newServiceAccount(cnf *Config, svcSyn syntax.ServiceAccount, products map[s
 				if dtapSvc, ok := ds.DTAPMapping[dtapProduct]; ok {
 					svcSem.Deploys[pSem.ID][dtapProduct] = dtapSvc
 				} else {
-					if !svcSem.DTAPs.HasDTAP(dtapProduct) || svcSem.DTAPs.IsProd(dtapProduct) {
-						return svcSem, fmt.Errorf("deploy spec: no non-prod svc dtap to deploy non-prod dtap '%s' of product '%s'", dtapProduct, pSem.ID)
+					if !svcSem.DTAPs.HasDTAP(dtapProduct) {
+						return svcSem, fmt.Errorf("deploy spec: no same-named svc dtap to deploy non-prod dtap '%s' of product '%s', and no dtap mapping for it", dtapProduct, pSem.ID)
 					}
 					svcSem.Deploys[pSem.ID][dtapProduct] = dtapProduct // default
 				}

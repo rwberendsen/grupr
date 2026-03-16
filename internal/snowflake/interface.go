@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
-	"github.com/rwberendsen/grupr/internal/syntax"
 )
 
 type Interface struct {
@@ -109,12 +108,12 @@ func (i *Interface) setAggAccountObjects() {
 	i.accountObjects = nil // reset, we do not need it anymore, and maps referenced inside this data structure may have been altered while summing
 }
 
-func (i *Interface) setFutureGrants(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, pID string, dtap string, iID string, c *accountCache) error {
+func (i *Interface) setFutureGrants(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, pID string, dtap string, iID string, c *accountCache) error {
 	for db, dbObjs := range i.aggAccountObjects.DBs {
 		if !c.hasDB(db) {
 			return ErrObjectNotExistOrAuthorized // db may have been dropped concurrently
 		}
-		dbObjs, err := dbObjs.setFutureGrants(ctx, synCnf, cnf, conn, pID, dtap, iID, db, i.ObjectMatchers, c.dbs[db].dbRoles)
+		dbObjs, err := dbObjs.setFutureGrants(ctx, semCnf, cnf, conn, pID, dtap, iID, db, i.ObjectMatchers, c.dbs[db].dbRoles)
 		if err != nil {
 			return err
 		}
@@ -123,12 +122,12 @@ func (i *Interface) setFutureGrants(ctx context.Context, synCnf *syntax.Config, 
 	return nil
 }
 
-func (i *Interface) setGrants(ctx context.Context, synCnf *syntax.Config, cnf *Config, conn *sql.DB, c *accountCache) error {
+func (i *Interface) setGrants(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, c *accountCache) error {
 	for db, dbObjs := range i.aggAccountObjects.DBs {
 		if !c.hasDB(db) {
 			return ErrObjectNotExistOrAuthorized // db may have been dropped concurrently
 		}
-		dbObjs, err := dbObjs.setGrants(ctx, synCnf, cnf, conn, db, i.ObjectMatchers)
+		dbObjs, err := dbObjs.setGrants(ctx, semCnf, cnf, conn, db, i.ObjectMatchers)
 		if err != nil {
 			return err
 		}

@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
-	"github.com/rwberendsen/grupr/internal/syntax"
 )
 
 type ProductRole struct {
@@ -18,29 +17,32 @@ type ProductRole struct {
 	ID        semantics.Ident
 }
 
-func newProductRole(synCnf *syntax.Config, cnf *Config, productID string, dtap string, mode Mode) ProductRole {
+func newProductRole(semCnf *semantics.Config, productID string, dtap string, mode Mode) ProductRole {
+	productIdent := semantics.NewIdentUnquoted(productID)
+	dtapIdent := semantics.NewIdentUnquoted(dtap)
+	modeIdent := semantics.NewIdentUnquoted(mode.String())
 	return ProductRole{
 		ProductID: productID,
 		DTAP:      dtap,
 		Mode:      mode,
-		ID:        semantics.NewIdentUnquoted(fmt.Sprintf("%s%s%s%s%s%s", cnf.ObjectPrefix, productID, synCnf.Infix, dtap, synCnf.Infix, mode)),
+		ID:        semCnf.Prefix + productIdent + semCnf.Infix + dtapIdent + semCnf.Infix + modeIdent,
 	}
 }
 
-func newProductRoleFromString(synCnf *syntax.Config, cnf *Config, role semantics.Ident) (ProductRole, error) {
+func newProductRoleFromString(semCnf *semantics.Config, role semantics.Ident) (ProductRole, error) {
 	r := ProductRole{ID: role}
-	roleStr := strings.ToLower(string(role))
-	if !strings.HasPrefix(roleStr, cnf.ObjectPrefix) {
+	roleStr := string(role)
+	if !strings.HasPrefix(roleStr, string(semCnf.Prefix)) {
 		return r, fmt.Errorf("role does not start with Grupr prefix: '%s'", r)
 	}
-	roleStr = strings.TrimPrefix(roleStr, cnf.ObjectPrefix)
-	parts := strings.Split(roleStr, synCnf.Infix)
+	roleStr = strings.TrimPrefix(roleStr, string(semCnf.Prefix))
+	parts := strings.Split(roleStr, string(semCnf.Infix))
 	if len(parts) != 3 {
 		return r, fmt.Errorf("role does not have three parts: '%s'", r)
 	}
-	r.ProductID = parts[0]
-	r.DTAP = parts[1]
-	if mode, err := ParseMode(parts[2]); err != nil {
+	r.ProductID = strings.ToLower(parts[0])
+	r.DTAP = strings.ToLower(parts[1])
+	if mode, err := ParseMode(strings.ToLower(parts[2])); err != nil {
 		return r, fmt.Errorf("invalid role: '%s': %w", r, err)
 	} else {
 		r.Mode = mode
