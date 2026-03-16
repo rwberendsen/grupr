@@ -175,9 +175,9 @@ func (pd *ProductDTAP) setIsReadRoleGrantedToWriteRole(ctx context.Context, cnf 
 	}
 	for grant, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, pd.WriteRole.ID, map[GrantTemplate]struct{}{
 		GrantTemplate{
-			PrivilegeComplete:           PrivilegeComplete{Privilege: PrvUsage},
-			GrantedOn:                   ObjTpRole,
-			GrantedRoleIsGruprManaged:   util.NewTrue(),
+			PrivilegeComplete:         PrivilegeComplete{Privilege: PrvUsage},
+			GrantedOn:                 ObjTpRole,
+			GrantedRoleIsGruprManaged: util.NewTrue(),
 		}: {},
 	}, nil) {
 		if err != nil {
@@ -250,7 +250,7 @@ func (pd *ProductDTAP) grant(ctx context.Context, semCnf *semantics.Config, cnf 
 func (pd *ProductDTAP) setFutureGrantsToWriteRole(ctx context.Context, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{}) error {
 	if _, ok := productRoles[pd.WriteRole]; !ok && cnf.DryRun {
 		return nil
-	} 
+	}
 	for g, err := range QueryFutureGrantsToRoleFiltered(ctx, conn, pd.WriteRole.ID, map[GrantTemplate]struct{}{
 		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpTable},
@@ -299,7 +299,7 @@ func (pd *ProductDTAP) setGrantsToWriteRole(ctx context.Context, cnf *Config, co
 	grupinDisjointFromObject func(semantics.Ident, semantics.Ident, semantics.Ident) bool, productRoles map[ProductRole]struct{}) error {
 	if _, ok := productRoles[pd.WriteRole]; !ok && cnf.DryRun {
 		return nil
-	} 
+	}
 	for g, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, pd.WriteRole.ID, map[GrantTemplate]struct{}{
 		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpTable},

@@ -39,7 +39,7 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 		StmtBatchSize:           100,
 		MaxProductDTAPRefreshes: 4,
 		Modes:                   [1]Mode{ModeRead},
-		SystemDefinedRoles:      []semantics.Ident{
+		SystemDefinedRoles: []semantics.Ident{
 			semantics.Ident("GLOBALORGADMIN"),
 			semantics.Ident("ORGADMIN"),
 			semantics.Ident("ACCOUNTADMIN"),
@@ -48,7 +48,7 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 			semantics.Ident("SECURITYADMIN"),
 			semantics.Ident("USERADMIN"),
 		},
-		DryRun:                  true,
+		DryRun: true,
 	}
 
 	if user, ok := os.LookupEnv("GRUPR_SNOWFLAKE_USER"); !ok {
@@ -183,16 +183,16 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 	cnf.ProductRolePrivileges = map[Mode]map[GrantTemplate]struct{}{}
 	cnf.ProductRolePrivileges[ModeRead] = map[GrantTemplate]struct{}{
 		GrantTemplate{
-			PrivilegeComplete:           PrivilegeComplete{Privilege: PrvUsage},
-			GrantedOn:                   ObjTpDatabaseRole,
-			GrantedRoleIsGruprManaged:   util.NewTrue(),
+			PrivilegeComplete:         PrivilegeComplete{Privilege: PrvUsage},
+			GrantedOn:                 ObjTpDatabaseRole,
+			GrantedRoleIsGruprManaged: util.NewTrue(),
 		}: {},
 	}
 	cnf.ProductRolePrivileges[ModeWrite] = map[GrantTemplate]struct{}{
 		GrantTemplate{
-			PrivilegeComplete:           PrivilegeComplete{Privilege: PrvUsage},
-			GrantedOn:                   ObjTpRole,
-			GrantedRoleIsGruprManaged:   util.NewTrue(),
+			PrivilegeComplete:         PrivilegeComplete{Privilege: PrvUsage},
+			GrantedOn:                 ObjTpRole,
+			GrantedRoleIsGruprManaged: util.NewTrue(),
 		}: {},
 		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpTable},

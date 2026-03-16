@@ -63,12 +63,12 @@ VALUES (?, ?, ?, ?, ?, ?)
 `,
 		cnf.Database, cnf.Schema)
 	if err := runSQL(ctx, cnf, conn, sql,
-	gosnowflake.Array(productIDs),
-	gosnowflake.Array(dtaps),
-	gosnowflake.Array(interfaceIDs),
-	gosnowflake.Array(userGroups),
-	gosnowflake.Array(tableCounts),
-	gosnowflake.Array(viewCounts)); err != nil {
+		gosnowflake.Array(productIDs),
+		gosnowflake.Array(dtaps),
+		gosnowflake.Array(interfaceIDs),
+		gosnowflake.Array(userGroups),
+		gosnowflake.Array(tableCounts),
+		gosnowflake.Array(viewCounts)); err != nil {
 		return fmt.Errorf("insert stats: %v", err)
 	}
 	return nil

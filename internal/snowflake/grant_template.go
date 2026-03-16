@@ -7,8 +7,8 @@ import (
 
 type GrantTemplate struct {
 	PrivilegeComplete
-	GrantedOn                   ObjType
-	GrantedRoleIsGruprManaged   *bool
+	GrantedOn                 ObjType
+	GrantedRoleIsGruprManaged *bool
 }
 
 func (g GrantTemplate) buildSQLFilter() (string, int) {

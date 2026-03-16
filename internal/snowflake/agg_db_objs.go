@@ -13,20 +13,20 @@ type AggDBObjs struct {
 	MatchAllObjects bool
 
 	// Set when (future) grants are set
-	readDBRole                           DatabaseRole
-	isReadDBRoleNew                      bool // if true, then no need to query grants
+	readDBRole      DatabaseRole
+	isReadDBRoleNew bool // if true, then no need to query grants
 
 	// Grants to the readDBRole
-	isUsageGrantedToReadDBRole       bool
-	isUsageGrantedOnFutureSchemasToReadDBRole    bool
+	isUsageGrantedToReadDBRole                bool
+	isUsageGrantedOnFutureSchemasToReadDBRole bool
 	// Small lookup table, first index rows, second index columns
 	//   		0: PrvSelect	1: PrvRefernces
 	// 0: ObjTable
 	// 1: ObjView
 	//
-	isPrivilegeOnFutureObjectGrantedToReadDBRole             [2][2]bool
-	revokeGrantsToReadDBRole           []Grant
-	revokeFutureGrantsToReadDBRole     []FutureGrant
+	isPrivilegeOnFutureObjectGrantedToReadDBRole [2][2]bool
+	revokeGrantsToReadDBRole                     []Grant
+	revokeFutureGrantsToReadDBRole               []FutureGrant
 
 	// Has the readDBRole been granted to the consuming ProductDTAPs already?
 	// TODO: can this be a struct{} value type?
@@ -36,7 +36,7 @@ type AggDBObjs struct {
 	isReadDBRoleGrantedToProductReadRole bool // directly set from within Grupin.setDBRoleGrants
 
 	// Grants to the product write role; only used if this AggDBObjs is part of a product level interface
-	revokeFutureGrantsToProductWriteRole    []FutureGrant
+	revokeFutureGrantsToProductWriteRole                   []FutureGrant
 	isCreateObjectOnFutureSchemasGrantedToProductWriteRole [2]bool // 0: ObjTable, 1: ObjView
 }
 

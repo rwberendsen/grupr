@@ -20,7 +20,7 @@ func NewID(cnf *Config, s string) (string, error) {
 
 		If so, it means this ID can cause no ambiguity when parsing a concatenation of it with other IDs as to what are the parts.
 
-		Note that, before concatenating, ID would be uppercased in ANSI SQL compatible databases, and hence we must do the 
+		Note that, before concatenating, ID would be uppercased in ANSI SQL compatible databases, and hence we must do the
 		same in this test. We do this by first converting ID to an Ident.
 	*/
 	i := NewIdentUnquoted(s)

@@ -9,9 +9,9 @@ type AggSchemaObjs struct {
 	MatchAllObjects bool
 
 	// set while grants are being set
-	isUsageGrantedToReadDBRole             bool
+	isUsageGrantedToReadDBRole                   bool
 	isPrivilegeOnFutureObjectGrantedToReadDBRole [2][2]bool // [ObjType][Privilege]
-	isCreateGrantedToProductWriteRole           [2]bool    // [ObjType]
+	isCreateGrantedToProductWriteRole            [2]bool    // [ObjType]
 }
 
 func newAggSchemaObjs(o SchemaObjs) AggSchemaObjs {
