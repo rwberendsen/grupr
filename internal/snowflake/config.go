@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
-	"github.com/rwberendsen/grupr/internal/syntax"
 	"github.com/rwberendsen/grupr/internal/util"
 )
 
@@ -40,7 +39,7 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 		StmtBatchSize:           100,
 		MaxProductDTAPRefreshes: 4,
 		Modes:                   [1]Mode{ModeRead},
-		SystemDefinedRoles       []semantics.Ident{
+		SystemDefinedRoles:      []semantics.Ident{
 			semantics.Ident("GLOBALORGADMIN"),
 			semantics.Ident("ORGADMIN"),
 			semantics.Ident("ACCOUNTADMIN"),
@@ -55,7 +54,7 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 	if user, ok := os.LookupEnv("GRUPR_SNOWFLAKE_USER"); !ok {
 		return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_USER")
 	} else {
-		if user, err := semantics.NewIdentStripQuotesIfAny(semCnf, user); err != nil {
+		if user, err := semantics.NewIdentStripQuotesIfAny(user, semCnf.ValidQuotedExpr, semCnf.ValidUnquotedExpr); err != nil {
 			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_USER: Invalid user name")
 		} else {
 			cnf.User = user
@@ -65,7 +64,7 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 	if role, ok := os.LookupEnv("GRUPR_SNOWFLAKE_ROLE"); !ok {
 		return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_USER")
 	} else {
-		if role, err := semantics.NewIdentStripQuotesIfAny(semCnf, role); err != nil {
+		if role, err := semantics.NewIdentStripQuotesIfAny(role, semCnf.ValidQuotedExpr, semCnf.ValidUnquotedExpr); err != nil {
 			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_ROLE: Invalid role name")
 		} else {
 			cnf.Role = role
@@ -81,7 +80,7 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 	if database, ok := os.LookupEnv("GRUPR_SNOWFLAKE_DB"); !ok {
 		return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_DB")
 	} else {
-		if database, err := semantics.NewIdentStripQuotesIfAny(semCnf, database); err != nil {
+		if database, err := semantics.NewIdentStripQuotesIfAny(database, semCnf.ValidQuotedExpr, semCnf.ValidUnquotedExpr); err != nil {
 			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_DB: Invalid database name")
 		} else {
 			cnf.Database = database
@@ -91,7 +90,7 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 	if schema, ok := os.LookupEnv("GRUPR_SNOWFLAKE_SCHEMA"); !ok {
 		return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_SCHEMA")
 	} else {
-		if schema, err := semantics.NewIdentStripQuotesIfAny(semCnf, schema); err != nil {
+		if schema, err := semantics.NewIdentStripQuotesIfAny(schema, semCnf.ValidQuotedExpr, semCnf.ValidUnquotedExpr); err != nil {
 			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_SCHEMA: Invalid schema name")
 		} else {
 			cnf.Schema = schema

@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"iter"
-	"strings"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
 	"github.com/rwberendsen/grupr/internal/syntax"
@@ -149,7 +148,7 @@ func (g *Grupin) setDBRoleGrants(ctx context.Context, semCnf *semantics.Config, 
 		if err != nil {
 			return err
 		}
-		grantedDBRole, err := newDatabaseRoleFromString(semCnf, cnf, grant.Database, grant.GrantedRole)
+		grantedDBRole, err := newDatabaseRoleFromIdent(semCnf, grant.Database, grant.GrantedRole)
 		if err != nil {
 			return err
 		}

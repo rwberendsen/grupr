@@ -48,7 +48,7 @@ func newServiceAccount(cnf *Config, svcSyn syntax.ServiceAccount, products map[s
 			return svcSem, fmt.Errorf("not exactly one DTAP for rendered identifier expression")
 		}
 		for ea := range m {
-			if ident, err := NewIdentStripQuotesIfAny(cnf, s); err != nil {
+			if ident, err := NewIdentStripQuotesIfAny(s, cnf.ValidQuotedExpr, cnf.ValidUnquotedExpr); err != nil {
 				return svcSem, err
 			} else {
 				svcSem.Idents[ea.DTAP] = ident
@@ -74,7 +74,7 @@ func newServiceAccount(cnf *Config, svcSyn syntax.ServiceAccount, products map[s
 			if pSem.DTAPs.IsProd(dtapProduct) {
 				return svcSem, fmt.Errorf("deploy spec: product id '%s': no need to specify prod dtap '%s' of product in dtap mapping, can only be deployed by prd svc account anyway", pSem.ID, dtapProduct)
 			}
-			if !svc.DTAPs.HasDTAP(dtapSVC) {
+			if !svcSem.DTAPs.HasDTAP(dtapSVC) {
 				return svcSem, fmt.Errorf("deploy spec: product id '%s': unknown service account dtap '%s'", pSem.ID, dtapSVC)
 			}
 		}

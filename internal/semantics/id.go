@@ -2,7 +2,6 @@ package semantics
 
 import (
 	"fmt"
-	"regexp"
 	"slices"
 )
 
@@ -11,7 +10,7 @@ import (
 
 func NewID(cnf *Config, s string) (string, error) {
 	if !cnf.ValidID.MatchString(s) || !cnf.ValidUnquotedExpr.MatchString(s) {
-		return id, &FormattingError{fmt.Sprintf("invalid ID: '%s'", s)}
+		return s, fmt.Errorf("invalid ID: '%s'", s)
 	}
 	/*
 		"Is there a suffix on the ID that can be used with a prefix of the infix to form a complete infix?
@@ -35,7 +34,7 @@ func NewID(cnf *Config, s string) (string, error) {
 		}
 	}
 	if len(matches) != 1 {
-		return s, &FormattingError{fmt.Sprintf("invalid ID when used with infix: '%s'", s)}
+		return s, fmt.Errorf("invalid ID when used with infix: '%s'", s)
 	}
 	return s, nil
 }

@@ -12,7 +12,7 @@ type ServiceAccount struct {
 	DTAPRenderings map[string]Rendering `yaml:"dtap_renderings,omitempty"`
 }
 
-func (svc *ServiceAccount) validate(cnf *Config) error {
+func (svc *ServiceAccount) validate() error {
 	for k, v := range svc.DTAPRenderings {
 		if err := v.validate(); err != nil {
 			return fmt.Errorf("service account '%s', dtap_rendering: '%s': %w", svc.ID, k, err)

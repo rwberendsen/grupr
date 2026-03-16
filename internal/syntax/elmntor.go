@@ -13,7 +13,7 @@ type ElmntOr struct {
 	ServiceAccount   *ServiceAccount   `yaml:"service_account,omitempty"`
 }
 
-func (e ElmntOr) validateAndAdd(cnf *Config, g *Grupin) error {
+func (e ElmntOr) validateAndAdd(g *Grupin) error {
 	n_elements := 0
 	if e.Classes != nil {
 		if g.Classes != nil {
@@ -43,7 +43,7 @@ func (e ElmntOr) validateAndAdd(cnf *Config, g *Grupin) error {
 	}
 	if e.Product != nil {
 		n_elements += 1
-		if err := e.Product.validate(cnf); err != nil {
+		if err := e.Product.validate(); err != nil {
 			return err
 		}
 		if _, ok := g.Products[e.Product.ID]; ok {
@@ -64,7 +64,7 @@ func (e ElmntOr) validateAndAdd(cnf *Config, g *Grupin) error {
 	}
 	if e.ServiceAccount != nil {
 		n_elements += 1
-		if err := e.ServiceAccount.validate(cnf); err != nil {
+		if err := e.ServiceAccount.validate(); err != nil {
 			return err
 		}
 		if _, ok := g.ServiceAccounts[e.ServiceAccount.ID]; ok {

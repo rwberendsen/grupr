@@ -18,9 +18,9 @@ type ProductRole struct {
 }
 
 func newProductRole(semCnf *semantics.Config, productID string, dtap string, mode Mode) ProductRole {
-	productIdent = NewIdentUnquoted(productID)
-	dtapIdent = NewIdentUnquoted(dtap)
-	modeIdent = NewIdentUnquoted(mode.String())
+	productIdent := semantics.NewIdentUnquoted(productID)
+	dtapIdent := semantics.NewIdentUnquoted(dtap)
+	modeIdent := semantics.NewIdentUnquoted(mode.String())
 	return ProductRole{
 		ProductID: productID,
 		DTAP:      dtap,

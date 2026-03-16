@@ -25,6 +25,7 @@ func NewGrupin(cnf *Config, gSyn syntax.Grupin) (Grupin, error) {
 	for k, _ := range gSem.Classes {
 		if _, err := NewID(cnf, k); err != nil {
 			return gSem, fmt.Errorf("classes: %w", err)
+		}
 	}
 
 	// Validate global user groups, they should be valid ids
@@ -44,7 +45,7 @@ func NewGrupin(cnf *Config, gSyn syntax.Grupin) (Grupin, error) {
 		if _, ok := gSem.UserGroupMappings[k]; ok {
 			return gSem, fmt.Errorf("duplicate user group mapping")
 		}
-		if ugm, err := newUserGroupMapping(v, gSem.GlobalUserGroups); err != nil {
+		if ugm, err := newUserGroupMapping(cnf, v, gSem.GlobalUserGroups); err != nil {
 			return gSem, err
 		} else {
 			gSem.UserGroupMappings[k] = ugm

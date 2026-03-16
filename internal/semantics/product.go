@@ -101,8 +101,8 @@ func newProduct(cnf *Config, pSyn syntax.Product, classes map[string]syntax.Clas
 	}
 
 	// Some last sanity checks
-	if len(pSem.Usergroups) == 0 {
-		if pSem.UserGroupMappingID != 0 {
+	if len(pSem.UserGroups) == 0 {
+		if pSem.UserGroupMappingID != "" {
 			return pSem, fmt.Errorf("product '%s': no usergroups, but user_group_mapping_id specified")
 		}
 		if len(pSem.UserGroupRenderings) > 0 {

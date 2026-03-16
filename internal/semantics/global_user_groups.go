@@ -32,7 +32,7 @@ func newGlobalUserGroups(cnf *Config, globalUserGroups *syntax.GlobalUserGroups)
 		}
 		gug[i] = false // historical
 	}
-	return gug
+	return gug, nil
 }
 
 func (lhs GlobalUserGroups) Equal(rhs GlobalUserGroups) bool {

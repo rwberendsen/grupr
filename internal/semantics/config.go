@@ -13,7 +13,7 @@ type Config struct {
 	DefaultProdDTAPName string
 }
 
-func GetConfig() *Config {
+func GetConfig() (*Config, error) {
 	cnf := new(Config)
 
 	// What are valid identifier parts in your backend; these regular expressions were developed against Snowflake
@@ -30,10 +30,18 @@ func GetConfig() *Config {
 	cnf.ValidID = regexp.MustCompile(`^[a-z0-9_]+$`)
 
 	// With what prefix would you like to distinguish objects (e.g., roles) that are managed by Grupr in your database platform?
-	cnf.Prefix = NewIdentStripQuotesIfAny("_x_", cnf.ValidQuotedExpr, cnf.ValidUnquotedExpr)
+	if pfx, err := NewIdentStripQuotesIfAny(`_x_`, cnf.ValidQuotedExpr, cnf.ValidUnquotedExpr); err != nil {
+		return cnf, err
+	} else {
+		cnf.Prefix = pfx
+	}
+
 	// With what infix would you build roles names that contain product ids, dtaps, and user groups?
-	cnf.Infix  = NewIdentStripQuotesIfAny("_x_", cnf.ValidQuotedExpr, cnf.ValidUnquotedExpr)
+	if ifx, err := NewIdentStripQuotesIfAny(`_x_`, cnf.ValidQuotedExpr, cnf.ValidUnquotedExpr); err != nil {
+		return cnf, err
+	} else {
+		cnf.Infix = ifx
+	}
 
-	return cnf
-
+	return cnf, nil
 }

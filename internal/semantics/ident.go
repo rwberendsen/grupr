@@ -26,7 +26,7 @@ func NewIdent(s string, isQuoted bool, validQuotedExpr, validUnquotedExpr *regex
 	return id, nil
 }
 
-func NewIdentStripQuotesIfAny(s string, validQuotedEpxr, validUnquotedExpr *regexp.Regexp) (Ident, error) {
+func NewIdentStripQuotesIfAny(s string, validQuotedExpr, validUnquotedExpr *regexp.Regexp) (Ident, error) {
 	var isQuoted bool
 	if strings.HasPrefix(s, `"`) {
 		if len(s) < 3 || !strings.HasSuffix(s, `"`) {

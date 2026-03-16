@@ -11,7 +11,6 @@ import (
 
 	"github.com/rwberendsen/grupr/internal/semantics"
 	"github.com/rwberendsen/grupr/internal/snowflake"
-	"github.com/rwberendsen/grupr/internal/syntax"
 )
 
 func main() {
@@ -39,9 +38,11 @@ func main() {
 	// temp key in S3 and then copy them; S3 CopyObject does support condtional write
 	// headers; most likely they would be applied on the target object for the copy
 	// operation. So, yeah, most likely this would work.
-	synCnf := syntax.GetConfig()
-	semCnf := semantics.GetConfig()
-	newGrupin, err := getGrupinFromPath(synCnf, semCnf, flag.Arg(0))
+	semCnf, err := semantics.GetConfig()
+	if err != nil {
+		log.Fatalf("get semantics config: %v", err)
+	}
+	newGrupin, err := getGrupinFromPath(semCnf, flag.Arg(0))
 	if err != nil {
 		log.Fatalf("get new grupin: %v", err)
 	}
@@ -82,13 +83,13 @@ func main() {
 	}
 
 	// Create Snowflake Grupin object, which will hold relevant account objects per data product
-	snowflakeNewGrupin, err := snowflake.NewGrupin(ctx, synCnf, snowCnf, conn, newGrupin)
+	snowflakeNewGrupin, err := snowflake.NewGrupin(ctx, semCnf, snowCnf, conn, newGrupin)
 	if err != nil {
 		log.Fatalf("error NewGrupin: %v", err)
 	}
 
 	// Use it now to manage access
-	if err := snowflakeNewGrupin.ManageAccess(ctx, synCnf, snowCnf, conn); err != nil {
+	if err := snowflakeNewGrupin.ManageAccess(ctx, semCnf, snowCnf, conn); err != nil {
 		log.Fatalf("ManageAccess: %v", err)
 	}
 

@@ -17,7 +17,7 @@ type Grupin struct {
 	ServiceAccounts   map[string]ServiceAccount
 }
 
-func NewGrupin(cnf *Config, r io.Reader) (Grupin, error) {
+func NewGrupin(r io.Reader) (Grupin, error) {
 	dec := yaml.NewDecoder(r)
 	dec.KnownFields(true)
 	g := Grupin{
@@ -35,7 +35,7 @@ func NewGrupin(cnf *Config, r io.Reader) (Grupin, error) {
 		if err != nil {
 			return g, fmt.Errorf("decoding YAML: %w", err)
 		}
-		if err := e.validateAndAdd(cnf, &g); err != nil {
+		if err := e.validateAndAdd(&g); err != nil {
 			return g, fmt.Errorf("decoding YAML: %w", err)
 		}
 	}

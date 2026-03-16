@@ -28,10 +28,10 @@ func NewDatabaseRole(semCnf *semantics.Config, productID string, dtap string, in
 		Mode:        mode,
 		Database:    db,
 	}
-	productIdent = NewIdentUnquoted(productID)
-	dtapIdent = NewIdentUnquoted(dtap)
-	interfaceIdent = NewIdentUnquoted(interfaceID)
-	modeIdent = NewIdentUnquoted(mode.String())
+	productIdent := semantics.NewIdentUnquoted(productID)
+	dtapIdent := semantics.NewIdentUnquoted(dtap)
+	interfaceIdent := semantics.NewIdentUnquoted(interfaceID)
+	modeIdent := semantics.NewIdentUnquoted(mode.String())
 	if interfaceID == "" {
 		r.Name = semCnf.Prefix + productIdent + semCnf.Infix + dtapIdent + semCnf.Infix + modeIdent
 	} else {
@@ -40,7 +40,7 @@ func NewDatabaseRole(semCnf *semantics.Config, productID string, dtap string, in
 	return r
 }
 
-func newDataBaseRoleFromIdent(semCnf *semantics.Config, db semantics.Ident, role semantics.Ident) (DatabaseRole, error) {
+func newDatabaseRoleFromIdent(semCnf *semantics.Config, db semantics.Ident, role semantics.Ident) (DatabaseRole, error) {
 	r := DatabaseRole{Name: role, Database: db}
 	roleStr := string(role)
 	if !strings.HasPrefix(roleStr, string(semCnf.Prefix)) {
@@ -84,7 +84,7 @@ func QueryDatabaseRoles(ctx context.Context, semCnf *semantics.Config, cnf *Conf
 				yield(DatabaseRole{}, err)
 				return
 			}
-			if r, err := newDataBaseRoleFromIdent(semCnf, db, roleName); err != nil {
+			if r, err := newDatabaseRoleFromIdent(semCnf, db, roleName); err != nil {
 				yield(DatabaseRole{}, err)
 				return
 			} else {
