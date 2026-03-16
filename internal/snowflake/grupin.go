@@ -113,7 +113,24 @@ func (g *Grupin) ManageAccess(ctx context.Context, semCnf *semantics.Config, cnf
 	// We will add them as non-prod, so they'll be dealt with after production.
 	g.addZombieProductDTAPs()
 
-	// First complete production
+	// Now, set up product roles for all products; prod or non-prod. Because zombie product dtaps
+	// may or may not be production, we have no way of knowing that. And, when we claim objects
+	// from such zombie product dtaps, any user managed roles that were granted the write role
+	// of the zombie product dtap would lose ownership. That could break a production process, then.
+	// By first setting for all product dtaps which user managed roles owned the write roles,
+	// we can prevent this scenario.
+	eg, egCtx := errgroup.WithContext(ctx)
+	eg.SetLimit(cnf.MaxProductDTAPThreads)
+	for _, pd := range g.ProductDTAPs {
+		eg.Go(func() error {
+			return pd.setupProductRoles(egCtx, semCnf, cnf, conn, g.productRoles)
+		})
+	}
+	if err := eg.Wait(); err != nil {
+		return err
+	}
+
+	// Now, first complete production
 	if err := g.manageAccess(ctx, semCnf, cnf, conn, true); err != nil {
 		return err
 	}
@@ -268,12 +285,14 @@ func (g *Grupin) grant(ctx context.Context, semCnf *semantics.Config, cnf *Confi
 				return pd.grant(egCtx, semCnf, cnf, conn, g.productRoles,
 					func(db semantics.Ident, schema semantics.Ident, obj semantics.Ident) bool {
 						return g.DisjointFromObject(db, schema, obj)
+					},
+					func(pdID semantics.ProductDTAPID) map[semantics.Ident]struct{} {
+						return g.ProductDTAPs[pdID].writeRoleGrantedToUserManagedRoles
 					}, g.accountCache)
 			})
 		}
 	}
-	err := eg.Wait()
-	if err != nil {
+	if err := eg.Wait(); err != nil {
 		return err
 	}
 	// Now all necessary db roles have been created and they have been granted the necessary privileges
@@ -316,6 +335,9 @@ func (g *Grupin) revoke(ctx context.Context, semCnf *semantics.Config, cnf *Conf
 				return pd.revoke(ctx, semCnf, cnf, conn, g.productRoles,
 					func(db semantics.Ident, schema semantics.Ident, obj semantics.Ident) bool {
 						return g.DisjointFromObject(db, schema, obj)
+					},
+					func(pdID semantics.ProductDTAPID) map[semantics.Ident]struct{} {
+						return g.ProductDTAPs[pdID].writeRoleGrantedToUserManagedRoles
 					}, g.accountCache)
 			})
 		}
