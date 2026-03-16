@@ -344,7 +344,6 @@ func (pd *ProductDTAP) setGrantsToWriteRole(ctx context.Context, cnf *Config, co
 				if !pd.Interface.ObjectMatchers.DisjointFromObject(g.Database, g.Schema, g.Object) {
 					if schemaObjs, ok := pd.Interface.aggAccountObjects.GetSchema(g.Database, g.Schema); ok {
 						if aggObjAttr, ok := schemaObjs.Objects[g.Object]; ok {
-							fmt.Printf("'%s' already has ownership of '%s.%s.%s'\n", pd.WriteRole.ID, g.Database, g.Schema, g.Object)
 							schemaObjs.Objects[g.Object] = aggObjAttr.setGrantTo(ModeWrite, g)
 						}
 					}

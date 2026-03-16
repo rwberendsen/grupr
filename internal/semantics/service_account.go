@@ -30,7 +30,7 @@ func newServiceAccount(cnf *Config, svcSyn syntax.ServiceAccount, products map[s
 
 	// Set DTAPs
 	if dtaps, err := newDTAPSpec(cnf, svcSyn.DTAPs, svcSyn.DTAPRenderings); err != nil {
-		return svcSem, err
+		return svcSem, fmt.Errorf("service account: %w", err)
 	} else {
 		svcSem.DTAPs = dtaps
 	}

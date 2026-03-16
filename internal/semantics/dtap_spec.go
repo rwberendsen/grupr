@@ -25,14 +25,14 @@ func newDTAPSpec(cnf *Config, dsSyn syntax.DTAPSpec, dtapRenderings map[string]s
 	allDTAPs := map[string]bool{}
 	if dsSem.Prod != nil {
 		if _, err := NewID(cnf, *dsSem.Prod); err != nil {
-			return dsSem, fmt.Errorf("dtap spec: %w", err)
+			return dsSem, fmt.Errorf("dtap spec, prod: %w", err)
 		}
 		allDTAPs[*dsSem.Prod] = true
 	}
 	dsSem.NonProd = make(map[string]struct{}, len(dsSyn.NonProd))
 	for _, d := range dsSyn.NonProd {
 		if _, err := NewID(cnf, d); err != nil {
-			return dsSem, fmt.Errorf("dtap spec: %w", err)
+			return dsSem, fmt.Errorf("dtap spec, non-prod: %w", err)
 		}
 		if _, ok := allDTAPs[d]; ok {
 			return dsSem, fmt.Errorf("duplicate dtap: '%s'", d)
