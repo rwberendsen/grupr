@@ -17,7 +17,6 @@ type AggDBObjs struct {
 	isReadDBRoleNew bool // if true, then no need to query grants
 
 	// Grants to the readDBRole
-	isUsageGrantedToReadDBRole                bool
 	isUsageGrantedOnFutureSchemasToReadDBRole bool
 	// Small lookup table, first index rows, second index columns
 	//   		0: PrvSelect	1: PrvRefernces
@@ -135,34 +134,6 @@ func (o AggDBObjs) setRevokeFutureGrantTo(m Mode, g FutureGrant) AggDBObjs {
 	return o
 }
 
-func (o AggDBObjs) setGrantTo(m Mode, g Grant) AggDBObjs {
-	// Used for setting if grants on objects in AggDBObjs have been
-	// granted to either the readDBRole (ModeRead) or the ProductWriteRole
-	// (ModeWrite); the latter currently has no direct privileges on a DB
-	switch m {
-	case ModeRead:
-		switch g.Privileges[0].Privilege {
-		case PrvUsage:
-			o.isUsageGrantedToReadDBRole = true
-		}
-	}
-	return o
-}
-
-func (o AggDBObjs) hasGrantTo(m Mode, p Privilege) bool {
-	// Used for checking if grants on objects in AggDBObjs have been
-	// granted to either the readDBRole (ModeRead) or the ProductWriteRole
-	// (ModeWrite); the latter currently has no direct privileges on a DB
-	switch m {
-	case ModeRead:
-		switch p {
-		case PrvUsage:
-			return o.isUsageGrantedToReadDBRole
-		}
-	}
-	return false
-}
-
 func (o AggDBObjs) setRevokeGrantTo(m Mode, g Grant) AggDBObjs {
 	// Used only for ModeRead at the moment, but, in the future we will have a ModeOps, most likely
 	// Note that ModeWrite privileges to be revoked are stored in ProductDTAP
@@ -257,8 +228,6 @@ func (o AggDBObjs) setGrants(ctx context.Context, semCnf *semantics.Config, cnf 
 			}
 
 			switch g.GrantedOn {
-			case ObjTpDatabase:
-				o = o.setGrantTo(ModeRead, g)
 			case ObjTpSchema:
 				if o.hasSchema(g.Schema) {
 					o.Schemas[g.Schema] = o.Schemas[g.Schema].setGrantTo(ModeRead, g)
@@ -340,18 +309,6 @@ func (o AggDBObjs) pushToDoFutureGrants(yield func(FutureGrant) bool) bool {
 }
 
 func (o AggDBObjs) pushToDoGrants(yield func(Grant) bool) bool {
-	if !o.hasGrantTo(ModeRead, PrvUsage) {
-		if !yield(Grant{
-			Privileges:        []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage}},
-			GrantedOn:         ObjTpDatabase,
-			Database:          o.readDBRole.Database,
-			GrantedTo:         ObjTpDatabaseRole,
-			GrantedToDatabase: o.readDBRole.Database,
-			GrantedToName:     o.readDBRole.Name,
-		}) {
-			return false
-		}
-	}
 	for schema, schemaObjs := range o.Schemas {
 		if !schemaObjs.pushToDoGrants(yield, o.readDBRole, schema) {
 			return false
