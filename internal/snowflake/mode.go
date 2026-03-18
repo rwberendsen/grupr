@@ -24,3 +24,19 @@ func ParseMode(s string) (Mode, error) {
 func (m Mode) String() string {
 	return map[Mode]string{ModeRead: "r", ModeWrite: "w", ModeOperate: "o"}[m]
 }
+
+func (m Mode) getIdx() int {
+	switch m {
+	case ModeRead:
+		return 0
+	case ModeWrite:
+		return 1
+	default:
+		panic("we don't currently use arrays with more modes")
+	}
+}
+
+func setFlagMode(flags [2]bool, setFlag Mode) [2]bool {
+	flags[setFlag.getIdx()] = true
+	return flags
+}

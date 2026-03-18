@@ -191,7 +191,7 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 	cnf.ProductRolePrivileges[ModeWrite] = map[GrantTemplate]struct{}{
 		GrantTemplate{
 			PrivilegeComplete:         PrivilegeComplete{Privilege: PrvUsage},
-			GrantedOn:                 ObjTpRole,
+			GrantedOn:                 ObjTpDatabaseRole,
 			GrantedRoleIsGruprManaged: util.NewTrue(),
 		}: {},
 		GrantTemplate{

@@ -24,15 +24,14 @@ type ProductDTAP struct {
 	WriteRole  ProductRole
 	DeployedBy map[semantics.Ident]bool // initially set to false, then to true if GRANTS are found in Snowflake
 
-	isReadRoleGrantedToWriteRole       bool
 	writeRoleGrantedToUserManagedRoles map[semantics.Ident]struct{}
 	userManagedOwnersOfObjects         map[semantics.Ident]struct{}
 	refreshCount                       int // how many times has this ProductDTAP been refreshed: populated with Snowflake objects
 	matchedAccountObjects              map[semantics.ObjExpr]*matchedAccountObjs
-	revokeGrantsToReadRole             []Grant
+	revokeDBRolesFromReadRole          []Grant
+	revokeDBRolesFromWriteRole         []Grant
 	revokeFutureGrantsToWriteRole      []FutureGrant
 	revokeGrantsToWriteRole            []Grant
-	revokeRolesFromWriteRole           []Grant
 	revokeGrantsOfWriteRoleToUsers     []Grant
 	transferOwnership                  []Grant // ownership grants we no longer want based on the YAML
 	isZombie                           bool
@@ -169,64 +168,11 @@ func (pd *ProductDTAP) setWriteRoleGrantedToUserManagedRoles(ctx context.Context
 	return nil
 }
 
-func (pd *ProductDTAP) setIsReadRoleGrantedToWriteRole(ctx context.Context, cnf *Config, conn *sql.DB,
-	productRoles map[ProductRole]struct{}) error {
-	if _, ok := productRoles[pd.WriteRole]; !ok && cnf.DryRun {
-		return nil
-	}
-	for grant, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, pd.WriteRole.ID, map[GrantTemplate]struct{}{
-		GrantTemplate{
-			PrivilegeComplete:         PrivilegeComplete{Privilege: PrvUsage},
-			GrantedOn:                 ObjTpRole,
-			GrantedRoleIsGruprManaged: util.NewTrue(),
-		}: {},
-	}, nil) {
-		if err != nil {
-			return err
-		}
-		switch grant.Privileges[0].Privilege {
-		case PrvUsage:
-			switch grant.GrantedOn {
-			case ObjTpRole:
-				if grant.GrantedRole == pd.ReadRole.ID {
-					pd.isReadRoleGrantedToWriteRole = true
-				} else {
-					pd.revokeRolesFromWriteRole = append(pd.revokeRolesFromWriteRole, grant)
-				}
-			}
-			// Ignore; unmanaged grant (we might also panic, since we queried for managed grants only, so it would be unexpected if it did not match anything)
-		}
-	}
-	return nil
-}
-
 func (pd *ProductDTAP) setupProductRoles(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB,
 	productRoles map[ProductRole]struct{}) error {
 	// Create the product roles if necessary (read, write)
 	if err := pd.createProductRoles(ctx, semCnf, cnf, conn, productRoles); err != nil {
 		return err
-	}
-
-	// Check if we already granted the read role to the write role; if not, do it
-	// TODO: when we get to managing warehouses with grupr, we should no longer grant the read to the write role
-	if err := pd.setIsReadRoleGrantedToWriteRole(ctx, cnf, conn, productRoles); err != nil {
-		return err
-	}
-
-	if !pd.isReadRoleGrantedToWriteRole {
-		if err := DoGrants(ctx, cnf, conn, func(yield func(Grant) bool) {
-			if !yield(Grant{
-				Privileges:    []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage}},
-				GrantedOn:     ObjTpRole,
-				GrantedRole:   pd.ReadRole.ID,
-				GrantedTo:     ObjTpRole,
-				GrantedToName: pd.WriteRole.ID,
-			}) {
-				return
-			}
-		}); err != nil {
-			return err
-		}
 	}
 
 	// Check (once) which roles currently have been granted the write role;
@@ -621,16 +567,18 @@ func (pd *ProductDTAP) pushToDoDBRoleGrants(yield func(Grant) bool, doProd bool,
 	// First grant database roles of product-level interface role to product read role
 	for db, dbObjs := range pd.Interface.aggAccountObjects.DBs {
 		if doProd == pd.IsProd {
-			if !dbObjs.isReadDBRoleGrantedToProductReadRole {
-				if !yield(Grant{
-					Privileges:    []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage}},
-					GrantedOn:     ObjTpDatabaseRole,
-					Database:      db,
-					GrantedRole:   dbObjs.readDBRole.Name,
-					GrantedTo:     ObjTpRole,
-					GrantedToName: pd.ReadRole.ID,
-				}) {
-					return false
+			for _, pr := range [2]ProductRole{pd.ReadRole, pd.WriteRole} {
+				if !dbObjs.isReadDBRoleGrantedToProductRole[pr.Mode.getIdx()] {
+					if !yield(Grant{
+						Privileges:    []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage}},
+						GrantedOn:     ObjTpDatabaseRole,
+						Database:      db,
+						GrantedRole:   dbObjs.readDBRole.Name,
+						GrantedTo:     ObjTpRole,
+						GrantedToName: pr.ID,
+					}) {
+						return false
+					}
 				}
 			}
 		}
@@ -678,8 +626,13 @@ func (pd *ProductDTAP) setGrantedUsers(ctx context.Context, cnf *Config, conn *s
 	return nil
 }
 
-func (pd *ProductDTAP) revokeGrantToReadRole(g Grant) {
-	pd.revokeGrantsToReadRole = append(pd.revokeGrantsToReadRole, g)
+func (pd *ProductDTAP) revokeGrantFromProductRole(m Mode, g Grant) {
+	switch m {
+	case ModeRead:
+		pd.revokeDBRolesFromReadRole = append(pd.revokeDBRolesFromReadRole, g)
+	case ModeWrite:
+		pd.revokeDBRolesFromWriteRole = append(pd.revokeDBRolesFromWriteRole, g)
+	}
 }
 
 func (pd *ProductDTAP) getToDoFutureRevokes() iter.Seq[FutureGrant] {
@@ -717,18 +670,16 @@ func (pd *ProductDTAP) revoke(ctx context.Context, semCnf *semantics.Config, cnf
 		return err
 	}
 
-	// Only the read role should be granted to the write role; when it comes to grupr managed roles
-	if err := DoRevokes(ctx, cnf, conn, slices.Values(pd.revokeRolesFromWriteRole)); err != nil {
-		return err
-	}
-
 	// We skip errors here because this concerns relationships between
 	// products, and refreshing brings no value on top of just rerunning
 	// the whole program.  Note that an error would only mean some DB was
 	// dropped concurrently, and this would mean the grants we thought we
 	// needed to revoke would have already been dropped server side as
 	// well.
-	if err := DoRevokesSkipErrors(ctx, cnf, conn, slices.Values(pd.revokeGrantsToReadRole)); err != nil {
+	if err := DoRevokesSkipErrors(ctx, cnf, conn, slices.Values(pd.revokeDBRolesFromReadRole)); err != nil {
+		return err
+	}
+	if err := DoRevokesSkipErrors(ctx, cnf, conn, slices.Values(pd.revokeDBRolesFromWriteRole)); err != nil {
 		return err
 	}
 
