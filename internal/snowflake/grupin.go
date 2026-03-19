@@ -45,9 +45,60 @@ func NewGrupin(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn 
 
 	if yamlPath != "" {
 		// parse the YAML in the path, for the snowflake specific features
+		if features, err := newFeatures(yamlPath); err != nil {
+			return r, err
+		} else {
+			r.setWarehouses(semCnf, features.warehouses)
+		}
 	}
 
 	return r, nil
+}
+
+func (g *Grupin) setWarehouses(semCnf *semantics.Config, warehouses []WarehouseDecoded) error {
+	g.Warehouses = map[semantics.Ident]Warehouse{}
+	for _, wd := range warehouses {
+		id, err := semantics.NewIdentStripQuotesIfAny(w.Ident, semCnf.ValidQuotedExpr, semCnf.ValidUnquotedExpr)
+		if err != nil {
+			return err
+		}
+		if _, ok := g.Warehouses[id]; ok! {
+			return fmt.Errorf("duplicate warehouse identifier '%v'", id)
+		}
+		if mode, err := ParseMode(wd.Mode); err != nil {
+			return fmt.Errorf("warehouse '%v', invalid mode '%v'", id, wd.Mode) 
+		}
+		if mode != ModeRead && mode != ModeWrite {
+			return fmt.Errorf("warehouse '%v', mode '%v' not implemented", id, mode) 
+		}
+		if wd.OnlyProd && wd.OnlyNonProd {
+			return fmt.Errorf("warehouse '%v', only_prod and only_non_prod should not both be true", id, mode) 
+		}
+		if mode == ModeWrite && !wd.OnlyProd && !wd.OnlyNonProd {
+			return fmt.Errorf("warehouse '%v', write mode warehouses should be either for prod or non prod use", id) 
+		}
+		w := Warehouse{Ident: id, Mode: mode, SharedBetween: map[string]struct{}{}, OnlyProd: wd.OnlyProd, OnlyNonProd:wd.OnlyNonProd}
+		for _, pID := range wd.SharedBetween {
+			if !g.hasProductID(pID) {
+				return fmt.Errorf("warehouse '%v', shared_between: unknown product id '%v'", id, pID)
+			}
+			if _, ok := w.SharedBetween[pID]; ok {
+				return fmt.Errorf("warehouse '%v', shared_between: duplicate product id '%v'", id, pID)
+			}
+			w.SharedBetween[pID] = struct{}{}
+		}
+		g.Warehouses[id] = w
+	}
+	return nil
+}
+
+func (g *Grupin) hasProductID(pID string) bool {
+	for pdID := range g.ProductDTAPs {
+		if pdID.ProductID == pID {
+			return true
+		}
+	}
+	return false
 }
 
 func (g *Grupin) setObjects(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, doProd bool) error {
