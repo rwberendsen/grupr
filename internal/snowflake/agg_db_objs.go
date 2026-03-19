@@ -29,10 +29,10 @@ type AggDBObjs struct {
 
 	// Has the readDBRole been granted to the consuming ProductDTAPs already?
 	// TODO: can this be a struct{} value type?
-	consumedByGranted map[semantics.ProductDTAPID]bool
+	consumedByGranted map[semantics.ProductDTAPID][2]bool
 
-	// Grants to the product read role; only used if this AggDBObjs is part of a product level interface
-	isReadDBRoleGrantedToProductReadRole bool // directly set from within Grupin.setDBRoleGrants
+	// Grants to the product read and write roles; only used if this AggDBObjs is part of a product level interface
+	isReadDBRoleGrantedToProductRole [2]bool // directly set from within Grupin.setDBRoleGrants
 
 	// Grants to the product write role; only used if this AggDBObjs is part of a product level interface
 	revokeFutureGrantsToProductWriteRole                   []FutureGrant
@@ -252,12 +252,12 @@ func (o AggDBObjs) setGrants(ctx context.Context, semCnf *semantics.Config, cnf 
 	return o, nil
 }
 
-func (o AggDBObjs) setConsumedByGranted(pdID semantics.ProductDTAPID) AggDBObjs {
+func (o AggDBObjs) setConsumedByGranted(m Mode, pdID semantics.ProductDTAPID) AggDBObjs {
 	// Called from within Grupin.setDBRoleGrants
 	if o.consumedByGranted == nil {
-		o.consumedByGranted = map[semantics.ProductDTAPID]bool{}
+		o.consumedByGranted = map[semantics.ProductDTAPID][2]bool{}
 	}
-	o.consumedByGranted[pdID] = true
+	o.consumedByGranted[pdID] = setFlagMode(o.consumedByGranted[pdID], m)
 	return o
 }
 

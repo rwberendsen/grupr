@@ -8,6 +8,7 @@ import (
 
 	"github.com/rwberendsen/grupr/internal/semantics"
 	"github.com/rwberendsen/grupr/internal/syntax"
+	"github.com/rwberendsen/grupr/internal/util"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -158,74 +159,82 @@ func (g *Grupin) setDBRoleGrants(ctx context.Context, semCnf *semantics.Config, 
 	// Loop over all granted grupr-managed database roles, and:
 	// - store which ones we already have been granted.
 	// - store which ones we should later revoke (when we have done a first granting loop over all products)
-	if _, ok := g.productRoles[pd.ReadRole]; !ok && cnf.DryRun {
-		return nil
-	}
-	for grant, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, pd.ReadRole.ID, cnf.ProductRolePrivileges[ModeRead], nil) {
-		if err != nil {
-			return err
+	for _, pr := range [2]ProductRole{pd.ReadRole, pd.WriteRole} {
+		if _, ok := g.productRoles[pr]; !ok && cnf.DryRun {
+			continue
 		}
-		grantedDBRole, err := newDatabaseRoleFromIdent(semCnf, grant.Database, grant.GrantedRole)
-		if err != nil {
-			return err
-		}
+		for grant, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, pr.ID, map[GrantTemplate]struct{}{
+				GrantTemplate{
+					PrivilegeComplete:         PrivilegeComplete{Privilege: PrvUsage},
+					GrantedOn:                 ObjTpDatabaseRole,
+					GrantedRoleIsGruprManaged: util.NewTrue(),
+				}: {},
+			}, nil) {
+			if err != nil {
+				return err
+			}
+			grantedDBRole, err := newDatabaseRoleFromIdent(semCnf, grant.Database, grant.GrantedRole)
+			if err != nil {
+				return err
+			}
 
-		// Store if these database roles have already been granted:
-		// - Read database role of pd product-level interface
-		// - Read database roles of interfaces that pd consumes
-		if grantedDBRole.ProductID == pd.ProductID {
-			if grantedDBRole.InterfaceID != "" {
-				pd.revokeGrantToReadRole(grant)
+			// Store if these database roles have already been granted:
+			// - Read database role of pd product-level interface
+			// - Read database roles of interfaces that pd consumes
+			if grantedDBRole.ProductID == pd.ProductID {
+				if grantedDBRole.InterfaceID != "" {
+					pd.revokeGrantFromProductRole(pr.Mode, grant)
+					continue
+				}
+				// grantedDBRole.InterfaceID == ""
+				if dbObjs, ok := pd.Interface.aggAccountObjects.DBs[grant.Database]; ok {
+					dbObjs.isReadDBRoleGrantedToProductRole[pr.Mode.getIdx()] = true
+				} else if pd.Interface.ObjectMatchers.DisjointFromDB(grant.Database) {
+					pd.revokeGrantFromProductRole(pr.Mode, grant)
+				}
+				continue // leave this grant be, it is correct, even if it is unexpected that it exists
+			}
+
+			// grantedDBRole.ProductID != pd.ProductID
+			if grantedDBRole.InterfaceID == "" {
+				// we have no business with the product level interface of another product
+				pd.revokeGrantFromProductRole(pr.Mode, grant)
 				continue
 			}
-			// grantedDBRole.InterfaceID == ""
-			if dbObjs, ok := pd.Interface.aggAccountObjects.DBs[grant.Database]; ok {
-				dbObjs.isReadDBRoleGrantedToProductReadRole = true
-			} else if pd.Interface.ObjectMatchers.DisjointFromDB(grant.Database) {
-				pd.revokeGrantToReadRole(grant)
+
+			// Check if granted database role belongs to an interface consumed by pd
+			sourceDTAP, ok := pd.Consumes[syntax.InterfaceID{ID: grantedDBRole.InterfaceID, ProductID: grantedDBRole.ProductID}]
+			if !ok {
+				// we do not consume that interface from that product
+				pd.revokeGrantFromProductRole(pr.Mode, grant)
+				continue
 			}
-			continue // leave this grant be, it is correct, even if it is unexpected that it exists
-		}
+			if sourceDTAP != grantedDBRole.DTAP {
+				// we do consume that interface from that product, but not that dtap though
+				pd.revokeGrantFromProductRole(pr.Mode, grant)
+				continue
+			}
+			// sourceDTAP == grantedDBRole.DTAP
 
-		// grantedDBRole.ProductID != pd.ProductID
-		if grantedDBRole.InterfaceID == "" {
-			// we have no business with the product level interface of another product
-			pd.revokeGrantToReadRole(grant)
-			continue
-		}
+			// Okay, so the database role belongs to a known interface of another product-dtap that pd consumes,
+			sourcePD := g.ProductDTAPs[semantics.ProductDTAPID{ProductID: grantedDBRole.ProductID, DTAP: sourceDTAP}]
+			sourceI := sourcePD.Interfaces[grantedDBRole.InterfaceID]
 
-		// Check if granted database role belongs to an interface consumed by pd
-		sourceDTAP, ok := pd.Consumes[syntax.InterfaceID{ID: grantedDBRole.InterfaceID, ProductID: grantedDBRole.ProductID}]
-		if !ok {
-			// we do not consume that interface from that product
-			pd.revokeGrantToReadRole(grant)
-			continue
-		}
-		if sourceDTAP != grantedDBRole.DTAP {
-			// we do consume that interface from that product, but not that dtap though
-			pd.revokeGrantToReadRole(grant)
-			continue
-		}
-		// sourceDTAP == grantedDBRole.DTAP
+			// But, is it true that the database in which the granted role was created still has objects that belong to that interface?
+			if sourceI.ObjectMatchers.DisjointFromDB(grantedDBRole.Database) {
+				pd.revokeGrantFromProductRole(pr.Mode, grant)
+				continue
+			}
 
-		// Okay, so the database role belongs to a known interface of another product-dtap that pd consumes,
-		sourcePD := g.ProductDTAPs[semantics.ProductDTAPID{ProductID: grantedDBRole.ProductID, DTAP: sourceDTAP}]
-		sourceI := sourcePD.Interfaces[grantedDBRole.InterfaceID]
+			// Okay, so indeed this grant is legitimate. If indeed we did find objects in this DB, then we have an AggDBObjs for it,
+			// and we need to store in there that this grant has already been done, so that we don't make an unnecessary network request
+			// granting it again.
 
-		// But, is it true that the database in which the granted role was created still has objects that belong to that interface?
-		if sourceI.ObjectMatchers.DisjointFromDB(grantedDBRole.Database) {
-			pd.revokeGrantToReadRole(grant)
-			continue
-		}
-
-		// Okay, so indeed this grant is legitimate. If indeed we did find objects in this DB, then we have an AggDBObjs for it,
-		// and we need to store in there that this grant has already been done, so that we don't make an unnecessary network request
-		// granting it again.
-
-		// We're setting the administration of is the consumption grant was done on the producer side; because that is where
-		// we have the correct (most up to date, anyway) information on which database roles actually exist.
-		if sourceAggDBObjs, ok := sourceI.aggAccountObjects.DBs[grantedDBRole.Database]; ok {
-			sourceI.aggAccountObjects.DBs[grantedDBRole.Database] = sourceAggDBObjs.setConsumedByGranted(pd.ProductDTAPID)
+			// We're setting the administration of is the consumption grant was done on the producer side; because that is where
+			// we have the correct (most up to date, anyway) information on which database roles actually exist.
+			if sourceAggDBObjs, ok := sourceI.aggAccountObjects.DBs[grantedDBRole.Database]; ok {
+				sourceI.aggAccountObjects.DBs[grantedDBRole.Database] = sourceAggDBObjs.setConsumedByGranted(pr.Mode, pd.ProductDTAPID)
+			}
 		}
 	}
 	return nil

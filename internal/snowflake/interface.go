@@ -158,16 +158,18 @@ func (i *Interface) pushToDoDBRoleGrants(yield func(Grant) bool, doProd bool, m 
 	for db, dbObjs := range i.aggAccountObjects.DBs {
 		for pdID := range i.ConsumedBy {
 			if doProd == m[pdID].IsProd {
-				if !dbObjs.consumedByGranted[pdID] {
-					if !yield(Grant{
-						Privileges:    []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage}},
-						GrantedOn:     ObjTpDatabaseRole,
-						Database:      db,
-						GrantedRole:   dbObjs.readDBRole.Name,
-						GrantedTo:     ObjTpRole,
-						GrantedToName: m[pdID].ReadRole.ID,
-					}) {
-						return false
+				for _, pr := range [2]ProductRole{m[pdID].ReadRole, m[pdID].WriteRole} {
+					if !dbObjs.consumedByGranted[pdID][pr.Mode.getIdx()] {
+						if !yield(Grant{
+							Privileges:    []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage}},
+							GrantedOn:     ObjTpDatabaseRole,
+							Database:      db,
+							GrantedRole:   dbObjs.readDBRole.Name,
+							GrantedTo:     ObjTpRole,
+							GrantedToName: pr.ID,
+						}) {
+							return false
+						}
 					}
 				}
 			}
