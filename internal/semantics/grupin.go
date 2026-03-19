@@ -2,6 +2,7 @@ package semantics
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/rwberendsen/grupr/internal/syntax"
 )
@@ -102,6 +103,20 @@ func NewGrupin(cnf *Config, gSyn syntax.Grupin) (Grupin, error) {
 		}
 	}
 	return gSem, nil
+}
+
+func NewGrupinFromPath(cnf *Config, path string) (Grupin, error) {
+	var g Grupin
+	f, err := os.Open(path)
+	defer f.Close()
+	if err != nil {
+		return g, err
+	}
+	s, err := syntax.NewGrupin(f) // redeclaring err, which just gets assigned a new value
+	if err != nil {
+		return g, err
+	}
+	return NewGrupin(cnf, s)
 }
 
 func (g Grupin) allConsumedOk() error {

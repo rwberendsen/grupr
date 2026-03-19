@@ -15,6 +15,7 @@ import (
 type Grupin struct {
 	ProductDTAPs      map[semantics.ProductDTAPID]*ProductDTAP
 	UserGroupMappings map[string]semantics.UserGroupMapping
+	Warehouses        map[semantics.Ident]Warehouse
 
 	// Some fetch-one time reference data on objects that exist in Snowflake already
 	productRoles map[ProductRole]struct{}
@@ -23,7 +24,7 @@ type Grupin struct {
 	accountCache *accountCache
 }
 
-func NewGrupin(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, g semantics.Grupin) (*Grupin, error) {
+func NewGrupin(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, g semantics.Grupin, yamlPath string) (*Grupin, error) {
 	r := &Grupin{
 		ProductDTAPs:      map[semantics.ProductDTAPID]*ProductDTAP{},
 		UserGroupMappings: g.UserGroupMappings,
@@ -40,6 +41,10 @@ func NewGrupin(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn 
 		return r, err
 	} else {
 		r.accountCache = c
+	}
+
+	if yamlPath != "" {
+		// parse the YAML in the path, for the snowflake specific features
 	}
 
 	return r, nil
