@@ -93,6 +93,7 @@ func NewGrupin(cnf *Config, gSyn syntax.Grupin) (Grupin, error) {
 		return gSem, err
 	}
 	// Validate service accounts
+	// TODO WIP validate that rendered ident exprs are unique accross service accounts
 	for k, v := range gSyn.ServiceAccounts {
 		if svc, err := newServiceAccount(cnf, v, gSem.Products); err != nil {
 			return gSem, err

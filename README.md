@@ -146,9 +146,25 @@ product:
     product_id: crm_de
 ```
 
+## Service accounts
+
+You can declare service accounts, like so:
+
+```
+service_account:
+  id: some_data_build_tool
+  dtaps: 
+    prod: p
+    non_prod: [d, t, a]
+  deploys:
+    - product_id: crm
+    - product_id: ...
+```
+
 It looks like our `crm` data product is consuming `customer` interfaces from CRM
-data products of two differernt user groups. With this information in hand,
-we can define a simple access management model.
+data products of two differernt user groups. We are using some data build tool to
+deploy the crm data product. With this information in hand, as a first, and 
+compelling use case, we can define a simple access management model.
 
 ## Other features
 
@@ -174,10 +190,12 @@ itself. Such policies make sure the YAML in internally consistent, coherent.
 At the moment, we have a single access management model on top of Snowflake, 
 which we will discuss here.
 
-For each combination of data product and dtap, grupr creates a product read role.
-Employees working on this data product can assume this role. 
+For each combination of data product and dtap, grupr creates a product read role,
+and a product write role.
+Employees working on this data product can assume the read role. The write role
+is intended for service accounts to assume.
 
-The product role gets read access to all objects in the product, as well as
+The product read role gets read access to all objects in the product, as well as
 read access to all objects in interfaces consumed by the product.
 
 Rather than directly getting privileges on the objects,for efficiency reasons
@@ -186,8 +204,18 @@ roles. Each product and each interface has a set of associated database roles,
 usually just one database role; but there can be more if objects of a sinlge
 product or interface reside in different databases.
 
-Concretely then, the product role is granted the database roles of the product
+Concretely then, the product read role is granted the database roles of the product
 objects, and the database roles of all interface it consumes.
+
+The product write role also gets granted the same database roles. But on top of
+that, the write role gets the ownership privilege on all objects in the product
+dtap. This privilege is granted directly to the write role, not via database roles.
+Before granting ownership of an object to a product write role, the product write role itself
+is granted to the current owner. This way, the current owner does lose the ownership
+privilege. After running grupr, you can update your production deployments to assume
+the product write role when connecting to Snowflake. When you are sure everything
+runs smoothly, you can revoke the product write role from the role that previously
+owned the object.
 
 If you change the YAML, it can be that privileges that have been granted in the
 database, based on an earlier YAML version, need to be revoked, and grupr will
@@ -200,7 +228,17 @@ It is important to note that grupr will also clean up after itself. Any
 with a configurable prefix) but that are not found in the YAML will be removed.
 However, if such roles have privileges that are outside of grupr its scope, 
 and therefore must have been granted outside of grupr, grupr logs a message but
-keeps the role and those additional privileges intact.
+keeps the role and those additional privileges intact. If a product write role
+needs to be removed, but still ownis an object, grupr will transfer
+ownership back to SYSADMIN if the product write role is not currently granted
+to any user managed role. If the product write role is granted to one user managed role, 
+that user managed role will get ownership. If the product write role is granted
+to more than one user managed role, then grupr will log a message and it will not
+drop the product write role. This way, none of the user managed roles will lose
+ownership, which could otherwise break a production process.
+
+After granting the necessary privileges to the product and database roles, the 
+product dtap write roles are granted to the correct service accounts.
 
 It is interesting to compare the way grupr manages access with popular infra as
 code approaches like Terraform or OpenTofu. Such approaches tend to stay close
@@ -212,16 +250,39 @@ physical representation in the database, based on just a few concepts, potential
 many resources such as roles, database roles, and privileges can be managed
 automatically.
 
+## Usage
+
+You call grupr like this:
+
+`grupr <path_to_yaml_file>`
+
+where `<path_to_yaml_file>` has the path to a single YAML file that contains
+all indidivual YAML documents describing your data products, interfaces, and
+service accounts. The documents should be separated with the YAML document
+separator `---`. Note that you should probably make a directory hierarchy for
+your YAML files that makes sense to you, and then use a simple script to
+concatenate all of them before you run grupr.
+
+When you use Snowflake specific features, like managing privileges on 
+virtual warehouses, you give a second argument on the command line, like
+so:
+
+`grupr <path_to_yaml_file> <path_to_snowflake_specific_yaml_file>`
+
 ## Roadmap
 
 Next steps include:
 
-- The addition of a write role for each product, which will obtain OWNERSHIP
-  of all objects in the product. This role is intended for service accounts
-  to assume.
-- The ability to describe which service accounts deploy which data products.
 - The ability to describe which teams work on which data products.
+- The ability to grant usage on warehouses to product roles.
+  Note that virtual warehouses are a Snowflake specific feature.
+  This means you will use a second independent collection of YAML files
+  to describe how you use warehouses with your data products. 
 - Ways to query the YAML metadata and / or the physical objects: for example: 
   - Give me a list of all products that consume interface X or Y.
   - Give me a list of all products and interfaces that have data of usergroup A or B.
   - Give me a list of all physical objects that have data of usergroup A or B.
+- Generalizing grupr in such a way that a single grupr YAML collection can be
+  used to manage data products that live in different database platforms or systems
+  of the same type, e.g., two Snowflake accounts, a production and a non-production
+  account (or similarly for other database platforms).
