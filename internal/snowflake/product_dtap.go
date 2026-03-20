@@ -34,6 +34,7 @@ type ProductDTAP struct {
 	revokeGrantsToWriteRole            []Grant
 	revokeGrantsOfWriteRoleToUsers     []Grant
 	transferOwnership                  []Grant // ownership grants we no longer want based on the YAML
+	isWarehouseGranted                 []bool
 	isZombie                           bool
 }
 
@@ -186,9 +187,39 @@ func (pd *ProductDTAP) setupProductRoles(ctx context.Context, semCnf *semantics.
 	return nil
 }
 
+func (pd *ProductDTAP) setWarehouseGrants(ctx context.Context, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{}) error {
+	for _, pr := range [2]ProductRole{pd.ReadRole, pd.WriteRole} {
+		if _, ok := productRoles[pr]; !ok && cnf.DryRun {
+			continue
+		}
+		for g, err := range QueryFutureGrantsToRoleFiltered(ctx, conn, pr.ID, map[GrantTemplate]struct{}{
+			GrantTemplate{
+				PrivilegeComplete: PrivilegeComplete{Privilege: PrvUsage},
+				GrantedOn: ObjTpWarehouse,
+			}: {},
+			GrantTemplate{
+				PrivilegeComplete: PrivilegeComplete{Privilege: PrvOperate},
+				GrantedOn: ObjTpWarehouse,
+			}: {},
+		}, nil) {
+			if err != nil {
+				return err
+			}
+		}
+		// Should we have this grant?
+		// If yes, mark it as already granted
+		// If not, add it to a list of grants to be revoked
+
+	}
+	return nil
+}
+
 func (pd *ProductDTAP) grant(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{},
 	grupinDisjointFromObject func(semantics.Ident, semantics.Ident, semantics.Ident) bool,
 	userManagedOwners func(semantics.ProductDTAPID) map[semantics.Ident]struct{}, c *accountCache) error {
+	// We manage grants on warehouses (once)
+	pd.setWarehouseGrants(ctx, semCnf, cnf, conn, productRoles)
+
 	// We handle grants on objects like databases, schemas, tables, and
 	// views, that may be created or dropped concurrently
 	// We retry granting all privileges on such objects a number until we
