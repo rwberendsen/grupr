@@ -23,18 +23,23 @@ type ProductDTAP struct {
 	ReadRole   ProductRole
 	WriteRole  ProductRole
 	DeployedBy map[semantics.Ident]bool // initially set to false, then to true if GRANTS are found in Snowflake
+	ReadWarehouses map[semantics.Ident][2]bool // initially set to false, then to true if GRANTS (USAGE, OPERATE) are found in Snowflake
+	WriteWarehouses map[semantics.Ident][2]bool // initially set to false, then to true if GRANTS (USAGE, OPERATE) are found in Snowflake
 
 	writeRoleGrantedToUserManagedRoles map[semantics.Ident]struct{}
 	userManagedOwnersOfObjects         map[semantics.Ident]struct{}
 	refreshCount                       int // how many times has this ProductDTAP been refreshed: populated with Snowflake objects
 	matchedAccountObjects              map[semantics.ObjExpr]*matchedAccountObjs
-	revokeDBRolesFromReadRole          []Grant
-	revokeDBRolesFromWriteRole         []Grant
-	revokeFutureGrantsToWriteRole      []FutureGrant
-	revokeGrantsToWriteRole            []Grant
-	revokeGrantsOfWriteRoleToUsers     []Grant
-	transferOwnership                  []Grant // ownership grants we no longer want based on the YAML
-	isWarehouseGranted                 []bool
+
+	// These are only appended to, as we query different kinds of privileges granted to our product roles
+	toRevoke []Grant
+
+	// These are reset when refreshing objects, as these grants are on objects
+	toRevokeObjects       []Grant
+        toRevokeFutureObjects []FutureGrant
+        toTransferOwnership   []Grant
+	
+	// Used for product dtap roles that exist in Snowflake but not in the YAML
 	isZombie                           bool
 }
 
@@ -46,6 +51,8 @@ func NewProductDTAP(pdID semantics.ProductDTAPID, isProd bool, pSem semantics.Pr
 		Interface:             NewInterface(pdID.DTAP, pSem.InterfaceMetadata, userGroupMappings[pSem.UserGroupMappingID]),
 		Interfaces:            map[string]*Interface{},
 		Consumes:              map[syntax.InterfaceID]string{},
+		ReadWarehouses:        map[semantics.Ident][2]bool{},
+		WriteWarehouses:       map[semantics.Ident][2]bool{},
 		matchedAccountObjects: map[semantics.ObjExpr]*matchedAccountObjs{},
 	}
 
@@ -84,15 +91,47 @@ func NewZombieProductDTAP(pdID semantics.ProductDTAPID) *ProductDTAP {
 	}
 }
 
+func (pd *ProductDTAP) addWarehouse(m Mode, id semantics.Ident) {
+	switch m {
+	case ModeRead:
+		pd.ReadWarehouses[id] = [2]bool{}
+	case ModeWrite:
+		pd.WriteWarehouses[id] = [2]bool{}
+	}
+}
+
+func (pd *ProductDTAP) hasWarehouse(m Mode, id semantics.Ident) bool {
+	switch m {
+	case ModeRead:
+		if _, ok := pd.ReadWarehouses[id]; ok {
+			return true
+		}
+	case ModeWrite:
+		if _, ok := pd.WriteWarehouses[id]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func (pd *ProductDTAP) setWarehouseGrantedPrivilege(m Mode, id semantics.Ident, p Privilege) {
+	switch m {
+	case ModeRead:
+		pd.ReadWarehouses[id] = setFlagPrivilegeWarehouse(pd.ReadWarehouses[id], p)
+	case ModeWrite:
+		pd.WriteWarehouses[id] = setFlagPrivilegeWarehouse(pd.WriteWarehouses[id], p)
+	}
+}
+
 func (pd *ProductDTAP) refresh(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, c *accountCache) error {
 	if err := pd.refresh_(ctx, semCnf, cnf, conn, c); err != nil {
 		return err
 	}
 	pd.recalcObjects() // will reset all accountObjs
 	// Reset other properties of pd that depend on which objects where matched
-	pd.revokeFutureGrantsToWriteRole = []FutureGrant{}
-	pd.revokeGrantsToWriteRole = []Grant{}
-	pd.transferOwnership = []Grant{}
+	pd.toRevokeFutureObjects = []FutureGrant{}
+	pd.toRevokeObjects = []Grant{}
+	pd.toTransferOwnership = []Grant{}
 	return nil
 }
 
@@ -205,14 +244,29 @@ func (pd *ProductDTAP) setWarehouseGrants(ctx context.Context, cnf *Config, conn
 			if err != nil {
 				return err
 			}
+			// Should we have this grant?
+			if pd.hasWarehouse(pr.Mode, g.Object) {
+				// If yes, mark it as already granted
+				pd.setWarehouseGrantedPrivilege(pr.Mode, g.Object, g.PrivilegeComplete[0].Privilege)
+			} else {
+			 	// If not, add it to a list of grants to be revoked
+				pd.ToRevoke = append(pd.ToRevoke, g)
+			}
 		}
-		// Should we have this grant?
-		// If yes, mark it as already granted
-		// If not, add it to a list of grants to be revoked
 
 	}
 	return nil
 }
+
+func (pd *ProductDTAP) getToDoWarehouseGrants() {
+	// WIP
+	for w, alreadyGranted := range pd.ReadWarehouses {
+		if !alreadyGranted {
+			// ...
+		}
+	}
+}
+
 
 func (pd *ProductDTAP) grant(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{},
 	grupinDisjointFromObject func(semantics.Ident, semantics.Ident, semantics.Ident) bool,
@@ -234,7 +288,7 @@ func (pd *ProductDTAP) grant(ctx context.Context, semCnf *semantics.Config, cnf 
 
 func (pd *ProductDTAP) setFutureGrantsToWriteRole(ctx context.Context, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{}) error {
 	if _, ok := productRoles[pd.WriteRole]; !ok && cnf.DryRun {
-		return nil
+			return nil
 	}
 	for g, err := range QueryFutureGrantsToRoleFiltered(ctx, conn, pd.WriteRole.ID, map[GrantTemplate]struct{}{
 		GrantTemplate{
@@ -269,8 +323,8 @@ func (pd *ProductDTAP) setFutureGrantsToWriteRole(ctx context.Context, cnf *Conf
 				} else {
 					// if not, then revoke this future grant
 					//
-					// Note that when we refreshed, we reset revokeFutureGrantsToWriteRole to the empty slice
-					pd.revokeFutureGrantsToWriteRole = append(pd.revokeFutureGrantsToWriteRole, g)
+					// Note that when we refreshed, we reset toRevokeFutureObjects to the empty slice
+					pd.toRevokeFutureObjects = append(pd.toRevokeFutureObjects, g)
 				}
 			}
 			// Ignore this grant, it's not in grupr its scope (unmanaged grant)
@@ -318,8 +372,8 @@ func (pd *ProductDTAP) setGrantsToWriteRole(ctx context.Context, cnf *Config, co
 					}
 					// ignore, we did not match the object last time we refreshed, but the grant is fine, we leave it
 				} else {
-					// Note that when we refreshed, revokeGrantsToWriteRole was reset to an empty slice
-					pd.revokeGrantsToWriteRole = append(pd.revokeGrantsToWriteRole, g)
+					// Note that when we refreshed, toRevokeObjects was reset to an empty slice
+					pd.toRevokeObjects = append(pd.toRevokeObjects, g)
 				}
 			}
 			// Ignore; unmanaged grant
@@ -335,8 +389,8 @@ func (pd *ProductDTAP) setGrantsToWriteRole(ctx context.Context, cnf *Config, co
 				} else if grupinDisjointFromObject(g.Database, g.Schema, g.Object) {
 					// There will be no other product claiming ownership of this object, we need to
 					// transfer its ownership to a role that is not managed by grupr.
-					// Note that when we refreshed, transferOwnership was reset to an empty slice
-					pd.transferOwnership = append(pd.transferOwnership, g)
+					// Note that when we refreshed, toTransferOwnership was reset to an empty slice
+					pd.toTransferOwnership = append(pd.toTransferOwnership, g)
 				}
 			}
 			// Ignore, unmanaged grant
@@ -651,19 +705,14 @@ func (pd *ProductDTAP) setGrantedUsers(ctx context.Context, cnf *Config, conn *s
 		if _, ok := pd.DeployedBy[grant.GrantedToName]; ok {
 			pd.DeployedBy[grant.GrantedToName] = true
 		} else {
-			pd.revokeGrantsOfWriteRoleToUsers = append(pd.revokeGrantsOfWriteRoleToUsers, grant)
+			pd.toRevoke = append(pd.toRevoke, grant)
 		}
 	}
 	return nil
 }
 
-func (pd *ProductDTAP) revokeGrantFromProductRole(m Mode, g Grant) {
-	switch m {
-	case ModeRead:
-		pd.revokeDBRolesFromReadRole = append(pd.revokeDBRolesFromReadRole, g)
-	case ModeWrite:
-		pd.revokeDBRolesFromWriteRole = append(pd.revokeDBRolesFromWriteRole, g)
-	}
+func (pd *ProductDTAP) revokeGrantFromProductRole(g Grant) {
+	pd.toRevoke = append(pd.toRevoke, g)
 }
 
 func (pd *ProductDTAP) getToDoFutureRevokes() iter.Seq[FutureGrant] {
@@ -695,22 +744,11 @@ func (pd *ProductDTAP) getToDoRevokes() iter.Seq[Grant] {
 func (pd *ProductDTAP) revoke(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{},
 	grupinDisjointFromObject func(semantics.Ident, semantics.Ident, semantics.Ident) bool,
 	userManagedOwners func(semantics.ProductDTAPID) map[semantics.Ident]struct{}, c *accountCache) error {
-	// We skip errors here, because users are not managed by grupr. And if users in the YAML
-	// do not exist, well, then they would not have any roles granted to them, and we are done
-	if err := DoRevokesSkipErrors(ctx, cnf, conn, slices.Values(pd.revokeGrantsOfWriteRoleToUsers)); err != nil {
-		return err
-	}
-
-	// We skip errors here because this concerns relationships between
-	// products, and refreshing brings no value on top of just rerunning
-	// the whole program.  Note that an error would only mean some DB was
-	// dropped concurrently, and this would mean the grants we thought we
-	// needed to revoke would have already been dropped server side as
-	// well.
-	if err := DoRevokesSkipErrors(ctx, cnf, conn, slices.Values(pd.revokeDBRolesFromReadRole)); err != nil {
-		return err
-	}
-	if err := DoRevokesSkipErrors(ctx, cnf, conn, slices.Values(pd.revokeDBRolesFromWriteRole)); err != nil {
+	// We skip does-not-exist errors here, because:
+	// - Users that do not exist are already revoked
+        // - Warehouses that do not exist are already revoked
+	// - DB roles that do not exist: it won't help refreshing just this product to refresh this info: a program re-run would be needed
+	if err := DoRevokesSkipErrors(ctx, cnf, conn, slices.Values(pd.toRevoke)); err != nil {
 		return err
 	}
 
@@ -747,7 +785,7 @@ func (pd *ProductDTAP) revoke(ctx context.Context, semCnf *semantics.Config, cnf
 
 func (pd *ProductDTAP) getTransferOwnershipGrants(newOwner semantics.Ident) iter.Seq[Grant] {
 	return func(yield func(Grant) bool) {
-		for _, g := range pd.transferOwnership {
+		for _, g := range pd.toTransferOwnership {
 			g.GrantedToName = newOwner
 			if !yield(g) {
 				return
@@ -759,10 +797,10 @@ func (pd *ProductDTAP) getTransferOwnershipGrants(newOwner semantics.Ident) iter
 func (pd *ProductDTAP) revoke_(ctx context.Context, cnf *Config, conn *sql.DB) error {
 	// We first revoke write privileges, to stop the wrong roles from creating objects asap
 	// As with read privileges, we start with future privileges
-	if err := DoFutureRevokes(ctx, cnf, conn, slices.Values(pd.revokeFutureGrantsToWriteRole)); err != nil {
+	if err := DoFutureRevokes(ctx, cnf, conn, slices.Values(pd.toRevokeFutureObjects)); err != nil {
 		return err
 	}
-	if err := DoRevokes(ctx, cnf, conn, slices.Values(pd.revokeGrantsToWriteRole)); err != nil {
+	if err := DoRevokes(ctx, cnf, conn, slices.Values(pd.toRevokeObjects)); err != nil {
 		return err
 	}
 	// Now we transfer ownership of objects that should no longer be owned by Grupr-managed roles
@@ -790,9 +828,9 @@ func (pd *ProductDTAP) revoke_(ctx context.Context, cnf *Config, conn *sql.DB) e
 		if err := DoGrantsIndividually(ctx, cnf, conn, pd.getTransferOwnershipGrants(newOwner)); err != nil {
 			return err
 		}
-		pd.transferOwnership = []Grant{}
+		pd.toTransferOwnership = []Grant{}
 	}
-	if !hasNewOwner && len(pd.transferOwnership) > 0 {
+	if !hasNewOwner && len(pd.toTransferOwnership) > 0 {
 		log.Printf("WARN: multiple historic owners of objects that no longer should be owned by product '%s', dtap '%s', keeping ownership", pd.ProductID, pd.DTAP)
 	}
 
@@ -824,7 +862,7 @@ func (pd *ProductDTAP) dropProductRolesIfZombie(ctx context.Context, cnf *Config
 	if !pd.isZombie {
 		return nil
 	}
-	if len(pd.transferOwnership) > 0 {
+	if len(pd.toTransferOwnership) > 0 {
 		log.Printf("WARN: product '%s', dtap '%s', has ownership of objects, not dropping product roles", pd.ProductID, pd.DTAP)
 		return nil
 	}

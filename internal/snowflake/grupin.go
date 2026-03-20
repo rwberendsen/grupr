@@ -15,7 +15,6 @@ import (
 type Grupin struct {
 	ProductDTAPs      map[semantics.ProductDTAPID]*ProductDTAP
 	UserGroupMappings map[string]semantics.UserGroupMapping
-	Warehouses        map[semantics.Ident]Warehouse
 
 	// Some fetch-one time reference data on objects that exist in Snowflake already
 	productRoles map[ProductRole]struct{}
@@ -56,13 +55,13 @@ func NewGrupin(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn 
 }
 
 func (g *Grupin) setWarehouses(semCnf *semantics.Config, warehouses []WarehouseDecoded) error {
-	g.Warehouses = map[semantics.Ident]Warehouse{}
+	seen := map[semantics.Ident]struct{}{}
 	for _, wd := range warehouses {
 		id, err := semantics.NewIdentStripQuotesIfAny(wd.Ident, semCnf.ValidQuotedExpr, semCnf.ValidUnquotedExpr)
 		if err != nil {
 			return err
 		}
-		if _, ok := g.Warehouses[id]; ok {
+		if _, ok := seen[id]; ok {
 			return fmt.Errorf("duplicate warehouse identifier '%v'", id)
 		}
 		mode, err := ParseMode(wd.Mode);
@@ -78,17 +77,24 @@ func (g *Grupin) setWarehouses(semCnf *semantics.Config, warehouses []WarehouseD
 		if mode == ModeWrite && !wd.OnlyProd && !wd.OnlyNonProd {
 			return fmt.Errorf("warehouse '%v', write mode warehouses should be either for prod or non prod use", id) 
 		}
-		w := Warehouse{Ident: id, Mode: mode, SharedBetween: map[string]struct{}{}, OnlyProd: wd.OnlyProd, OnlyNonProd:wd.OnlyNonProd}
+		seenPIDs := map[string]struct{}{}
 		for _, pID := range wd.SharedBetween {
+			if _, ok := seenPIDs[pID]; ok {
+				return fmt.Errorf("warehouse '%v', shared_between: duplicate product id '%v'", id, pID)
+			}
 			if !g.hasProductID(pID) {
 				return fmt.Errorf("warehouse '%v', shared_between: unknown product id '%v'", id, pID)
 			}
-			if _, ok := w.SharedBetween[pID]; ok {
-				return fmt.Errorf("warehouse '%v', shared_between: duplicate product id '%v'", id, pID)
+			seenPIDs[pID] = struct{}{}
+
+			// Okay, all good, add warehouse to necessary dtaps
+			for pd := range g.getProductDTAPs(pID) {
+				if (pd.IsProd && !OnlyNonProd) || (!pd.IsProd && !OnlyProd) {
+					pd.addWarehouse(mode, id)
+				}
 			}
-			w.SharedBetween[pID] = struct{}{}
 		}
-		g.Warehouses[id] = w
+		seen[id] = struct{}{}
 	}
 	return nil
 }
@@ -100,6 +106,18 @@ func (g *Grupin) hasProductID(pID string) bool {
 		}
 	}
 	return false
+}
+
+func (g *Grupin) getProductDTAPs(pID string) iter.Seq[ProductDTAP] {
+	return func(yield func(ProductDTAP) bool) {
+		for _, pd := range g.ProductDTAPs {
+			if pd.ProductID == pID {
+				if !yield(pd) {
+					return false
+				}
+			}
+		}
+	}
 }
 
 func (g *Grupin) setObjects(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, doProd bool) error {
@@ -240,14 +258,14 @@ func (g *Grupin) setDBRoleGrants(ctx context.Context, semCnf *semantics.Config, 
 			// - Read database roles of interfaces that pd consumes
 			if grantedDBRole.ProductID == pd.ProductID {
 				if grantedDBRole.InterfaceID != "" {
-					pd.revokeGrantFromProductRole(pr.Mode, grant)
+					pd.revokeGrantFromProductRole(grant)
 					continue
 				}
 				// grantedDBRole.InterfaceID == ""
 				if dbObjs, ok := pd.Interface.aggAccountObjects.DBs[grant.Database]; ok {
 					dbObjs.isReadDBRoleGrantedToProductRole[pr.Mode.getIdx()] = true
 				} else if pd.Interface.ObjectMatchers.DisjointFromDB(grant.Database) {
-					pd.revokeGrantFromProductRole(pr.Mode, grant)
+					pd.revokeGrantFromProductRole(grant)
 				}
 				continue // leave this grant be, it is correct, even if it is unexpected that it exists
 			}
@@ -255,7 +273,7 @@ func (g *Grupin) setDBRoleGrants(ctx context.Context, semCnf *semantics.Config, 
 			// grantedDBRole.ProductID != pd.ProductID
 			if grantedDBRole.InterfaceID == "" {
 				// we have no business with the product level interface of another product
-				pd.revokeGrantFromProductRole(pr.Mode, grant)
+				pd.revokeGrantFromProductRole(grant)
 				continue
 			}
 
@@ -263,12 +281,12 @@ func (g *Grupin) setDBRoleGrants(ctx context.Context, semCnf *semantics.Config, 
 			sourceDTAP, ok := pd.Consumes[syntax.InterfaceID{ID: grantedDBRole.InterfaceID, ProductID: grantedDBRole.ProductID}]
 			if !ok {
 				// we do not consume that interface from that product
-				pd.revokeGrantFromProductRole(pr.Mode, grant)
+				pd.revokeGrantFromProductRole(grant)
 				continue
 			}
 			if sourceDTAP != grantedDBRole.DTAP {
 				// we do consume that interface from that product, but not that dtap though
-				pd.revokeGrantFromProductRole(pr.Mode, grant)
+				pd.revokeGrantFromProductRole(grant)
 				continue
 			}
 			// sourceDTAP == grantedDBRole.DTAP
@@ -279,7 +297,7 @@ func (g *Grupin) setDBRoleGrants(ctx context.Context, semCnf *semantics.Config, 
 
 			// But, is it true that the database in which the granted role was created still has objects that belong to that interface?
 			if sourceI.ObjectMatchers.DisjointFromDB(grantedDBRole.Database) {
-				pd.revokeGrantFromProductRole(pr.Mode, grant)
+				pd.revokeGrantFromProductRole(grant)
 				continue
 			}
 
