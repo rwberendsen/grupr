@@ -91,38 +91,6 @@ func NewZombieProductDTAP(pdID semantics.ProductDTAPID) *ProductDTAP {
 	}
 }
 
-func (pd *ProductDTAP) addWarehouse(m Mode, id semantics.Ident) {
-	switch m {
-	case ModeRead:
-		pd.ReadWarehouses[id] = [2]bool{}
-	case ModeWrite:
-		pd.WriteWarehouses[id] = [2]bool{}
-	}
-}
-
-func (pd *ProductDTAP) hasWarehouse(m Mode, id semantics.Ident) bool {
-	switch m {
-	case ModeRead:
-		if _, ok := pd.ReadWarehouses[id]; ok {
-			return true
-		}
-	case ModeWrite:
-		if _, ok := pd.WriteWarehouses[id]; ok {
-			return true
-		}
-	}
-	return false
-}
-
-func (pd *ProductDTAP) setWarehouseGrantedPrivilege(m Mode, id semantics.Ident, p Privilege) {
-	switch m {
-	case ModeRead:
-		pd.ReadWarehouses[id] = setFlagPrivilegeWarehouse(pd.ReadWarehouses[id], p)
-	case ModeWrite:
-		pd.WriteWarehouses[id] = setFlagPrivilegeWarehouse(pd.WriteWarehouses[id], p)
-	}
-}
-
 func (pd *ProductDTAP) refresh(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, c *accountCache) error {
 	if err := pd.refresh_(ctx, semCnf, cnf, conn, c); err != nil {
 		return err
@@ -226,53 +194,16 @@ func (pd *ProductDTAP) setupProductRoles(ctx context.Context, semCnf *semantics.
 	return nil
 }
 
-func (pd *ProductDTAP) setWarehouseGrants(ctx context.Context, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{}) error {
-	for _, pr := range [2]ProductRole{pd.ReadRole, pd.WriteRole} {
-		if _, ok := productRoles[pr]; !ok && cnf.DryRun {
-			continue
-		}
-		for g, err := range QueryFutureGrantsToRoleFiltered(ctx, conn, pr.ID, map[GrantTemplate]struct{}{
-			GrantTemplate{
-				PrivilegeComplete: PrivilegeComplete{Privilege: PrvUsage},
-				GrantedOn: ObjTpWarehouse,
-			}: {},
-			GrantTemplate{
-				PrivilegeComplete: PrivilegeComplete{Privilege: PrvOperate},
-				GrantedOn: ObjTpWarehouse,
-			}: {},
-		}, nil) {
-			if err != nil {
-				return err
-			}
-			// Should we have this grant?
-			if pd.hasWarehouse(pr.Mode, g.Object) {
-				// If yes, mark it as already granted
-				pd.setWarehouseGrantedPrivilege(pr.Mode, g.Object, g.PrivilegeComplete[0].Privilege)
-			} else {
-			 	// If not, add it to a list of grants to be revoked
-				pd.ToRevoke = append(pd.ToRevoke, g)
-			}
-		}
-
-	}
-	return nil
-}
-
-func (pd *ProductDTAP) getToDoWarehouseGrants() {
-	// WIP
-	for w, alreadyGranted := range pd.ReadWarehouses {
-		if !alreadyGranted {
-			// ...
-		}
-	}
-}
-
-
 func (pd *ProductDTAP) grant(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{},
 	grupinDisjointFromObject func(semantics.Ident, semantics.Ident, semantics.Ident) bool,
 	userManagedOwners func(semantics.ProductDTAPID) map[semantics.Ident]struct{}, c *accountCache) error {
 	// We manage grants on warehouses (once)
-	pd.setWarehouseGrants(ctx, semCnf, cnf, conn, productRoles)
+	if err := pd.setWarehouseGrants(ctx, semCnf, cnf, conn, productRoles); err != nil {
+		return err
+	}
+	if err := DoGrantsSkipErrors(ctx, cnf, conn, pd.getToDoWarehouseGrants()); err != nil {
+		return err
+	}
 
 	// We handle grants on objects like databases, schemas, tables, and
 	// views, that may be created or dropped concurrently

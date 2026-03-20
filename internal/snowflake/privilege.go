@@ -58,3 +58,13 @@ func setFlagPrivilegeWarehouse(flags [2]bool, setFlag Privilege) [2]bool {
 	}
 	return flags
 }
+
+func hasFlagPrivilegeWarehouse(flags [2]bool, flag Privilege) bool {
+	switch flag {
+	case PrvUsage:
+		return flags[0]
+	case PrvOperate:
+		return flags[1]
+	}
+	return false
+}
