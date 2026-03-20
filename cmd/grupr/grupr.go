@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -92,7 +91,7 @@ func main() {
 	// Still, this call already initializes the account cache, which will already have all databases that exist,
 	// and the database roles that grupr is managing; we might move this initialisation to the ManageAccess call,
 	// in which case we would not need to pass in `conn` below at all
-	snowflakeNewGrupin, err := snowflake.NewGrupin(ctx, semCnf, snowCnf, conn, newGrupin, &flag.Arg(1))
+	snowflakeNewGrupin, err := snowflake.NewGrupin(ctx, semCnf, snowCnf, conn, newGrupin, snowflakeYamlPath)
 	if err != nil {
 		log.Fatalf("error NewGrupin: %v", err)
 	}

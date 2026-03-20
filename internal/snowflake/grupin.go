@@ -58,14 +58,15 @@ func NewGrupin(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn 
 func (g *Grupin) setWarehouses(semCnf *semantics.Config, warehouses []WarehouseDecoded) error {
 	g.Warehouses = map[semantics.Ident]Warehouse{}
 	for _, wd := range warehouses {
-		id, err := semantics.NewIdentStripQuotesIfAny(w.Ident, semCnf.ValidQuotedExpr, semCnf.ValidUnquotedExpr)
+		id, err := semantics.NewIdentStripQuotesIfAny(wd.Ident, semCnf.ValidQuotedExpr, semCnf.ValidUnquotedExpr)
 		if err != nil {
 			return err
 		}
-		if _, ok := g.Warehouses[id]; ok! {
+		if _, ok := g.Warehouses[id]; ok {
 			return fmt.Errorf("duplicate warehouse identifier '%v'", id)
 		}
-		if mode, err := ParseMode(wd.Mode); err != nil {
+		mode, err := ParseMode(wd.Mode);
+		if err != nil {
 			return fmt.Errorf("warehouse '%v', invalid mode '%v'", id, wd.Mode) 
 		}
 		if mode != ModeRead && mode != ModeWrite {

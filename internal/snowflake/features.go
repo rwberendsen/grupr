@@ -1,6 +1,7 @@
 package snowflake
 
 import (
+	"fmt"
 	"io"
 	"os"
 
@@ -38,7 +39,7 @@ func newFeatures(yamlPath string) (features, error) {
 		}
 		nElements := 0
 		if e.Warehouse != nil {
-			feat.warehouses = append(feat.warehouses, e.Warehouse)
+			feat.warehouses = append(feat.warehouses, *e.Warehouse)
 			nElements += 1
 		}
 		if nElements != 1 {
