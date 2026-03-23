@@ -15,8 +15,9 @@ type Product struct {
 	UserGroupMappingID  string
 	UserGroupRenderings map[string]syntax.Rendering
 	InterfaceMetadata
-	UserGroupColumn ColMatcher
-	Interfaces      map[string]InterfaceMetadata
+	UserGroupColumn   ColMatcher
+	Interfaces        map[string]InterfaceMetadata
+	BlockCentralTeams bool
 }
 
 func newProduct(cnf *Config, pSyn syntax.Product, classes map[string]syntax.Class, globalUserGroups map[string]bool,
@@ -24,6 +25,7 @@ func newProduct(cnf *Config, pSyn syntax.Product, classes map[string]syntax.Clas
 	// Initialize
 	pSem := Product{
 		Interfaces: map[string]InterfaceMetadata{},
+		BlockCentralTeams: pSyn.BlockCentralTeams,
 	}
 
 	if _, err := NewID(cnf, pSyn.ID); err != nil {

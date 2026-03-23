@@ -13,6 +13,7 @@ type Grupin struct {
 	UserGroupMappings map[string]UserGroupMapping
 	Products          map[string]Product
 	ServiceAccounts   map[string]ServiceAccount
+	Teams             map[string]Team
 }
 
 func NewGrupin(cnf *Config, gSyn syntax.Grupin) (Grupin, error) {
@@ -21,6 +22,7 @@ func NewGrupin(cnf *Config, gSyn syntax.Grupin) (Grupin, error) {
 		UserGroupMappings: map[string]UserGroupMapping{},
 		Products:          map[string]Product{},
 		ServiceAccounts:   map[string]ServiceAccount{},
+		Teams              map[string]Team{},
 	}
 	// Validate class labels; they should be valid ids
 	for k, _ := range gSem.Classes {
@@ -94,12 +96,21 @@ func NewGrupin(cnf *Config, gSyn syntax.Grupin) (Grupin, error) {
 		return gSem, err
 	}
 	// Validate service accounts
-	// TODO WIP validate that rendered ident exprs are unique accross service accounts
+	// TODO WIP validate that rendered ident exprs are unique accross service accounts and team members
 	for k, v := range gSyn.ServiceAccounts {
 		if svc, err := newServiceAccount(cnf, v, gSem.Products); err != nil {
 			return gSem, err
 		} else {
 			gSem.ServiceAccounts[k] = svc
+		}
+	}
+	// Validate teams
+	for k, v := range gSyn.Teams {
+		// WIP from here
+		if t, err := newTeam(v, gSem.Products); err != nil {
+			return gSem, err
+		} else {
+			gSem.Teams[k] = t
 		}
 	}
 	return gSem, nil

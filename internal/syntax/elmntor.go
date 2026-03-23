@@ -11,6 +11,7 @@ type ElmntOr struct {
 	Product          *Product          `yaml:",omitempty"`
 	Interface        *Interface        `yaml:"interface,omitempty"`
 	ServiceAccount   *ServiceAccount   `yaml:"service_account,omitempty"`
+	Team             *Team             `yaml:"team,omitempty"`
 }
 
 func (e ElmntOr) validateAndAdd(g *Grupin) error {
@@ -71,6 +72,13 @@ func (e ElmntOr) validateAndAdd(g *Grupin) error {
 			return &FormattingError{fmt.Sprintf("duplicate service account id")}
 		}
 		g.ServiceAccounts[e.ServiceAccount.ID] = *e.ServiceAccount
+	}
+	if e.Team != nil {
+		nElements += 1
+		if _, ok := g.Teams[e.Team.ID]; ok {
+			return &FormattingError{fmt.Sprintf("duplicate team id")}
+		}
+		g.Teams[e.Team.ID] = *e.Team
 	}
 	if nElements != 1 {
 		return &FormattingError{"not exactly one element in ElmntOr"}
