@@ -14,12 +14,12 @@ type ElmntOr struct {
 }
 
 func (e ElmntOr) validateAndAdd(g *Grupin) error {
-	n_elements := 0
+	nElements := 0
 	if e.Classes != nil {
 		if g.Classes != nil {
 			return &FormattingError{"classes specified more than once"}
 		}
-		n_elements += 1
+		nElements += 1
 		for k, v := range e.Classes {
 			if err := v.validate(); err != nil {
 				return fmt.Errorf("classes: class id '%s': %w", k, err)
@@ -28,21 +28,21 @@ func (e ElmntOr) validateAndAdd(g *Grupin) error {
 		g.Classes = e.Classes
 	}
 	if e.GlobalUserGroups != nil {
-		n_elements += 1
+		nElements += 1
 		if g.GlobalUserGroups != nil {
 			return &FormattingError{"user_groups specified more than once"}
 		}
 		g.GlobalUserGroups = e.GlobalUserGroups
 	}
 	if e.UserGroupMapping != nil {
-		n_elements += 1
+		nElements += 1
 		if _, ok := g.UserGroupMappings[e.UserGroupMapping.ID]; ok {
 			return &FormattingError{fmt.Sprintf("duplicate user group mapping: '%s'", e.UserGroupMapping.ID)}
 		}
 		g.UserGroupMappings[e.UserGroupMapping.ID] = *e.UserGroupMapping
 	}
 	if e.Product != nil {
-		n_elements += 1
+		nElements += 1
 		if err := e.Product.validate(); err != nil {
 			return err
 		}
@@ -52,7 +52,7 @@ func (e ElmntOr) validateAndAdd(g *Grupin) error {
 		g.Products[e.Product.ID] = *e.Product
 	}
 	if e.Interface != nil {
-		n_elements += 1
+		nElements += 1
 		iid := InterfaceID{
 			ID:        e.Interface.ID,
 			ProductID: e.Interface.ProductID,
@@ -63,7 +63,7 @@ func (e ElmntOr) validateAndAdd(g *Grupin) error {
 		g.Interfaces[iid] = *e.Interface
 	}
 	if e.ServiceAccount != nil {
-		n_elements += 1
+		nElements += 1
 		if err := e.ServiceAccount.validate(); err != nil {
 			return err
 		}
@@ -72,7 +72,7 @@ func (e ElmntOr) validateAndAdd(g *Grupin) error {
 		}
 		g.ServiceAccounts[e.ServiceAccount.ID] = *e.ServiceAccount
 	}
-	if n_elements != 1 {
+	if nElements != 1 {
 		return &FormattingError{"not exactly one element in ElmntOr"}
 	}
 	return nil

@@ -48,3 +48,23 @@ func (p Privilege) getIdxObjectLevel() int {
 		panic("not an object level privilege or not yet implemented")
 	}
 }
+
+func setFlagPrivilegeWarehouse(flags [2]bool, setFlag Privilege) [2]bool {
+	switch setFlag {
+	case PrvUsage:
+		flags[0] = true
+	case PrvOperate:
+		flags[1] = true
+	}
+	return flags
+}
+
+func hasFlagPrivilegeWarehouse(flags [2]bool, flag Privilege) bool {
+	switch flag {
+	case PrvUsage:
+		return flags[0]
+	case PrvOperate:
+		return flags[1]
+	}
+	return false
+}

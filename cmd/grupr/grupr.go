@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -16,10 +15,14 @@ import (
 func main() {
 	// oldFlag := flag.String("o", "", "old YAML, if any") // TODO: grupinDiff needs work
 	flag.Parse()
-	if len(flag.Args()) != 1 {
-		log.Fatalf("need one argument with path to YAML")
+	if len(flag.Args()) < 1 || len(flag.Args()) > 2 {
+		log.Fatalf("usage: grupr path_to_yaml [path_to_snowflake_yaml]")
 	}
-	fmt.Printf("args: %v\n", flag.Args())
+	yamlPath := flag.Arg(0)
+	var snowflakeYamlPath string
+	if len(flag.Args()) == 2 {
+		snowflakeYamlPath = flag.Arg(1)	
+	}
 
 	// TODO: while deserializing into Grupin, also gunzip, and
 	// calculate hash based on gzipped bytes. (using something like, io.TeeReader)
@@ -42,7 +45,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("get semantics config: %v", err)
 	}
-	newGrupin, err := getGrupinFromPath(semCnf, flag.Arg(0))
+	newGrupin, err := semantics.NewGrupinFromPath(semCnf, yamlPath)
 	if err != nil {
 		log.Fatalf("get new grupin: %v", err)
 	}
@@ -88,7 +91,7 @@ func main() {
 	// Still, this call already initializes the account cache, which will already have all databases that exist,
 	// and the database roles that grupr is managing; we might move this initialisation to the ManageAccess call,
 	// in which case we would not need to pass in `conn` below at all
-	snowflakeNewGrupin, err := snowflake.NewGrupin(ctx, semCnf, snowCnf, conn, newGrupin)
+	snowflakeNewGrupin, err := snowflake.NewGrupin(ctx, semCnf, snowCnf, conn, newGrupin, snowflakeYamlPath)
 	if err != nil {
 		log.Fatalf("error NewGrupin: %v", err)
 	}

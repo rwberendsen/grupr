@@ -35,7 +35,6 @@ type AggDBObjs struct {
 	isReadDBRoleGrantedToProductRole [2]bool // directly set from within Grupin.setDBRoleGrants
 
 	// Grants to the product write role; only used if this AggDBObjs is part of a product level interface
-	revokeFutureGrantsToProductWriteRole                   []FutureGrant
 	isCreateObjectOnFutureSchemasGrantedToProductWriteRole [2]bool // 0: ObjTable, 1: ObjView
 }
 

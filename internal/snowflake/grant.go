@@ -71,6 +71,8 @@ func (g Grant) buildSQLGrant(revoke bool) string {
 		objectClause = fmt.Sprintf(`%v IDENTIFIER($$%s.%s$$)`, g.GrantedOn, g.Database, g.Schema)
 	case ObjTpTable, ObjTpView:
 		objectClause = fmt.Sprintf(`%v IDENTIFIER($$%s.%s.%s$$)`, g.GrantedOn, g.Database, g.Schema, g.Object)
+	case ObjTpWarehouse:
+		objectClause = fmt.Sprintf(`%v IDENTIFIER($$%s$$)`, g.GrantedOn, g.Object)
 	default:
 		panic("Not implemented")
 	}
@@ -97,6 +99,7 @@ func newGrantToRole(privilege string, createObjType string, grantedOn string, na
 		ObjTpSchema:       2,
 		ObjTpTable:        3,
 		ObjTpView:         3,
+		ObjTpWarehouse:    1,
 	}
 	r := csv.NewReader(strings.NewReader(name)) // handles quoted fields as they appear in name
 	r.Comma = '.'
@@ -123,6 +126,8 @@ func newGrantToRole(privilege string, createObjType string, grantedOn string, na
 		g.Database = semantics.Ident(rec[0])
 		g.Schema = semantics.Ident(rec[1])
 		g.Object = semantics.Ident(rec[2])
+	case ObjTpWarehouse:
+		g.Object = semantics.Ident(rec[0])
 	default:
 		return g, fmt.Errorf("unsupported granted_on object type for grant")
 	}

@@ -12,6 +12,7 @@ const (
 	ObjTpTable
 	ObjTpUser
 	ObjTpView
+	ObjTpWarehouse
 )
 
 func ParseObjType(s string) ObjType {
@@ -24,6 +25,7 @@ func ParseObjType(s string) ObjType {
 		"TABLE":         ObjTpTable,
 		"USER":          ObjTpUser,
 		"VIEW":          ObjTpView,
+		"WAREHOUSE":     ObjTpWarehouse,
 	}[s]
 }
 
@@ -38,6 +40,7 @@ func (ot ObjType) String() string {
 		ObjTpTable:        "TABLE",
 		ObjTpUser:         "USER",
 		ObjTpView:         "VIEW",
+		ObjTpWarehouse:    "WAREHOUSE",
 	}[ot]
 }
 
