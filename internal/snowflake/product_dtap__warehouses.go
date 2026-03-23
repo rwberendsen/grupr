@@ -1,5 +1,17 @@
 package snowflake
 
+import (
+	"context"
+	"database/sql"
+	"iter"
+
+	"github.com/rwberendsen/grupr/internal/semantics"
+)
+
+/*
+In product_dtap__objects.go, we have ProductDTAP methods that deal with (privileges on) warehouses
+*/
+
 func (pd *ProductDTAP) addWarehouse(m Mode, id semantics.Ident) {
 	switch m {
 	case ModeRead:
@@ -37,14 +49,14 @@ func (pd *ProductDTAP) setWarehouseGrants(ctx context.Context, cnf *Config, conn
 		if _, ok := productRoles[pr]; !ok && cnf.DryRun {
 			continue
 		}
-		for g, err := range QueryFutureGrantsToRoleFiltered(ctx, conn, pr.ID, map[GrantTemplate]struct{}{
+		for g, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, pr.ID, map[GrantTemplate]struct{}{
 			GrantTemplate{
 				PrivilegeComplete: PrivilegeComplete{Privilege: PrvUsage},
-				GrantedOn: ObjTpWarehouse,
+				GrantedOn:         ObjTpWarehouse,
 			}: {},
 			GrantTemplate{
 				PrivilegeComplete: PrivilegeComplete{Privilege: PrvOperate},
-				GrantedOn: ObjTpWarehouse,
+				GrantedOn:         ObjTpWarehouse,
 			}: {},
 		}, nil) {
 			if err != nil {
@@ -53,10 +65,10 @@ func (pd *ProductDTAP) setWarehouseGrants(ctx context.Context, cnf *Config, conn
 			// Should we have this grant?
 			if pd.hasWarehouse(pr.Mode, g.Object) {
 				// If yes, mark it as already granted
-				pd.setWarehouseGrantedPrivilege(pr.Mode, g.Object, g.PrivilegeComplete[0].Privilege)
+				pd.setWarehouseGrantedPrivilege(pr.Mode, g.Object, g.Privileges[0].Privilege)
 			} else {
-			 	// If not, add it to a list of grants to be revoked
-				pd.ToRevoke = append(pd.ToRevoke, g)
+				// If not, add it to a list of grants to be revoked
+				pd.toRevoke = append(pd.toRevoke, g)
 			}
 		}
 
@@ -66,7 +78,7 @@ func (pd *ProductDTAP) setWarehouseGrants(ctx context.Context, cnf *Config, conn
 
 func (pd *ProductDTAP) getToDoWarehouseGrants() iter.Seq[Grant] {
 	return func(yield func(Grant) bool) {
-		for pr := range [2]ProductRole{pd.ReadRole, pd.WriteRole} {
+		for _, pr := range [2]ProductRole{pd.ReadRole, pd.WriteRole} {
 			m := pd.ReadWarehouses
 			if pr.Mode == ModeWrite {
 				m = pd.WriteWarehouses
@@ -81,10 +93,10 @@ func (pd *ProductDTAP) getToDoWarehouseGrants() iter.Seq[Grant] {
 				}
 				if len(prvs) > 0 {
 					if !yield(Grant{
-						Privileges: prvs,
-						GrantedOn: ObjTpWarehouse,
-						Object: w,
-						GrantedTo: ObjTpRole,
+						Privileges:    prvs,
+						GrantedOn:     ObjTpWarehouse,
+						Object:        w,
+						GrantedTo:     ObjTpRole,
 						GrantedToName: pr.ID,
 					}) {
 						return

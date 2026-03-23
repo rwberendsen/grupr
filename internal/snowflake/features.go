@@ -15,7 +15,7 @@ type features struct {
 }
 
 type ElmntOr struct {
-	Warehouse *WarehouseDecoded `yaml:"warehouse,omitempty"`	
+	Warehouse *WarehouseDecoded `yaml:"warehouse,omitempty"`
 	// Stage *StageDecoded ...
 }
 

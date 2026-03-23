@@ -56,29 +56,29 @@ func NewGrupin(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn 
 
 func (g *Grupin) setWarehouses(semCnf *semantics.Config, warehouses []WarehouseDecoded) error {
 	seen := map[semantics.Ident]struct{}{}
-	for _, wd := range warehouses {
-		id, err := semantics.NewIdentStripQuotesIfAny(wd.Ident, semCnf.ValidQuotedExpr, semCnf.ValidUnquotedExpr)
+	for _, w := range warehouses {
+		id, err := semantics.NewIdentStripQuotesIfAny(w.Ident, semCnf.ValidQuotedExpr, semCnf.ValidUnquotedExpr)
 		if err != nil {
 			return err
 		}
 		if _, ok := seen[id]; ok {
 			return fmt.Errorf("duplicate warehouse identifier '%v'", id)
 		}
-		mode, err := ParseMode(wd.Mode);
+		mode, err := ParseMode(w.Mode)
 		if err != nil {
-			return fmt.Errorf("warehouse '%v', invalid mode '%v'", id, wd.Mode) 
+			return fmt.Errorf("warehouse '%v', invalid mode '%v'", id, w.Mode)
 		}
 		if mode != ModeRead && mode != ModeWrite {
-			return fmt.Errorf("warehouse '%v', mode '%v' not implemented", id, mode) 
+			return fmt.Errorf("warehouse '%v', mode '%v' not implemented", id, mode)
 		}
-		if wd.OnlyProd && wd.OnlyNonProd {
-			return fmt.Errorf("warehouse '%v', only_prod and only_non_prod should not both be true", id, mode) 
+		if w.OnlyProd && w.OnlyNonProd {
+			return fmt.Errorf("warehouse '%v', only_prod and only_non_prod should not both be true", id, mode)
 		}
-		if mode == ModeWrite && !wd.OnlyProd && !wd.OnlyNonProd {
-			return fmt.Errorf("warehouse '%v', write mode warehouses should be either for prod or non prod use", id) 
+		if mode == ModeWrite && !w.OnlyProd && !w.OnlyNonProd {
+			return fmt.Errorf("warehouse '%v', write mode warehouses should be either for prod or non prod use", id)
 		}
 		seenPIDs := map[string]struct{}{}
-		for _, pID := range wd.SharedBetween {
+		for _, pID := range w.SharedBetween {
 			if _, ok := seenPIDs[pID]; ok {
 				return fmt.Errorf("warehouse '%v', shared_between: duplicate product id '%v'", id, pID)
 			}
@@ -89,7 +89,7 @@ func (g *Grupin) setWarehouses(semCnf *semantics.Config, warehouses []WarehouseD
 
 			// Okay, all good, add warehouse to necessary dtaps
 			for pd := range g.getProductDTAPs(pID) {
-				if (pd.IsProd && !OnlyNonProd) || (!pd.IsProd && !OnlyProd) {
+				if (pd.IsProd && !w.OnlyNonProd) || (!pd.IsProd && !w.OnlyProd) {
 					pd.addWarehouse(mode, id)
 				}
 			}
@@ -108,12 +108,12 @@ func (g *Grupin) hasProductID(pID string) bool {
 	return false
 }
 
-func (g *Grupin) getProductDTAPs(pID string) iter.Seq[ProductDTAP] {
-	return func(yield func(ProductDTAP) bool) {
+func (g *Grupin) getProductDTAPs(pID string) iter.Seq[*ProductDTAP] {
+	return func(yield func(*ProductDTAP) bool) {
 		for _, pd := range g.ProductDTAPs {
 			if pd.ProductID == pID {
 				if !yield(pd) {
-					return false
+					return
 				}
 			}
 		}
@@ -239,12 +239,12 @@ func (g *Grupin) setDBRoleGrants(ctx context.Context, semCnf *semantics.Config, 
 			continue
 		}
 		for grant, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, pr.ID, map[GrantTemplate]struct{}{
-				GrantTemplate{
-					PrivilegeComplete:         PrivilegeComplete{Privilege: PrvUsage},
-					GrantedOn:                 ObjTpDatabaseRole,
-					GrantedRoleIsGruprManaged: util.NewTrue(),
-				}: {},
-			}, nil) {
+			GrantTemplate{
+				PrivilegeComplete:         PrivilegeComplete{Privilege: PrvUsage},
+				GrantedOn:                 ObjTpDatabaseRole,
+				GrantedRoleIsGruprManaged: util.NewTrue(),
+			}: {},
+		}, nil) {
 			if err != nil {
 				return err
 			}
