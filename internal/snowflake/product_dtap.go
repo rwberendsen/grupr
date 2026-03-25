@@ -89,6 +89,9 @@ func NewProductDTAP(pdID semantics.ProductDTAPID, isProd bool, pSem semantics.Pr
 	// Set which personal users we should grant the read and write roles to.
 	for _, team := range teams {
 		if _, ok := team.WorkOn[pd.ProductID]; team.IsCentral && !pd.BlockCentralTeams || ok {
+			if team.OnlyNonProd && pd.IsProd {
+				continue
+			}
 			for ident := range team.Members {
 				pd.GrantReadRoleToUsers[ident] = false // no GRANT found in Snowflake yet
 			}
