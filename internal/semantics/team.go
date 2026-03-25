@@ -24,7 +24,7 @@ func newTeam(cnf *Config, teamSyn syntax.Team, products map[string]Product) (Tea
 	}
 	// Set ID
 	if _, err := NewID(cnf, teamSyn.ID); err != nil {
-		return team, fmt.Errorf("team: %w", err)
+		return team, err
 	} else {
 		team.ID = teamSyn.ID
 	}
@@ -51,6 +51,12 @@ func newTeam(cnf *Config, teamSyn syntax.Team, products map[string]Product) (Tea
 		}
 		team.WorkOn[pID] = struct{}{}
 	}
+
+	// Validate
+	if team.IsCentral && len(team.WorkOn) > 0 {
+		return team, fmt.Errorf("specify either that the team is central or which products they work on, not both")
+	}
+
 	return team, nil
 }
 
