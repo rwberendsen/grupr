@@ -16,11 +16,15 @@ import (
 type ProductDTAP struct {
 	semantics.ProductDTAPID
 	IsProd bool
+	IsManual bool
+	BlockCentralTeams bool
 	*Interface
 	Interfaces      map[string]*Interface
 	Consumes        map[syntax.InterfaceID]string // value is source dtap
 	ReadRole        ProductRole
 	WriteRole       ProductRole
+	GrantReadRoleToUsers  map[semantics.Ident]bool    // initially set to false, then to true if GRANTS are found in Snowflake
+	GrantWriteRoleToUsers map[semantics.Ident]bool    // initially set to false, then to true if GRANTS are found in Snowflake
 	DeployedBy      map[semantics.Ident]bool    // initially set to false, then to true if GRANTS are found in Snowflake
 	ReadWarehouses  map[semantics.Ident][2]bool // initially set to false, then to true if GRANTS (USAGE, OPERATE) are found in Snowflake
 	WriteWarehouses map[semantics.Ident][2]bool // initially set to false, then to true if GRANTS (USAGE, OPERATE) are found in Snowflake
@@ -43,13 +47,17 @@ type ProductDTAP struct {
 }
 
 func NewProductDTAP(pdID semantics.ProductDTAPID, isProd bool, pSem semantics.Product, userGroupMappings map[string]semantics.UserGroupMapping,
-	svcs map[string]semantics.ServiceAccount) *ProductDTAP {
+	svcs map[string]semantics.ServiceAccount, teams map[string]semantics.Team) *ProductDTAP {
 	pd := &ProductDTAP{
 		ProductDTAPID:         pdID,
 		IsProd:                isProd,
+		IsManual:              pSem.DTAPs.IsManual(pdID.DTAP),
+		BlockCentralTeams:     pSem.BlockCentralTeams,
 		Interface:             NewInterface(pdID.DTAP, pSem.InterfaceMetadata, userGroupMappings[pSem.UserGroupMappingID]),
 		Interfaces:            map[string]*Interface{},
 		Consumes:              map[syntax.InterfaceID]string{},
+		GrantReadRoleToUsers:  map[semantics.Ident]bool{},
+		GrantWriteRoleToUsers: map[semantics.Ident]bool{},
 		ReadWarehouses:        map[semantics.Ident][2]bool{},
 		WriteWarehouses:       map[semantics.Ident][2]bool{},
 		matchedAccountObjects: map[semantics.ObjExpr]*matchedAccountObjs{},
@@ -70,13 +78,18 @@ func NewProductDTAP(pdID semantics.ProductDTAPID, isProd bool, pSem semantics.Pr
 		pd.matchedAccountObjects[k] = &matchedAccountObjs{}
 	}
 
-	pd.DeployedBy = map[semantics.Ident]bool{}
+	// Set which service account users we should grant the write role to.
 	for _, svc := range svcs {
 		if dtapMapping, ok := svc.Deploys[pd.ProductID]; ok {
 			if svcDTAP, ok := dtapMapping[pd.DTAP]; ok {
-				pd.DeployedBy[svc.Idents[svcDTAP]] = false // no GRANT found in Snowflake yet
+				pd.GrantWriteRoleTo[svc.Idents[svcDTAP]] = false // no GRANT found in Snowflake yet
 			}
 		}
+	}
+
+	// Set which personal users we should grant the read and write roles to.
+	for _, team := range teams {
+		if _, ok := team.WorkOn ... // WIP
 	}
 
 	return pd
