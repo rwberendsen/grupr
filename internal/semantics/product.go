@@ -24,7 +24,7 @@ func newProduct(cnf *Config, pSyn syntax.Product, classes map[string]syntax.Clas
 	userGroupMappings map[string]UserGroupMapping) (Product, error) {
 	// Initialize
 	pSem := Product{
-		Interfaces: map[string]InterfaceMetadata{},
+		Interfaces:        map[string]InterfaceMetadata{},
 		BlockCentralTeams: pSyn.BlockCentralTeams,
 	}
 

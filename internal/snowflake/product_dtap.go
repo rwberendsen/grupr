@@ -15,18 +15,18 @@ import (
 
 type ProductDTAP struct {
 	semantics.ProductDTAPID
-	IsProd bool
-	IsManual bool
+	IsProd            bool
+	IsManual          bool
 	BlockCentralTeams bool
 	*Interface
-	Interfaces      map[string]*Interface
-	Consumes        map[syntax.InterfaceID]string // value is source dtap
-	ReadRole        ProductRole
-	WriteRole       ProductRole
+	Interfaces            map[string]*Interface
+	Consumes              map[syntax.InterfaceID]string // value is source dtap
+	ReadRole              ProductRole
+	WriteRole             ProductRole
 	GrantReadRoleToUsers  map[semantics.Ident]bool    // initially set to false, then to true if GRANTS are found in Snowflake
 	GrantWriteRoleToUsers map[semantics.Ident]bool    // initially set to false, then to true if GRANTS are found in Snowflake
-	ReadWarehouses  map[semantics.Ident][2]bool // initially set to false, then to true if GRANTS (USAGE, OPERATE) are found in Snowflake
-	WriteWarehouses map[semantics.Ident][2]bool // initially set to false, then to true if GRANTS (USAGE, OPERATE) are found in Snowflake
+	ReadWarehouses        map[semantics.Ident][2]bool // initially set to false, then to true if GRANTS (USAGE, OPERATE) are found in Snowflake
+	WriteWarehouses       map[semantics.Ident][2]bool // initially set to false, then to true if GRANTS (USAGE, OPERATE) are found in Snowflake
 
 	writeRoleGrantedToUserManagedRoles map[semantics.Ident]struct{}
 	userManagedOwnersOfObjects         map[semantics.Ident]struct{}

@@ -17,9 +17,9 @@ type Team struct {
 
 func newTeam(cnf *Config, teamSyn syntax.Team, products map[string]Product) (Team, error) {
 	team := Team{
-		Members: map[Ident]struct{}{},
-		WorkOn: map[string]struct{}{},
-		IsCentral: teamSyn.IsCentral,
+		Members:     map[Ident]struct{}{},
+		WorkOn:      map[string]struct{}{},
+		IsCentral:   teamSyn.IsCentral,
 		OnlyNonProd: teamSyn.OnlyNonProd,
 	}
 	// Set ID
@@ -28,7 +28,7 @@ func newTeam(cnf *Config, teamSyn syntax.Team, products map[string]Product) (Tea
 	} else {
 		team.ID = teamSyn.ID
 	}
-	
+
 	// Set Members
 	for _, m := range teamSyn.Members {
 		ident, err := NewIdentStripQuotesIfAny(m, cnf.ValidQuotedExpr, cnf.ValidUnquotedExpr)
@@ -63,7 +63,7 @@ func newTeam(cnf *Config, teamSyn syntax.Team, products map[string]Product) (Tea
 func (lhs Team) Equal(rhs Team) bool {
 	return lhs.ID == rhs.ID &&
 		maps.Equal(lhs.Members, rhs.Members) &&
-		maps.Equal(lhs.WorkOn, rhs.WorkOn) && 
+		maps.Equal(lhs.WorkOn, rhs.WorkOn) &&
 		lhs.IsCentral == rhs.IsCentral &&
 		lhs.OnlyNonProd == rhs.OnlyNonProd
 }
