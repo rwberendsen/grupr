@@ -32,7 +32,7 @@ func NewGrupin(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn 
 	for pID, pSem := range g.Products {
 		for dtap, isProd := range pSem.DTAPs.All() {
 			pdID := semantics.ProductDTAPID{ProductID: pID, DTAP: dtap}
-			r.ProductDTAPs[pdID] = NewProductDTAP(pdID, isProd, pSem, r.UserGroupMappings, g.ServiceAccounts)
+			r.ProductDTAPs[pdID] = NewProductDTAP(pdID, isProd, pSem, r.UserGroupMappings, g.ServiceAccounts, g.Teams)
 		}
 	}
 

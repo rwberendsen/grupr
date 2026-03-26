@@ -12,6 +12,7 @@ import (
 type DTAPSpec struct {
 	Prod           *string
 	NonProd        map[string]struct{}
+	Manual         map[string]struct{}
 	DTAPRenderings map[string]syntax.Rendering
 }
 
@@ -38,6 +39,16 @@ func newDTAPSpec(cnf *Config, dsSyn syntax.DTAPSpec, dtapRenderings map[string]s
 			return dsSem, fmt.Errorf("duplicate dtap: '%s'", d)
 		}
 		dsSem.NonProd[d] = struct{}{}
+	}
+	dsSem.Manual = make(map[string]struct{}, len(dsSyn.Manual))
+	for _, d := range dsSyn.Manual {
+		if !dsSem.HasDTAP(d) {
+			return dsSem, fmt.Errorf("dtap spec, unknown manual dtap: '%s'", d)
+		}
+		if _, ok := dsSem.Manual[d]; ok {
+			return dsSem, fmt.Errorf("dtap spec, duplicate manual dtap: '%s'", d)
+		}
+		dsSem.Manual[d] = struct{}{}
 	}
 	dsSem.DTAPRenderings = make(map[string]syntax.Rendering, len(dtapRenderings))
 	for k, r := range dtapRenderings {
@@ -71,6 +82,11 @@ func (spec DTAPSpec) IsProd(dtap string) bool {
 
 func (spec DTAPSpec) HasProd() bool {
 	return spec.Prod != nil
+}
+
+func (spec DTAPSpec) IsManual(dtap string) bool {
+	_, ok := spec.Manual[dtap]
+	return ok
 }
 
 func (spec DTAPSpec) Count() int {

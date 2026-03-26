@@ -15,6 +15,7 @@ type Grupin struct {
 	Products          map[string]Product
 	Interfaces        map[InterfaceID]Interface
 	ServiceAccounts   map[string]ServiceAccount
+	Teams             map[string]Team
 }
 
 func NewGrupin(r io.Reader) (Grupin, error) {
@@ -25,6 +26,7 @@ func NewGrupin(r io.Reader) (Grupin, error) {
 		Products:          map[string]Product{},
 		Interfaces:        map[InterfaceID]Interface{},
 		ServiceAccounts:   map[string]ServiceAccount{},
+		Teams:             map[string]Team{},
 	}
 	for {
 		var e ElmntOr

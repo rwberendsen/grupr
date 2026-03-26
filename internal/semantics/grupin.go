@@ -13,6 +13,7 @@ type Grupin struct {
 	UserGroupMappings map[string]UserGroupMapping
 	Products          map[string]Product
 	ServiceAccounts   map[string]ServiceAccount
+	Teams             map[string]Team
 }
 
 func NewGrupin(cnf *Config, gSyn syntax.Grupin) (Grupin, error) {
@@ -21,6 +22,7 @@ func NewGrupin(cnf *Config, gSyn syntax.Grupin) (Grupin, error) {
 		UserGroupMappings: map[string]UserGroupMapping{},
 		Products:          map[string]Product{},
 		ServiceAccounts:   map[string]ServiceAccount{},
+		Teams:             map[string]Team{},
 	}
 	// Validate class labels; they should be valid ids
 	for k, _ := range gSem.Classes {
@@ -94,7 +96,6 @@ func NewGrupin(cnf *Config, gSyn syntax.Grupin) (Grupin, error) {
 		return gSem, err
 	}
 	// Validate service accounts
-	// TODO WIP validate that rendered ident exprs are unique accross service accounts
 	for k, v := range gSyn.ServiceAccounts {
 		if svc, err := newServiceAccount(cnf, v, gSem.Products); err != nil {
 			return gSem, err
@@ -102,6 +103,19 @@ func NewGrupin(cnf *Config, gSyn syntax.Grupin) (Grupin, error) {
 			gSem.ServiceAccounts[k] = svc
 		}
 	}
+	// Validate teams
+	for k, v := range gSyn.Teams {
+		// WIP from here
+		if t, err := newTeam(cnf, v, gSem.Products); err != nil {
+			return gSem, err
+		} else {
+			gSem.Teams[k] = t
+		}
+	}
+	if err := gSem.validateUsers(gSem.ServiceAccounts, gSem.Teams); err != nil {
+		return gSem, err
+	}
+
 	return gSem, nil
 }
 
@@ -117,6 +131,29 @@ func NewGrupinFromPath(cnf *Config, path string) (Grupin, error) {
 		return g, err
 	}
 	return NewGrupin(cnf, s)
+}
+
+func (g Grupin) validateUsers(svcs map[string]ServiceAccount, teams map[string]Team) error {
+	seen := map[Ident]struct{}{}
+	for _, svc := range svcs {
+		for _, ident := range svc.Idents {
+			if _, ok := seen[ident]; ok {
+				return fmt.Errorf("duplicate user identifier: '%s'", ident)
+			}
+		}
+	}
+	people := map[Ident]struct{}{}
+	for _, team := range teams {
+		for ident := range team.Members {
+			people[ident] = struct{}{}
+		}
+	}
+	for ident := range people {
+		if _, ok := seen[ident]; ok {
+			return fmt.Errorf("duplicate user identifier: '%s'", ident)
+		}
+	}
+	return nil
 }
 
 func (g Grupin) allConsumedOk() error {

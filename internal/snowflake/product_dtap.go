@@ -16,12 +16,15 @@ import (
 type ProductDTAP struct {
 	semantics.ProductDTAPID
 	IsProd bool
+	IsManual bool
+	BlockCentralTeams bool
 	*Interface
 	Interfaces      map[string]*Interface
 	Consumes        map[syntax.InterfaceID]string // value is source dtap
 	ReadRole        ProductRole
 	WriteRole       ProductRole
-	DeployedBy      map[semantics.Ident]bool    // initially set to false, then to true if GRANTS are found in Snowflake
+	GrantReadRoleToUsers  map[semantics.Ident]bool    // initially set to false, then to true if GRANTS are found in Snowflake
+	GrantWriteRoleToUsers map[semantics.Ident]bool    // initially set to false, then to true if GRANTS are found in Snowflake
 	ReadWarehouses  map[semantics.Ident][2]bool // initially set to false, then to true if GRANTS (USAGE, OPERATE) are found in Snowflake
 	WriteWarehouses map[semantics.Ident][2]bool // initially set to false, then to true if GRANTS (USAGE, OPERATE) are found in Snowflake
 
@@ -43,13 +46,17 @@ type ProductDTAP struct {
 }
 
 func NewProductDTAP(pdID semantics.ProductDTAPID, isProd bool, pSem semantics.Product, userGroupMappings map[string]semantics.UserGroupMapping,
-	svcs map[string]semantics.ServiceAccount) *ProductDTAP {
+	svcs map[string]semantics.ServiceAccount, teams map[string]semantics.Team) *ProductDTAP {
 	pd := &ProductDTAP{
 		ProductDTAPID:         pdID,
 		IsProd:                isProd,
+		IsManual:              pSem.DTAPs.IsManual(pdID.DTAP),
+		BlockCentralTeams:     pSem.BlockCentralTeams,
 		Interface:             NewInterface(pdID.DTAP, pSem.InterfaceMetadata, userGroupMappings[pSem.UserGroupMappingID]),
 		Interfaces:            map[string]*Interface{},
 		Consumes:              map[syntax.InterfaceID]string{},
+		GrantReadRoleToUsers:  map[semantics.Ident]bool{},
+		GrantWriteRoleToUsers: map[semantics.Ident]bool{},
 		ReadWarehouses:        map[semantics.Ident][2]bool{},
 		WriteWarehouses:       map[semantics.Ident][2]bool{},
 		matchedAccountObjects: map[semantics.ObjExpr]*matchedAccountObjs{},
@@ -70,11 +77,28 @@ func NewProductDTAP(pdID semantics.ProductDTAPID, isProd bool, pSem semantics.Pr
 		pd.matchedAccountObjects[k] = &matchedAccountObjs{}
 	}
 
-	pd.DeployedBy = map[semantics.Ident]bool{}
+	// Set which service account users we should grant the write role to.
 	for _, svc := range svcs {
 		if dtapMapping, ok := svc.Deploys[pd.ProductID]; ok {
 			if svcDTAP, ok := dtapMapping[pd.DTAP]; ok {
-				pd.DeployedBy[svc.Idents[svcDTAP]] = false // no GRANT found in Snowflake yet
+				pd.GrantWriteRoleToUsers[svc.Idents[svcDTAP]] = false // no GRANT found in Snowflake yet
+			}
+		}
+	}
+
+	// Set which personal users we should grant the read and write roles to.
+	for _, team := range teams {
+		if _, ok := team.WorkOn[pd.ProductID]; team.IsCentral && !pd.BlockCentralTeams || ok {
+			if team.OnlyNonProd && pd.IsProd {
+				continue
+			}
+			for ident := range team.Members {
+				pd.GrantReadRoleToUsers[ident] = false // no GRANT found in Snowflake yet
+			}
+			if pd.IsManual {
+				for ident := range team.Members {
+					pd.GrantWriteRoleToUsers[ident] = false // no GRANT found in Snowflake yet
+				}
 			}
 		}
 	}
@@ -211,16 +235,22 @@ func (pd *ProductDTAP) pushToDoDBRoleGrants(yield func(Grant) bool, doProd bool,
 }
 
 func (pd *ProductDTAP) pushToDoProductRoleGrants(yield func(Grant) bool) bool {
-	for svc, alreadyGranted := range pd.DeployedBy {
-		if !alreadyGranted {
-			if !yield(Grant{
-				Privileges:    []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage}},
-				GrantedOn:     ObjTpRole,
-				GrantedRole:   pd.WriteRole.ID,
-				GrantedTo:     ObjTpUser,
-				GrantedToName: svc,
-			}) {
-				return false
+	for _, pr := range [2]ProductRole{pd.ReadRole, pd.WriteRole} {
+		m := pd.GrantReadRoleToUsers
+		if pr.Mode == ModeWrite {
+			m = pd.GrantWriteRoleToUsers
+		}
+		for ident, alreadyGranted := range m {
+			if !alreadyGranted {
+				if !yield(Grant{
+					Privileges:    []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage}},
+					GrantedOn:     ObjTpRole,
+					GrantedRole:   pr.ID,
+					GrantedTo:     ObjTpUser,
+					GrantedToName: ident,
+				}) {
+					return false
+				}
 			}
 		}
 	}
@@ -228,17 +258,23 @@ func (pd *ProductDTAP) pushToDoProductRoleGrants(yield func(Grant) bool) bool {
 }
 
 func (pd *ProductDTAP) setGrantedUsers(ctx context.Context, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{}) error {
-	if _, ok := productRoles[pd.WriteRole]; !ok && cnf.DryRun {
-		return nil
-	}
-	for grant, err := range QueryGrantsOfRoleToUsers(ctx, conn, pd.WriteRole.ID) {
-		if err != nil {
-			return err
+	for _, pr := range [2]ProductRole{pd.ReadRole, pd.WriteRole} {
+		if _, ok := productRoles[pr]; !ok && cnf.DryRun {
+			continue
 		}
-		if _, ok := pd.DeployedBy[grant.GrantedToName]; ok {
-			pd.DeployedBy[grant.GrantedToName] = true
-		} else {
-			pd.toRevoke = append(pd.toRevoke, grant)
+		m := pd.GrantReadRoleToUsers
+		if pr.Mode == ModeWrite {
+			m = pd.GrantWriteRoleToUsers
+		}
+		for grant, err := range QueryGrantsOfRoleToUsers(ctx, conn, pr.ID) {
+			if err != nil {
+				return err
+			}
+			if _, ok := m[grant.GrantedToName]; ok {
+				m[grant.GrantedToName] = true
+			} else {
+				pd.toRevoke = append(pd.toRevoke, grant)
+			}
 		}
 	}
 	return nil

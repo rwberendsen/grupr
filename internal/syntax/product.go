@@ -13,6 +13,7 @@ type Product struct {
 	UserGroupMappingID  string               `yaml:"user_group_mapping,omitempty"`
 	UserGroupRenderings map[string]Rendering `yaml:"user_group_renderings,omitempty"`
 	UserGroupColumn     string               `yaml:"user_group_column,omitempty"`
+	BlockCentralTeams   bool                 `yaml:"block_central_teams,omitempty"`
 }
 
 func (p *Product) validate() error {
