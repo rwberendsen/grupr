@@ -232,7 +232,7 @@ is using to deploy a certain data mart.
 At the moment, we have a single access management model on top of Snowflake, 
 which we will discuss here. A simplified overview of the idea is in this figure:
 
-![grupr access management model](grupr_access_management_model.png)
+![grupr access management model](grupr_access_management_model.svg)
 
 For each combination of data product and dtap, grupr creates a read role, and a
 write role. Employees working on this data product can assume the read role.
