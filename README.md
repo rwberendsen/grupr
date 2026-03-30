@@ -18,7 +18,11 @@ Because grupr uses a text based data format, you can take
 your metadata with you wherever you go.
 
 Let's have a bit closer look at data products, interfaces, and the relations
-between them.
+between them. We show a basic example of each concept you can describe
+in your YAML files. For a more detailed description we will write a reference
+manual at a later stage; until that time, please consult the code itself. You
+will find the structs used to decode the YAML in the `syntax` package, and 
+you will find how they are validated in the `semantics` package.
 
 ## Data products
 An example product.yaml file may look like this:
@@ -96,7 +100,6 @@ also ensures that the grouping will be correct. Your data teams will make sure
 they have access to all the data they need, and as a result, you will have a
 clean record of that.
 
-
 ## Interfaces
 
 An example interface may look like this:
@@ -166,6 +169,23 @@ data products of two differernt user groups. We are using some data build tool t
 deploy the crm data product. With this information in hand, as a first, and 
 compelling use case, we can define a simple access management model.
 
+## Teams
+
+You can add teams:
+
+```
+team:
+  id: my_awesome_crew
+  work_on:
+    - crm
+  members:
+    - alice
+    - bob
+```
+
+Here, `work_on` is a list of product ids. Members of the team should now be enabled
+to work on these data products.
+
 ## Other features
 
 There are more features than listed above, in particular features that
@@ -185,37 +205,76 @@ allowed to consume non-production environments. Products are not allowed to
 consume interfaces with a higher classification than the product classification
 itself. Such policies make sure the YAML in internally consistent, coherent.
 
+## Snowflake specific features
+
+So far, grupr has only been used with Snowflake. In the snowflake package of
+grupr, we have defined some YAML structure for managing privileges on Snowflake
+specific objects, such as virtual warehouses.
+
+You can describe a warehouse, like this:
+
+```
+warehouse:
+  ident: etl_medium
+  mode: w
+  shared_between:
+    - crm
+    - crm_fr
+```
+
+Here, `mode` is if you intend to use this warehouse for querying (reading, r) data
+or for modifying (writing, w) data. This is a useful distinction to make, you 
+typically would not want analysts to use the same warehouse that a production job
+is using to deploy a certain data mart.
+
 ## Access management
 
 At the moment, we have a single access management model on top of Snowflake, 
-which we will discuss here.
+which we will discuss here. A simplified overview of the idea is in this figure:
 
-For each combination of data product and dtap, grupr creates a product read role,
-and a product write role.
-Employees working on this data product can assume the read role. The write role
-is intended for service accounts to assume.
+![grupr access management model](grupr_access_management_model.png)
 
-The product read role gets read access to all objects in the product, as well as
-read access to all objects in interfaces consumed by the product.
+For each combination of data product and dtap, grupr creates a read role, and a
+write role. Employees working on this data product can assume the read role.
+The write role is intended for service accounts to assume.
+
+A quick note--below, when we write "product" we are often referring to a
+"product-dtap" combination, actually, for simplicity we often leave out the
+"dtap" part, you can assume that we are talking about a production environment
+only. That being said, grupr does allow different products to have a different
+set of dtaps, and some cross dtap relationships are allowed. In such cases, the
+documentation will be more explicit.
+
+Products and interfaces are a collection of objects, e.g., tables and views.
+Products do not overlap. Interfaces are subsets of products. But interfaces
+can overlap. In the figure above, product B consumes interface 1 of product A.
+
+The read role for product B gets read access to all objects in product B, as
+well as read access to all objects in interface A1 consumed by the product;
+this is why interface A1 and product B are shown in bold. The write role for
+product B gets write access to all objects in product B, but only read access
+to all objects in interface A1. Note that it is accepted in grupr YAML for a
+non-production product-dtap to consume a production interface--but not the
+other way around.
 
 Rather than directly getting privileges on the objects,for efficiency reasons
-(fewer relations to manage) privileges to objects are granted to database
-roles. Each product and each interface has a set of associated database roles,
-usually just one database role; but there can be more if objects of a sinlge
-product or interface reside in different databases.
+(fewer relations to manage) read privileges to objects are granted to database
+roles. Each product and each interface has a set of associated database roles.
+Usually this set will have just one database role, but there can be more if
+objects of a sinlge product or interface reside in different databases.
 
 Concretely then, the product read role is granted the database roles of the product
 objects, and the database roles of all interface it consumes.
 
 The product write role also gets granted the same database roles. But on top of
 that, the write role gets the ownership privilege on all objects in the product
-dtap. This privilege is granted directly to the write role, not via database roles.
-Before granting ownership of an object to a product write role, the product write role itself
-is granted to the current owner. This way, the current owner does lose the ownership
-privilege. After running grupr, you can update your production deployments to assume
-the product write role when connecting to Snowflake. When you are sure everything
-runs smoothly, you can revoke the product write role from the role that previously
-owned the object.
+dtap. This privilege is granted directly to the write role, not via database
+roles.  Before granting ownership of an object to a product write role, the
+product write role itself is granted to the current owner. This way, the
+current owner retains ownership of the object. After running grupr, you can
+update your production deployments to assume the product write role when
+connecting to Snowflake. When you are sure everything runs smoothly, you can
+revoke the product write role from the role that previously owned the object.
 
 If you change the YAML, it can be that privileges that have been granted in the
 database, based on an earlier YAML version, need to be revoked, and grupr will
@@ -273,11 +332,6 @@ so:
 
 Next steps include:
 
-- The ability to describe which teams work on which data products.
-- The ability to grant usage on warehouses to product roles.
-  Note that virtual warehouses are a Snowflake specific feature.
-  This means you will use a second independent collection of YAML files
-  to describe how you use warehouses with your data products. 
 - Ways to query the YAML metadata and / or the physical objects: for example: 
   - Give me a list of all products that consume interface X or Y.
   - Give me a list of all products and interfaces that have data of usergroup A or B.
