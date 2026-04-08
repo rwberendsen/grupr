@@ -80,6 +80,9 @@ func main() {
 
 	// Get DB connection; calling this only once and passing it around as necessary
 	snowCnf, err := snowflake.GetConfig(semCnf)
+	if err != nil {
+		log.Fatalf("get snowflake config: %v", err)
+	}
 
 	conn, err := snowflake.GetDB(ctx, snowCnf)
 	if err != nil {
