@@ -21,11 +21,8 @@ func GetConfig() (*Config, error) {
 		ValidUnquotedExpr: regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_$]{0,254}$`), // identifier chars + optional wildcard suffix
 
 		// What are valid product id's, dtap names, usergroup names?
-		// NB: its important to keep accepting only lower case id's: currently, that's the approach,
-		// when we parse, e.g., role identifiers as seen in ANSI SQL compatible databases, we lowercase those id's
-		//
-		// NB2: In addition whatever we do, if something matches ValidID, it should also match ValidUnquotedExpr
-		// We don't want to have to deal with quotes in there.
+		// We accept only lowercase id's, but they can start with a number, unlike unquoted identifiers;
+		// we use them in database identifiers, but always with a prefix (Config.Prefix)
 		ValidID: regexp.MustCompile(`^[a-z0-9_]+$`),
 
 		// If no DTAPs are specified in a product or service account, by default you will get only a production DTAP with

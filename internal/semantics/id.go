@@ -9,7 +9,7 @@ import (
 // type ID string
 
 func NewID(cnf *Config, s string) (string, error) {
-	if !cnf.ValidID.MatchString(s) || !cnf.ValidUnquotedExpr.MatchString(s) {
+	if !cnf.ValidID.MatchString(s) {
 		return s, fmt.Errorf("invalid ID: '%s'", s)
 	}
 	/*
