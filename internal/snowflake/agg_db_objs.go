@@ -16,6 +16,9 @@ type AggDBObjs struct {
 	readDBRole      DatabaseRole
 	isReadDBRoleNew bool // if true, then no need to query grants
 
+	// In / on which schema's does the readDBrole have unmanaged grants?
+	schemasWithUnmanagedGrants map[semantics.Ident]struct{}
+
 	// Grants to the readDBRole
 	isUsageGrantedOnFutureSchemasToReadDBRole bool
 	// Small lookup table, first index rows, second index columns
@@ -36,6 +39,7 @@ type AggDBObjs struct {
 
 	// Grants to the product write role; only used if this AggDBObjs is part of a product level interface
 	isCreateObjectOnFutureSchemasGrantedToProductWriteRole [2]bool // 0: ObjTable, 1: ObjView
+
 }
 
 func newAggDBObjs(o DBObjs) AggDBObjs {
@@ -215,6 +219,19 @@ func (o AggDBObjs) setFutureGrants(ctx context.Context, semCnf *semantics.Config
 
 func (o AggDBObjs) setGrants(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, db semantics.Ident, oms semantics.ObjMatchers) (AggDBObjs, error) {
 	if !o.isReadDBRoleNew {
+		// First, check for unmanaged grants, and keep track of in which schemas the database role holds unmanaged grants;
+		// We should not revoke USAGE on these schemas from the database role, not even if the schema is disjoint from the YAML.
+		for g, err := range QueryGrantsToDBRoleFiltered(ctx, cnf, conn, db, o.readDBRole.Name, nil, cnf.DatabaseRolePrivileges[ModeRead]) {
+			if err != nil {
+				return o, err
+			}
+
+			if g.Schema != semantics.Ident("") {
+				o.schemasWithUnmanagedGrants[g.Schema] = struct{}{}
+			}
+		}
+
+		// Second, check for managed grants
 		for g, err := range QueryGrantsToDBRoleFiltered(ctx, cnf, conn, db, o.readDBRole.Name, cnf.DatabaseRolePrivileges[ModeRead], nil) {
 			if err != nil {
 				return o, err
@@ -231,7 +248,12 @@ func (o AggDBObjs) setGrants(ctx context.Context, semCnf *semantics.Config, cnf 
 				if o.hasSchema(g.Schema) {
 					o.Schemas[g.Schema] = o.Schemas[g.Schema].setGrantTo(ModeRead, g)
 				} else if oms.DisjointFromSchema(g.Database, g.Schema) {
-					o = o.setRevokeGrantTo(ModeRead, g)
+					// Before we revoke schema level privileges, we need to make sure the database role
+					// does not hold any unmanaged grants on objects in the schema; as these would be broken
+					// by the absence of at least one grant on their container: the schema.
+					if _, ok := o.schemasWithUnmanagedGrants[g.Schema]; !ok {
+						o = o.setRevokeGrantTo(ModeRead, g)
+					}
 				} // Ignore this grant, it is correct, even if we did not know about the object's existence yet (result of FUTURE grant, probably)
 			case ObjTpTable, ObjTpView:
 				if o.hasObject(g.Schema, g.Object) {
