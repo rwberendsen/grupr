@@ -159,11 +159,23 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 			GrantedOn:         ObjTpDatabase,
 		}: {},
 		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvMonitor},
+			GrantedOn:         ObjTpDatabase,
+		}: {},
+		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvUsage},
 			GrantedOn:         ObjTpSchema,
 		}: {},
 		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvMonitor},
+			GrantedOn:         ObjTpSchema,
+		}: {},
+		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvSelect},
+			GrantedOn:         ObjTpTable,
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvSelectErrorTable},
 			GrantedOn:         ObjTpTable,
 		}: {},
 		GrantTemplate{
@@ -225,6 +237,30 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvOperate},
 			GrantedOn:         ObjTpWarehouse,
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvInsert},
+			GrantedOn:         ObjTpTable,
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvUpdate},
+			GrantedOn:         ObjTpTable,
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvTruncate},
+			GrantedOn:         ObjTpTable,
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvDelete},
+			GrantedOn:         ObjTpTable,
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvEvolveSchema},
+			GrantedOn:         ObjTpTable,
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvApplyBudget},
+			GrantedOn:         ObjTpTable,
 		}: {},
 	}
 

@@ -39,9 +39,13 @@ func QueryObjs(ctx context.Context, conn *sql.DB, db semantics.Ident, schema sem
 SELECT
     NULL AS n
   , "name" AS name
-  , "kind" As kind
+  , "kind" AS kind
   , "owner" AS owner
-FROM $1 WHERE kind in ('%s', '%s')
+FROM $1
+WHERE kind in ('%s', '%s')
+AND "is_hybrid" = 'N'
+AND "is_dynamic" = 'N'
+AND "is_iceberg" = 'N'
 UNION ALL
 SELECT
     COUNT(*)

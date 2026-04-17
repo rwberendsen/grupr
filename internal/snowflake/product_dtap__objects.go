@@ -79,6 +79,10 @@ func (pd *ProductDTAP) setFutureGrantsToWriteRole(ctx context.Context, cnf *Conf
 		// grants itself. Instead, the idea is that sysadmins would arrange for any service account that
 		// deploys objects in this product dtap to assume the product role; when doing so, ownership is
 		// already automatic.
+
+		// WIP: correct future grants on tables like truncate, insert, update, delete, etc; these would
+		// be made redundant by ownership. In fact, that does mean we do manage these grants, in a way,
+		// and yes, we would revoke them if we found them.
 	}, nil) {
 		if err != nil {
 			return err
@@ -130,6 +134,30 @@ func (pd *ProductDTAP) setGrantsToWriteRole(ctx context.Context, cnf *Config, co
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvOwnership},
 			GrantedOn:         ObjTpView,
 		}: {},
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvInsert},
+			GrantedOn:         ObjTpTable,
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvUpdate},
+			GrantedOn:         ObjTpTable,
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvTruncate},
+			GrantedOn:         ObjTpTable,
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvDelete},
+			GrantedOn:         ObjTpTable,
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvEvolveSchema},
+			GrantedOn:         ObjTpTable,
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvApplyBudget},
+			GrantedOn:         ObjTpTable,
+		}: {},
 	}, nil) {
 		if err != nil {
 			return err
@@ -169,6 +197,13 @@ func (pd *ProductDTAP) setGrantsToWriteRole(ctx context.Context, cnf *Config, co
 			}
 			// Ignore, unmanaged grant
 		}
+		case PrvInsert, PrvUpdate, PrvTruncate, PrvDelete, PrvEvolveSchema, PrvApplyBudget:
+			switch g.GrantedOn {
+			case ObjTpTable:
+				// We revoke this grant, as it will be redundant given the ownership privilege
+				pd.toRevokeObjects = append(pd.toRevokeObjects, g)
+			}
+			// Ignore
 		// Ignore; unmanaged grant
 	}
 	return nil
