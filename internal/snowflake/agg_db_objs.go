@@ -221,6 +221,7 @@ func (o AggDBObjs) setGrants(ctx context.Context, semCnf *semantics.Config, cnf 
 	if !o.isReadDBRoleNew {
 		// First, check for unmanaged grants, and keep track of in which schemas the database role holds unmanaged grants;
 		// We should not revoke USAGE on these schemas from the database role, not even if the schema is disjoint from the YAML.
+		o.schemasWithUnmanagedGrants = map[semantics.Ident]struct{}{}
 		for g, err := range QueryGrantsToDBRoleFiltered(ctx, cnf, conn, db, o.readDBRole.Name, nil, cnf.DatabaseRolePrivileges[ModeRead]) {
 			if err != nil {
 				return o, err
