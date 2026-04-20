@@ -27,6 +27,9 @@ func newObj(name semantics.Ident, objType ObjType, owner semantics.Ident) (Obj, 
 }
 
 func QueryObjs(ctx context.Context, conn *sql.DB, db semantics.Ident, schema semantics.Ident) iter.Seq2[Obj, error] {
+	// The problem with the SHOW OBJECTS function is that there is no flag "is_regular" for regular tables.
+	// If new types of tables are returned in the future, with flags like "is_new_type_X", "is_new_type_Y",
+	// calling code will treat it like a regular table.
 	return func(yield func(Obj, error) bool) {
 		// When there are more than 10K results, paginate.
 		// Because we apply filters, even if fewer results are returned, perhaps there are still more.

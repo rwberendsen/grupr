@@ -51,6 +51,8 @@ func (o AggObjAttr) hasGrantTo(m Mode, p Privilege) bool {
 
 func (o AggObjAttr) pushToDoGrants(yield func(Grant) bool, dbRole DatabaseRole, schema semantics.Ident, obj semantics.Ident) bool {
 	prvs := []PrivilegeComplete{}
+	// WIP TODO PrvReferences is not there for dynamic tables and online feature tables, are we 100% sure the latter is
+	// not in the output of show objects? If so, granting REFERENCES may fail
 	for _, p := range [2]Privilege{PrvSelect, PrvReferences} {
 		if !o.hasGrantTo(ModeRead, p) {
 			prvs = append(prvs, PrivilegeComplete{Privilege: p})
