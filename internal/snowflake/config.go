@@ -2,6 +2,7 @@ package snowflake
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"strconv"
 	"strings"
@@ -152,8 +153,7 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 		}
 	}
 
-	cnf.DatabaseRolePrivileges = map[Mode]map[GrantTemplate]struct{}{}
-	cnf.DatabaseRolePrivileges[ModeRead] = map[GrantTemplate]struct{}{
+	cnf.ObjectPrivilegesRead = map[GrantTemplate]struct{}{
 		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvUsage},
 			GrantedOn:         ObjTpDatabase,
@@ -179,41 +179,19 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 			GrantedOn:         ObjTpTable,
 		}: {},
 		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvReferences},
+			GrantedOn:         ObjTpTable,
+		}: {},
+		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvSelect},
 			GrantedOn:         ObjTpView,
 		}: {},
 		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvReferences},
-			GrantedOn:         ObjTpTable,
-		}: {},
-		GrantTemplate{
-			PrivilegeComplete: PrivilegeComplete{Privilege: PrvReferences},
 			GrantedOn:         ObjTpView,
 		}: {},
 	}
-
-	cnf.ProductRolePrivileges = map[Mode]map[GrantTemplate]struct{}{}
-	cnf.ProductRolePrivileges[ModeRead] = map[GrantTemplate]struct{}{
-		GrantTemplate{
-			PrivilegeComplete:         PrivilegeComplete{Privilege: PrvUsage},
-			GrantedOn:                 ObjTpDatabaseRole,
-			GrantedRoleIsGruprManaged: util.NewTrue(),
-		}: {},
-		GrantTemplate{
-			PrivilegeComplete: PrivilegeComplete{Privilege: PrvUsage},
-			GrantedOn:         ObjTpWarehouse,
-		}: {},
-		GrantTemplate{
-			PrivilegeComplete: PrivilegeComplete{Privilege: PrvOperate},
-			GrantedOn:         ObjTpWarehouse,
-		}: {},
-	}
-	cnf.ProductRolePrivileges[ModeWrite] = map[GrantTemplate]struct{}{
-		GrantTemplate{
-			PrivilegeComplete:         PrivilegeComplete{Privilege: PrvUsage},
-			GrantedOn:                 ObjTpDatabaseRole,
-			GrantedRoleIsGruprManaged: util.NewTrue(),
-		}: {},
+	cnf.ObjectPrivilegesWrite = map[GrantTemplate]struct{}{
 		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpTable},
 			GrantedOn:         ObjTpSchema,
@@ -229,14 +207,6 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvOwnership},
 			GrantedOn:         ObjTpView,
-		}: {},
-		GrantTemplate{
-			PrivilegeComplete: PrivilegeComplete{Privilege: PrvUsage},
-			GrantedOn:         ObjTpWarehouse,
-		}: {},
-		GrantTemplate{
-			PrivilegeComplete: PrivilegeComplete{Privilege: PrvOperate},
-			GrantedOn:         ObjTpWarehouse,
 		}: {},
 		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvInsert},
@@ -261,6 +231,41 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvApplyBudget},
 			GrantedOn:         ObjTpTable,
+		}: {},
+	}
+	cnf.ObjectPrivileges = map[GrantTemplate]struct{}{}
+	maps.Copy(cnf.ObjectPrivileges, cnf.ObjectPrivilegesWrite)
+	maps.Copy(cnf.ObjectPrivileges, cnf.ObjectPrivilegesRead)
+
+	cnf.ProductRolePrivileges = map[Mode]map[GrantTemplate]struct{}{}
+	cnf.ProductRolePrivileges[ModeRead] = map[GrantTemplate]struct{}{
+		GrantTemplate{
+			PrivilegeComplete:         PrivilegeComplete{Privilege: PrvUsage},
+			GrantedOn:                 ObjTpDatabaseRole,
+			GrantedRoleIsGruprManaged: util.NewTrue(),
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvUsage},
+			GrantedOn:         ObjTpWarehouse,
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvOperate},
+			GrantedOn:         ObjTpWarehouse,
+		}: {},
+	}
+	cnf.ProductRolePrivileges[ModeWrite] = map[GrantTemplate]struct{}{
+		GrantTemplate{
+			PrivilegeComplete:         PrivilegeComplete{Privilege: PrvUsage},
+			GrantedOn:                 ObjTpDatabaseRole,
+			GrantedRoleIsGruprManaged: util.NewTrue(),
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvUsage},
+			GrantedOn:         ObjTpWarehouse,
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvOperate},
+			GrantedOn:         ObjTpWarehouse,
 		}: {},
 	}
 

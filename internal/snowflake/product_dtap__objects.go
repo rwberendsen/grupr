@@ -117,48 +117,7 @@ func (pd *ProductDTAP) setGrantsToWriteRole(ctx context.Context, cnf *Config, co
 	if _, ok := productRoles[pd.WriteRole]; !ok && cnf.DryRun {
 		return nil
 	}
-	for g, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, pd.WriteRole.ID, map[GrantTemplate]struct{}{
-		GrantTemplate{
-			PrivilegeComplete: PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpTable},
-			GrantedOn:         ObjTpSchema,
-		}: {},
-		GrantTemplate{
-			PrivilegeComplete: PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpView},
-			GrantedOn:         ObjTpSchema,
-		}: {},
-		GrantTemplate{
-			PrivilegeComplete: PrivilegeComplete{Privilege: PrvOwnership},
-			GrantedOn:         ObjTpTable,
-		}: {},
-		GrantTemplate{
-			PrivilegeComplete: PrivilegeComplete{Privilege: PrvOwnership},
-			GrantedOn:         ObjTpView,
-		}: {},
-		GrantTemplate{
-			PrivilegeComplete: PrivilegeComplete{Privilege: PrvInsert},
-			GrantedOn:         ObjTpTable,
-		}: {},
-		GrantTemplate{
-			PrivilegeComplete: PrivilegeComplete{Privilege: PrvUpdate},
-			GrantedOn:         ObjTpTable,
-		}: {},
-		GrantTemplate{
-			PrivilegeComplete: PrivilegeComplete{Privilege: PrvTruncate},
-			GrantedOn:         ObjTpTable,
-		}: {},
-		GrantTemplate{
-			PrivilegeComplete: PrivilegeComplete{Privilege: PrvDelete},
-			GrantedOn:         ObjTpTable,
-		}: {},
-		GrantTemplate{
-			PrivilegeComplete: PrivilegeComplete{Privilege: PrvEvolveSchema},
-			GrantedOn:         ObjTpTable,
-		}: {},
-		GrantTemplate{
-			PrivilegeComplete: PrivilegeComplete{Privilege: PrvApplyBudget},
-			GrantedOn:         ObjTpTable,
-		}: {},
-	}, nil) {
+	for g, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, pd.WriteRole.ID, cnf.ObjectPrivileges, nil) {
 		if err != nil {
 			return err
 		}
@@ -193,15 +152,54 @@ func (pd *ProductDTAP) setGrantsToWriteRole(ctx context.Context, cnf *Config, co
 					// transfer its ownership to a role that is not managed by grupr.
 					// Note that when we refreshed, toTransferOwnership was reset to an empty slice
 					pd.toTransferOwnership = append(pd.toTransferOwnership, g)
+					// WIP: We don't want to transfer ownership on unmanaged objects like dynamic tables!?
+					// even if they are disjoint from the grupin?! cause it would be like altering an
+					// unmanaged grant. How to distinguish in this case between regular tables disjoint
+					// from the grupin, and, say, external, event, hybrid, etc tables? Perhaps there will
+					// be no other way than to do another, ad hoc, query, to find out.
+					// Even that is not simple, however, because the way to query it depends on what it is,
+					// so that would be a piece of code that would have to try different kinds of strategies
+					// until it finds something. e.g., try DESCRIBE TABLE, then try DESCRIBE DYNAMIC TABLE, etc.
+					// Or do a SHOW OBJECTS, covering regular, hybrid, dynamic, and iceberg tables, and then
+					// if you still don't find it, do external tables, event tables, interactive tables, etc.
+					// Perhaps in our account cache we should actually keep all kinds of tables there are,
+					// so that we do have all the info, even if we are not managing grants on such types of
+					// objects yet.
+					// If we did that, it would be nice to have ObjType values for each kind, the only trouble
+					// is that when we query for grants in Snowflake, Snowflake will always just say TABLE,
+					// so when we deserialize a row like that, it would contain erroneous data. We could also
+					// use ObjTpTable for all of them, and then have properties like is_external, etc.
+					//
+					// And what about secure views, materialized views, and semantic views?
+					//
+					// You know, the Snowflake APIs for creating objects and querying grants on them have
+					// some inconsistencies, probably due to the speed with which new features are added and
+					// launched. That makes it harder for a tool like grupr to achieve consistent access management
+					// in a simple manner.
+
+					// And what about interactive warehouses :-)
 				}
 			}
 			// Ignore, unmanaged grant
 		}
-		case PrvInsert, PrvUpdate, PrvTruncate, PrvDelete, PrvEvolveSchema, PrvApplyBudget:
+		case PrvInsert, PrvUpdate, PrvTruncate, PrvDelete, PrvEvolveSchema, PrvApplyBudget,
+        	PrvSelect, PrvSelectErrorTable, PrvReferences:
 			switch g.GrantedOn {
-			case ObjTpTable:
-				// We revoke this grant, as it will be redundant given the ownership privilege
-				pd.toRevokeObjects = append(pd.toRevokeObjects, g)
+			case ObjTpTable, ObjTpView:
+				// We revoke this grant, as it is redundant in grupr it's access management model. But, we need to check
+				// if we found the object in question, before we revoke: this could be a dynamic, event, external,
+				// hybrid, or iceberg table, which we do not manage yet; we leave unmanaged grants intact not to break
+				// anything.
+				// 
+				// If this is a regular table or view, and we did not find it, it means the object was created after we
+				// refreshed objects, and then some of these privileges were granted.  So if we do not have the table in
+				// our accountobjects in memory, we have no way of knowing for sure whether or not this is a type of
+				// table we don't support yet (dynamic, iceberg, hybrid, event, external, ...) Therefore, we will not
+				// revoke in that case also. If it was a regular table, the next time grupr runs, the object will be
+				// found, and the privilege revoked.
+				if _, ok := pd.Interface.aggAccountObjects.GetObject(g.Database, g.Schema, g.Object); ok {
+					pd.toRevokeObjects = append(pd.toRevokeObjects, g)
+				}
 			}
 			// Ignore
 		// Ignore; unmanaged grant
