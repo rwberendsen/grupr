@@ -4,37 +4,58 @@ type Privilege int
 
 const (
 	PrvOther Privilege = iota // zero type is PrvOther
+	PrvApplyBudget
 	PrvCreate
+	PrvDelete
+	PrvEvolveSchema
+	PrvInsert
 	PrvMonitor
 	PrvOperate
 	PrvOwnership
 	PrvReferences
 	PrvSelect
+	PrvSelectErrorTable
+	PrvTruncate
+	PrvUpdate
 	PrvUsage
 )
 
 func ParsePrivilege(p string) Privilege {
 	return map[string]Privilege{
-		"CREATE":     PrvCreate,
-		"MONITOR":    PrvMonitor,
-		"OPERATE":    PrvOperate,
-		"OWNERSHIP":  PrvOwnership,
-		"REFERENCES": PrvReferences,
-		"SELECT":     PrvSelect,
-		"USAGE":      PrvUsage,
+		"APPLY BUDGET":       PrvApplyBudget,
+		"CREATE":             PrvCreate,
+		"DELETE":             PrvDelete,
+		"EVOLVE SCHEMA":      PrvEvolveSchema,
+		"INSERT":             PrvInsert,
+		"MONITOR":            PrvMonitor,
+		"OPERATE":            PrvOperate,
+		"OWNERSHIP":          PrvOwnership,
+		"REFERENCES":         PrvReferences,
+		"SELECT":             PrvSelect,
+		"SELECT ERROR TABLE": PrvSelect,
+		"TRUNCATE":           PrvTruncate,
+		"UPDATE":             PrvUpdate,
+		"USAGE":              PrvUsage,
 	}[p]
 }
 
 func (p Privilege) String() string {
 	return map[Privilege]string{
-		PrvOther:      "OTHER",
-		PrvCreate:     "CREATE",
-		PrvMonitor:    "MONITOR",
-		PrvOperate:    "OPERATE",
-		PrvOwnership:  "OWNERSHIP",
-		PrvReferences: "REFERENCES",
-		PrvSelect:     "SELECT",
-		PrvUsage:      "USAGE",
+		PrvOther:            "OTHER",
+		PrvApplyBudget:      "APPLY BUDGET",
+		PrvCreate:           "CREATE",
+		PrvDelete:           "DELETE",
+		PrvEvolveSchema:     "EVOLVE SCHEMA",
+		PrvInsert:           "INSERT",
+		PrvMonitor:          "MONITOR",
+		PrvOperate:          "OPERATE",
+		PrvOwnership:        "OWNERSHIP",
+		PrvReferences:       "REFERENCES",
+		PrvSelect:           "SELECT",
+		PrvSelectErrorTable: "SELECT ERROR TABLE",
+		PrvTruncate:         "TRUNCATE",
+		PrvUpdate:           "UPDATE",
+		PrvUsage:            "USAGE",
 	}[p]
 }
 

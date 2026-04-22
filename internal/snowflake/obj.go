@@ -35,6 +35,14 @@ func QueryObjs(ctx context.Context, conn *sql.DB, db semantics.Ident, schema sem
 		// Because we apply filters, even if fewer results are returned, perhaps there are still more.
 		// For that reason, our last row has a count of the first query result
 		mayHaveMore := true
+		type objTpRec struct {
+			kind string
+			is_hybrid bool
+			is_dynamic bool
+			is_iceberg bool
+			is_interactive bool
+		}
+		toDetermine := map[string]objTpRec{}
 		var fromClause string
 		limit := 10000
 		for mayHaveMore {
@@ -43,12 +51,12 @@ SELECT
     NULL AS n
   , "name" AS name
   , "kind" AS kind
+  , "is_hybrid" AS is_hybrid
+  , "is_dynamic" AS is_dynamic
+  , "is_iceberg" AS is_iceberg
+  , "is_interactive" AS is_interactive
   , "owner" AS owner
 FROM $1
-WHERE kind in ('%s', '%s')
-AND "is_hybrid" = 'N'
-AND "is_dynamic" = 'N'
-AND "is_iceberg" = 'N'
 UNION ALL
 SELECT
     COUNT(*)
@@ -70,6 +78,10 @@ FROM $1
 				var n *int
 				var name semantics.Ident
 				var kind string
+				var is_hybrid string
+				var is_dynamic string
+				var is_iceberg string
+				var is_interactive string
 				var owner semantics.Ident
 				if err = rows.Scan(&n, &name, &kind, &owner); err != nil {
 					err = fmt.Errorf("QueryObjs: error scanning row: %w", err)
@@ -84,11 +96,18 @@ FROM $1
 					}
 					continue
 				}
-				if obj, err := newObj(name, ParseObjType(kind), owner); err != nil {
-					yield(Obj{}, err)
-					return
-				} else if !yield(obj, nil) {
-					return
+				if objType, ok := ParseObjTypeFromRecord(kind, is_hybrid, is_dynamic, is_iceberg, is_interactive); ok {
+					if !yield(Obj{Name: name, ObjectType: objType, Owner: owner}, nil) {
+							return
+					}
+				} else {
+					toDetermine[name] = objTpRec{
+						kind: kind,
+						is_hybrid: is_hybrid,
+						is_dynamic: is_dynamic,
+						is_iceberg: is_iceberg,
+						is_interactive: is_interactive,
+					}
 				}
 				lastName = name
 			}
@@ -97,6 +116,20 @@ FROM $1
 				yield(Obj{}, err)
 				return
 			}
+		}
+		if toDetermineHasViews() > 0 {
+			// There were objects for which we cannot decide the object type based on the output of SHOW OBJECTS 
+			// Still, we need to know the object type, to be able to manage grants correctly
+			// The only practical way appears to be to query again, for more specific object types. 
+			// In particular, when kind equals VIEW, we need to know if it is a regular view, a materialized view,
+			// or a semantic view. SHOW VIEWS does not appear to include semantic views.
+			// We may query specifically for MATERIALIZED VIEWS, and then SEMANTIC VIEWS.
+			// And, any remaining objects with kind VIEW we may assume to be regular views--until Snowflake introduces
+			// yet more view types without indicating so in SHOW OBJECTS its output
+			
+			// WIP: fire query for materialized views, and delete matching records from toDetermine
+			// WIP: if toDetermine still has views, fire query for semantic views, and delete matching records from toDetermine
+			// WIP: yield any remaining views in toDetermine as regular views
 		}
 	}
 }
