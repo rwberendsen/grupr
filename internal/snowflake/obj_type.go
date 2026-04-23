@@ -25,6 +25,7 @@ const (
 )
 
 func ParseObjType(s string) ObjType {
+	// s is a statement-style object type string
 	return map[string]ObjType{
 		"ACCOUNT":              ObjTpAccount,
 		"DATABASE":             ObjTpDatabase,
@@ -71,35 +72,14 @@ func (ot ObjType) String() string {
 	}[ot]
 }
 
-func ParseObjTypeFromShowObjectsRecord(kind string, is_hybrid bool, is_dynamic bool, is_iceberg bool,
-	is_interactive bool) (ObjType, bool) {
-	switch kind {
-	case "TABLE":
-		// TODO: there appears to be something like a dynamic iceberg table, for example, not sure how it would be
-		// represented here, and what would be the set of privileges we can assign an object like that, it is not
-		// separate treated in the Snowflake documentation page on access control privileges as of April 2026
-		if is_hybrid && !is_dynamic && !is_iceberg && !is_interactive {
-			return ObjTpHybridTable, true
-		}
-		if !is_hybrid && is_dynamic && !is_iceberg && !is_interactive {
-			return ObjTpDynamicTable, true
-		}
-		if !is_hybrid && !is_dynamic && is_iceberg && !is_interactive {
-			return ObjTpIcebergTable, true
-		}
-		if !is_hybrid && !is_dynamic && !is_iceberg && is_interactive {
-			return ObjTpInteractiveTable, true
-		}
-	case "ONLINE_FEATURE_TABLE":
-		return ObjTpOnlineFeatureTable, true
-	case "EVENT_TABLE": // TODO: validate this is how it appears in the output
-		return ObjTpEventTable, true
-	case "EXTERNAL_TABLE": // TODO: validate this is how it appears in the output
-		return ObjTpExternalTable, true
-	case "VIEW":
-		return ObjTpView, false // we cannot fully determine object type
-	}
-	return ObjTpOther, false
+func (ot ObjType) RecordString() string {
+	return ot.String() // TODO: and replace spaces with underscores
+}
+
+func ParseObjTypeFromRecord(s string) ObjType {
+	// s is a record-style object type string as found in output of
+	// SHOW OBJECTS and SHOW GRANTS
+	return ParseObjType(s) // TODO: and first replace underscores with spaces
 }
 
 func (ot ObjType) getIdxObjectLevel() int {
