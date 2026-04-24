@@ -1,5 +1,9 @@
 package snowflake
 
+import (
+	"strings"
+)
+
 type ObjType int
 
 const (
@@ -73,13 +77,13 @@ func (ot ObjType) String() string {
 }
 
 func (ot ObjType) RecordString() string {
-	return ot.String() // TODO: and replace spaces with underscores
+	return strings.ReplaceAll(ot.String(), " ", "_")
 }
 
 func ParseObjTypeFromRecord(s string) ObjType {
 	// s is a record-style object type string as found in output of
 	// SHOW OBJECTS and SHOW GRANTS
-	return ParseObjType(s) // TODO: and first replace underscores with spaces
+	return ParseObjType(strings.ReplaceAll(s, "_", " "))
 }
 
 func (ot ObjType) getIdxObjectLevel() int {
