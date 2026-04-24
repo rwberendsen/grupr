@@ -168,6 +168,28 @@ func GetObjs(ctx context.Context, conn *sql.DB, db semantics.Ident, schema seman
 	}
 }
 
+func queryTables(ctx context.Context, conn *sql.DB, db semantics.Ident, schema semantics.Ident) iter.Seq2[tableRec,
+	error] {
+	// The main problem with the SHOW TABLES function is that there is no flag "is_normal" for regular tables.
+	// If new types of tables are returned in the future, with flags like "is_new_type_X", "is_new_type_Y",
+	// grupr will treat it like a regular table. That means grupr may crash, for example, when it tries to
+	// grant SELECT ERROR TABLE, which, as of Apr 2026, is only applicable to normal tables.
+	// 
+	// Until Snowflake adds a flag "is_normal" to the output of the SHOW TABLES function (and friends like SHOW OBJECTS,
+	// SHOW VIEWS, etc, I see no easy way to prevent this problem, other than quickly fixing grupr each time Snowflake
+	// comes out with something new (again).
+}
+
+func queryViews(ctx context.Context, conn *sql.DB, db semantics.Ident, schema semantics.Ident) iter.Seq2[viewRec,
+	error] {
+	// The main problem with the SHOW VIEWS function is that there is no flag "is_normal" for regular views.
+	// If new types of views are returned in the future, with flags like "is_new_type_X", "is_new_type_Y",
+	// grupr will treat it like a regular view.
+	// Until Snowflake adds a flag "is_normal" to the output of the SHOW VIEWS function (and friends like SHOW OBJECTS,
+	// SHOW TABLES, etc, I see no easy way to prevent this problem, other than quickly fixing grupr each time Snowflake
+	// comes out with something new (again).
+}
+
 func queryObjs(ctx context.Context, conn *sql.DB, db semantics.Ident, schema semantics.Ident) iter.Seq2[objRec, error] {
 	// The problem with the SHOW OBJECTS function is that there is no flag "is_regular" for regular tables.
 	// If new types of tables are returned in the future, with flags like "is_new_type_X", "is_new_type_Y",

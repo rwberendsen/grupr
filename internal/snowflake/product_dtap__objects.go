@@ -273,6 +273,18 @@ func (pd *ProductDTAP) setGrantsToWriteRole(ctx context.Context, cnf *Config, co
 					// so far. The Snowflake REST API also mentions a table type "NORMAL", but, that API comes
 					// with its own quirks as well. Anyway, I gave some feedback on the Snowflake docs,
 					// and, am calling it a day.
+
+					// SOLUTION, WIP:
+					// We will process candidate objects for transferring ownership as follows:
+					// - for all schema's in the collection of to transfer objects, create a matching expression,
+					// - use the matching expressions to query the account cache
+					// - if the objects are subsequently found in the account cache, they are of a type that
+					//   is in scope for grupr normally, and ownership can be transferred.
+					// - if the objects are subsequently not found in the account cache, they are of a type
+					//   for which grupr is not (yet) managing privileges, in this case, sysadmins must have
+					//   granted the privilege using other means, and grupr will not revoke it and not
+					//   transfer ownership.
+					// We will treat revoke candidates the same way.
 				}
 			}
 			// Ignore, unmanaged grant
