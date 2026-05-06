@@ -264,7 +264,15 @@ Usually this set will have just one database role, but there can be more if
 objects of a sinlge product or interface reside in different databases.
 
 Concretely then, the product read role is granted the database roles of the product
-objects, and the database roles of all interface it consumes.
+objects, and the database roles of all interface it consumes. If you want
+to grant read privileges to objects of types that grupr does not yet manage,
+you can do so. Grupr will leave these grants intact, and as long as any remain,
+it will also keep the USAGE privilege on the containing schemas intact. If you insist,
+it is also possible to grant such privileges directly to the product read role,
+but if you make that choice, you have to also grant USAGE on the containing schemas
+and databases to the product write role directly; being privileges that grupr
+normally does not manage for a product read role, it would leave such grants intact
+as well.
 
 The product write role also gets granted the same database roles. But on top of
 that, the write role gets the ownership privilege on all objects in the product
@@ -275,6 +283,11 @@ current owner retains ownership of the object. After running grupr, you can
 update your production deployments to assume the product write role when
 connecting to Snowflake. When you are sure everything runs smoothly, you can
 revoke the product write role from the role that previously owned the object.
+
+If you grant privileges directly to the write role that grupr does not normally manage; or privileges on object types that grupr
+does not normally manage; then you should also grant USAGE on the containing schemas and databases directly to the write
+role. Not doing so means you will rely on managed privileges to still exist based on the YAML in those same schemas and
+databases.
 
 If you change the YAML, it can be that privileges that have been granted in the
 database, based on an earlier YAML version, need to be revoked, and grupr will
