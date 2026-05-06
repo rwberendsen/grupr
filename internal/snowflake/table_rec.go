@@ -19,24 +19,36 @@ type tableRec struct {
 	is_hybrid string
 	is_iceberg string
 	is_dynamic string
-	is_immutable string
+	is_immutable string // should always be N anyway, since we filter out temporary tables, but, never mind, could change in the future.
 	is_interactive string
 }
 
 func (r tableRec) getObjType() ObjType {
+	// First, exclude any object not owned by a role
 	if ParseObjType(r.owner_role_type) != ObjTpRole {
 		return ObjTpOther
 	}
-	if r.is_external == "Y" || 
-		r.is_event == "Y" ||
-		r.is_hybrid == "Y" ||
-		r.is_iceberg == "Y" ||
-		r.is_dynamic == "Y" ||
-		r.is_immutable == "Y" ||
-		r.is_interactive == "Y" {
-		return ObjTpOther
+	// Now, start accepting objects of types we manage
+	if r.is_external == "N" &&
+		r.is_hybrid == "N" &&
+		r.is_event == "N" &&
+		r.is_iceberg == "N" &&
+		r.is_dynamic == "N" &&
+		r.is_immutable == "N" &&
+		r.is_interactive == "N" {
+		return ObjTpTable
 	}
-	return ObjTpTable
+	if r.is_external == "N" &&
+		r.is_hybrid == "Y" &&
+		r.is_event == "N" &&
+		r.is_iceberg == "N" &&
+		r.is_dynamic == "N" &&
+		r.is_immutable == "N" &&
+		r.is_interactive == "N" {
+		return ObjTpHybridTable
+	}
+	// Else, return ObjTpOther, meaning this object type is not managed by grupr
+	return ObjTpOther
 }
 
 func queryTables(ctx context.Context, conn *sql.DB, db semantics.Ident, schema semantics.Ident) iter.Seq2[tableRec,

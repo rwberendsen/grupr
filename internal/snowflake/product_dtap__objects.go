@@ -64,26 +64,7 @@ func (pd *ProductDTAP) setFutureGrantsToWriteRole(ctx context.Context, cnf *Conf
 	if _, ok := productRoles[pd.WriteRole]; !ok && cnf.DryRun {
 		return nil
 	}
-	for g, err := range QueryFutureGrantsToRoleFiltered(ctx, conn, pd.WriteRole.ID, map[GrantTemplate]struct{}{
-		GrantTemplate{
-			PrivilegeComplete: PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpTable},
-			GrantedOn:         ObjTpSchema,
-		}: {},
-		GrantTemplate{
-			PrivilegeComplete: PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpView},
-			GrantedOn:         ObjTpSchema,
-		}: {},
-		// Ignoring other grants, including future ownership grants. It would be quite annoying if such grants
-		// were present, they would interfere with grupr (basically grupr would correct them if they grant
-		// ownership to any other role than the product dtap role). But, grupr does not use future ownership
-		// grants itself. Instead, the idea is that sysadmins would arrange for any service account that
-		// deploys objects in this product dtap to assume the product role; when doing so, ownership is
-		// already automatic.
-
-		// WIP: correct future grants on tables like truncate, insert, update, delete, etc; these would
-		// be made redundant by ownership. In fact, that does mean we do manage these grants, in a way,
-		// and yes, we would revoke them if we found them.
-	}, nil) {
+	for g, err := range QueryFutureGrantsToRoleFiltered(ctx, conn, pd.WriteRole.ID,	cnf.ObjectPrivileges, nil) {
 		if err != nil {
 			return err
 		}
@@ -92,22 +73,29 @@ func (pd *ProductDTAP) setFutureGrantsToWriteRole(ctx context.Context, cnf *Conf
 		case ObjTpDatabase:
 			switch g.GrantedOn {
 			case ObjTpSchema:
-				// Should we have this grant?
-				if pd.Interface.ObjectMatchers.MatchAllSchemasInDB(g.Database) {
-					// If yes, then, if we also have matched the object, mark on it that privilege on future objects was already granted
-					if dbObjs, ok := pd.Interface.aggAccountObjects.DBs[g.Database]; ok {
-						dbObjs.setFutureGrantTo(ModeWrite, g)
+				switch g.Privileges[0].Privilege {
+				case PrvCreate:
+					// Should we have this grant?
+					if pd.Interface.ObjectMatchers.MatchAllSchemasInDB(g.Database) {
+						// If yes, then, if we also have matched the object, mark on it that privilege on future objects was already granted
+						if dbObjs, ok := pd.Interface.aggAccountObjects.DBs[g.Database]; ok {
+							dbObjs.setFutureGrantTo(ModeWrite, g)
+						}
+					} else {
+						// if not, then revoke this future grant
+						//
+						// Note that when we refreshed, we reset toRevokeFutureObjects to the empty slice
+						pd.toRevokeFutureObjects = append(pd.toRevokeFutureObjects, g)
 					}
-				} else {
-					// if not, then revoke this future grant
-					//
-					// Note that when we refreshed, we reset toRevokeFutureObjects to the empty slice
+				default:
 					pd.toRevokeFutureObjects = append(pd.toRevokeFutureObjects, g)
 				}
+			default:
+				pd.toRevokeFutureObjects = append(pd.toRevokeFutureObjects, g)
 			}
-			// Ignore this grant, it's not in grupr its scope (unmanaged grant)
+		default:
+			pd.toRevokeFutureObjects = append(pd.toRevokeFutureObjects, g)
 		}
-		// Ignore; unmanaged grant
 	}
 	return nil
 }

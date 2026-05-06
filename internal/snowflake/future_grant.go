@@ -91,25 +91,13 @@ func newFutureGrant(privilege string, createObjType string, grantedOn string, na
 	if _, err = r.Read(); err != io.EOF {
 		return g, err
 	} // more than one record
-	switch len(rec) {
-	case 2:
-		g.GrantedIn = ObjTpDatabase
-		g.Database = semantics.Ident(rec[0])
-	case 3:
-		g.GrantedIn = ObjTpSchema
-		g.Database = semantics.Ident(rec[0])
-		g.Schema = semantics.Ident(rec[1])
-	default:
-		return g, fmt.Errorf("parsing name in future grant failed")
-	}
 	switch g.GrantedOn {
 	case ObjTpSchema:
 		g.Database = semantics.Ident(rec[0])
-		g.Schema = semantics.Ident(rec[1])
 	case ObjTpTable, ObjTpView:
 		g.Database = semantics.Ident(rec[0])
 		g.Schema = semantics.Ident(rec[1])
-		g.Object = semantics.Ident(rec[2])
+	case ObjTpOther:
 	default:
 		return g, fmt.Errorf("unsupported granted_on object type for future grant")
 	}

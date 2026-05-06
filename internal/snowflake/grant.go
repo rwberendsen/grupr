@@ -128,6 +128,7 @@ func newGrantToRole(privilege string, createObjType string, grantedOn string, na
 		g.Object = semantics.Ident(rec[2])
 	case ObjTpWarehouse:
 		g.Object = semantics.Ident(rec[0])
+	case ObjTpOther:
 	default:
 		return g, fmt.Errorf("unsupported granted_on object type for grant")
 	}

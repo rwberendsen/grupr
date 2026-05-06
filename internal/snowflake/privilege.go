@@ -22,7 +22,7 @@ const (
 
 func ParsePrivilege(p string) Privilege {
 	return map[string]Privilege{
-		"APPLY BUDGET":       PrvApplyBudget,
+		"APPLYBUDGET":        PrvApplyBudget,
 		"CREATE":             PrvCreate,
 		"DELETE":             PrvDelete,
 		"EVOLVE SCHEMA":      PrvEvolveSchema,
@@ -42,7 +42,7 @@ func ParsePrivilege(p string) Privilege {
 func (p Privilege) String() string {
 	return map[Privilege]string{
 		PrvOther:            "OTHER",
-		PrvApplyBudget:      "APPLY BUDGET",
+		PrvApplyBudget:      "APPLYBUDGET",
 		PrvCreate:           "CREATE",
 		PrvDelete:           "DELETE",
 		PrvEvolveSchema:     "EVOLVE SCHEMA",
