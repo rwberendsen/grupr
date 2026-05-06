@@ -1,0 +1,134 @@
+package snowflake
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"iter"
+	"strings"
+
+	"github.com/rwberendsen/grupr/internal/semantics"
+)
+
+type viewRec struct {
+	name semantics.Ident
+	kind string
+	owner semantics.Ident
+	is_external bool
+	owner_role_type ObjType
+	is_event bool
+	is_hybrid bool
+	is_iceberg bool
+	is_dynamic bool
+	is_immutable bool
+	is_interactive bool
+}
+
+func queryTables(ctx context.Context, conn *sql.DB, db semantics.Ident, schema semantics.Ident) iter.Seq2[tableRec,
+	error] {
+	// The main problem with the SHOW VIEWS function is that there is no flag "is_normal" for regular views.
+	// If new types of views are returned in the future, with flags like "is_new_type_X", "is_new_type_Y",
+	// grupr will treat it like a regular view.
+	// Until Snowflake adds a flag "is_normal" to the output of the SHOW VIEWS function (and friends like SHOW OBJECTS,
+	// SHOW TABLES, etc, I see no easy way to prevent this problem, other than quickly fixing grupr each time Snowflake
+	// comes out with something new (again).
+	return func(yield func(tableRec, error) bool) {
+		// When there are more than 10K results, paginate.
+		// Because we apply filters, even if fewer results are returned, perhaps there are still more.
+		// For that reason, our last row has a count of the first query result
+		mayHaveMore := true
+		var fromClause string
+		limit := 10000
+		for mayHaveMore {
+			rows, err := conn.QueryContext(ctx, fmt.Sprintf(`SHOW TABLES IN SCHEMA IDENTIFIER($$%s.%s$$) LIMIT %d%s ->>
+SELECT
+    NULL AS n
+  , "name" AS name
+  , "kind" AS kind
+  , "owner" AS owner
+  , "is_external" AS is_external
+  , "owner_role_type" AS owner_role_type
+  , "is_event" AS is_event
+  , "is_hybrid" AS is_hybrid
+  , "is_iceberg" AS is_iceberg
+  , "is_dynamic" AS is_dynamic
+  , "is_immutable" AS is_immutable
+  , "is_interactive" AS is_interactive
+FROM $1
+WHERE
+    kind IN ('TABLE', 'TRANSIENT')
+AND owner_role_type = 'ROLE'
+AND is_external = 'N'
+AND is_event = 'N'
+AND is_hybrid = 'N'
+AND is_iceberg = 'N'
+AND is_dynamic = 'N'
+AND is_immutable = 'N'
+AND is_interactive = 'N'
+UNION ALL
+SELECT
+    COUNT(*)
+  , '' AS name
+  , '' AS kind
+  , '' AS owner
+  , '' AS is_external
+  , '' AS owner_role_type
+  , '' AS is_event
+  , '' AS is_hybrid
+  , '' AS is_iceberg
+  , '' AS is_dynamic
+  , '' AS is_immutable
+  , '' AS is_interactive
+FROM $1
+`, db, schema, limit, fromClause))
+			if err != nil {
+				if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
+					err = ErrObjectNotExistOrAuthorized
+				}
+				yield(Obj{}, err)
+				return
+			}
+			defer rows.Close()
+			var lastName semantics.Ident
+			for rows.Next() {
+				var n *int
+				var rec tableRec
+				if err = rows.Scan(
+					&n,
+					&rec.name,
+					&rec.kind,
+					&rec.owner,
+					&rec.is_external,
+					&rec.owner_role_type,
+					&rec.is_event,
+					&rec.is_hybrid,
+					&rec.is_iceberg,
+					&rec.is_dynamic,
+					&rec.is_immutable,
+					&rec.is_interactive,
+				); err != nil {
+					err = fmt.Errorf("queryTables: error scanning row: %w", err)
+					yield(rec, err)
+					return
+				}
+				if n != nil { // this is the last row holding the count
+					if *n < limit {
+						mayHaveMore = false
+					} else {
+						fromClause = fmt.Sprintf(" FROM '%s'", string(lastName))
+					}
+					continue
+				}
+				if !yield(rec, nil) {
+					return
+				}
+				lastName = rec.name
+			}
+			if err = rows.Err(); err != nil {
+				err = fmt.Errorf("queryTables: error after looping over results: %w", err)
+				yield(tableRec{}, err)
+				return
+			}
+		}
+	}
+}

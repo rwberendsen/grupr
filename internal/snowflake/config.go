@@ -28,6 +28,7 @@ type Config struct {
 	SystemDefinedRoles      []semantics.Ident
 	DatabaseRolePrivileges  map[Mode]map[GrantTemplate]struct{}
 	ProductRolePrivileges   map[Mode]map[GrantTemplate]struct{}
+	ManagedObjTypes         map[ObjType]bool
 	DryRun                  bool
 }
 
@@ -49,6 +50,7 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 			semantics.Ident("SECURITYADMIN"),
 			semantics.Ident("USERADMIN"),
 		},
+		ManagedObjTypes: map[ObjType]bool{},
 		DryRun: true,
 	}
 
@@ -267,6 +269,17 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvOperate},
 			GrantedOn:         ObjTpWarehouse,
 		}: {},
+	}
+
+	for ot := range []ObjType{ObjTpTable, ObjTpView} {
+		envStr := fmt.Sprintf("GRUPR_SNOWFLAKE_MA_%v", ot)
+		if env, ok := os.LookupEnv(envStr); ok {
+			if b, err := strconv.ParseBool(env); err != nil {
+				return nil, fmt.Errorf("%s: %w", envStr, err)
+			} else {
+				cnf.ManagedObjectTypes[ot] = b
+			}
+		}
 	}
 
 	if dryRun, ok := os.LookupEnv("GRUPR_SNOWFLAKE_DRY_RUN"); ok {
