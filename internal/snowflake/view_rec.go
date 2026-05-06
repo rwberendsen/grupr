@@ -12,27 +12,30 @@ import (
 
 type viewRec struct {
 	name semantics.Ident
-	kind string
 	owner semantics.Ident
-	is_external bool
+	is_secure bool
+	is_materialized bool
 	owner_role_type ObjType
-	is_event bool
-	is_hybrid bool
-	is_iceberg bool
-	is_dynamic bool
-	is_immutable bool
-	is_interactive bool
 }
 
-func queryTables(ctx context.Context, conn *sql.DB, db semantics.Ident, schema semantics.Ident) iter.Seq2[tableRec,
-	error] {
+func (r viewRec) getObjType() ObjType {
+	if ParseObjType(r.owner_role_type) != ObjTpRole {
+		return ObjTpOther
+	}
+	if r.is_secure || r.is_materialized {
+		return ObjTpOther
+	}
+	return ObjTpView
+}
+
+func queryViews(ctx context.Context, conn *sql.DB, db semantics.Ident, schema semantics.Ident) iter.Seq2[viewRec, error] {
 	// The main problem with the SHOW VIEWS function is that there is no flag "is_normal" for regular views.
 	// If new types of views are returned in the future, with flags like "is_new_type_X", "is_new_type_Y",
 	// grupr will treat it like a regular view.
 	// Until Snowflake adds a flag "is_normal" to the output of the SHOW VIEWS function (and friends like SHOW OBJECTS,
 	// SHOW TABLES, etc, I see no easy way to prevent this problem, other than quickly fixing grupr each time Snowflake
 	// comes out with something new (again).
-	return func(yield func(tableRec, error) bool) {
+	return func(yield func(viewRec, error) bool) {
 		// When there are more than 10K results, paginate.
 		// Because we apply filters, even if fewer results are returned, perhaps there are still more.
 		// For that reason, our last row has a count of the first query result
@@ -40,47 +43,29 @@ func queryTables(ctx context.Context, conn *sql.DB, db semantics.Ident, schema s
 		var fromClause string
 		limit := 10000
 		for mayHaveMore {
-			rows, err := conn.QueryContext(ctx, fmt.Sprintf(`SHOW TABLES IN SCHEMA IDENTIFIER($$%s.%s$$) LIMIT %d%s ->>
+			rows, err := conn.QueryContext(ctx, fmt.Sprintf(`SHOW VIEWS IN SCHEMA IDENTIFIER($$%s.%s$$) LIMIT %d%s ->>
 SELECT
     NULL AS n
   , "name" AS name
-  , "kind" AS kind
   , "owner" AS owner
-  , "is_external" AS is_external
+  , "is_secure" AS is_secure
+  , "is_materialized" AS is_materialized
   , "owner_role_type" AS owner_role_type
-  , "is_event" AS is_event
-  , "is_hybrid" AS is_hybrid
-  , "is_iceberg" AS is_iceberg
-  , "is_dynamic" AS is_dynamic
-  , "is_immutable" AS is_immutable
-  , "is_interactive" AS is_interactive
 FROM $1
 WHERE
-    kind IN ('TABLE', 'TRANSIENT')
-AND owner_role_type = 'ROLE'
-AND is_external = 'N'
-AND is_event = 'N'
-AND is_hybrid = 'N'
-AND is_iceberg = 'N'
-AND is_dynamic = 'N'
-AND is_immutable = 'N'
-AND is_interactive = 'N'
+    owner_role_type = '%s'
+AND NOT is_secure
+AND NOT is_materialized
 UNION ALL
 SELECT
     COUNT(*)
   , '' AS name
-  , '' AS kind
   , '' AS owner
-  , '' AS is_external
+  , false AS is_secure
+  , false AS is_materialized
   , '' AS owner_role_type
-  , '' AS is_event
-  , '' AS is_hybrid
-  , '' AS is_iceberg
-  , '' AS is_dynamic
-  , '' AS is_immutable
-  , '' AS is_interactive
 FROM $1
-`, db, schema, limit, fromClause))
+`, db, schema, limit, fromClause, ObjTpRole.RecordString()))
 			if err != nil {
 				if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
 					err = ErrObjectNotExistOrAuthorized
@@ -92,22 +77,16 @@ FROM $1
 			var lastName semantics.Ident
 			for rows.Next() {
 				var n *int
-				var rec tableRec
+				var rec viewRec
 				if err = rows.Scan(
 					&n,
 					&rec.name,
-					&rec.kind,
 					&rec.owner,
-					&rec.is_external,
+					&rec.is_secure,
+					&rec.is_materialized,
 					&rec.owner_role_type,
-					&rec.is_event,
-					&rec.is_hybrid,
-					&rec.is_iceberg,
-					&rec.is_dynamic,
-					&rec.is_immutable,
-					&rec.is_interactive,
 				); err != nil {
-					err = fmt.Errorf("queryTables: error scanning row: %w", err)
+					err = fmt.Errorf("queryViews: error scanning row: %w", err)
 					yield(rec, err)
 					return
 				}
@@ -125,8 +104,8 @@ FROM $1
 				lastName = rec.name
 			}
 			if err = rows.Err(); err != nil {
-				err = fmt.Errorf("queryTables: error after looping over results: %w", err)
-				yield(tableRec{}, err)
+				err = fmt.Errorf("queryViews: error after looping over results: %w", err)
+				yield(viewRec{}, err)
 				return
 			}
 		}

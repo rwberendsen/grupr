@@ -13,21 +13,27 @@ import (
 type tableRec struct {
 	name semantics.Ident
 	owner semantics.Ident
-	is_external bool
+	is_external string
 	owner_role_type string
-	is_event bool
-	is_hybrid bool
-	is_iceberg bool
-	is_dynamic bool
-	is_immutable bool
-	is_interactive bool
+	is_event string
+	is_hybrid string
+	is_iceberg string
+	is_dynamic string
+	is_immutable string
+	is_interactive string
 }
 
 func (r tableRec) getObjType() ObjType {
 	if ParseObjType(r.owner_role_type) != ObjTpRole {
 		return ObjTpOther
 	}
-	if r.is_external || r.is_event || r.is_hybrid || r.is_iceberg || r.is_dynamic || r.is_immutable || r.is_interactive {
+	if r.is_external == "Y" || 
+		r.is_event == "Y" ||
+		r.is_hybrid == "Y" ||
+		r.is_iceberg == "Y" ||
+		r.is_dynamic == "Y" ||
+		r.is_immutable == "Y" ||
+		r.is_interactive == "Y" {
 		return ObjTpOther
 	}
 	return ObjTpTable
@@ -89,7 +95,7 @@ SELECT
   , '' AS is_immutable
   , '' AS is_interactive
 FROM $1
-`, db, schema, limit, fromClause, ObjTpRole.RecordString))
+`, db, schema, limit, fromClause, ObjTpRole.RecordString()))
 			if err != nil {
 				if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
 					err = ErrObjectNotExistOrAuthorized
