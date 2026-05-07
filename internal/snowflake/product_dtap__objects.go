@@ -60,7 +60,9 @@ func (pd *ProductDTAP) recalcObjects() {
 	pd.Interface.aggregate() // we needed to hold on to AccountObjs by ObjExpr until we derived all interface objects
 }
 
-func (pd *ProductDTAP) setFutureGrantsToWriteRole(ctx context.Context, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{}) error {
+func (pd *ProductDTAP) setGrantActionsFutureObjectsWriteRole(ctx context.Context, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{}) error {
+	// This function covers setting the todo and already done actions regarding privileges on future objects for the product write role
+	// It does not cover compute privileges, and it does not cover usage of database roles.
 	if _, ok := productRoles[pd.WriteRole]; !ok && cnf.DryRun {
 		return nil
 	}
@@ -68,7 +70,6 @@ func (pd *ProductDTAP) setFutureGrantsToWriteRole(ctx context.Context, cnf *Conf
 		if err != nil {
 			return err
 		}
-
 		switch g.GrantedIn {
 		case ObjTpDatabase:
 			switch g.GrantedOn {
@@ -81,27 +82,33 @@ func (pd *ProductDTAP) setFutureGrantsToWriteRole(ctx context.Context, cnf *Conf
 						if dbObjs, ok := pd.Interface.aggAccountObjects.DBs[g.Database]; ok {
 							dbObjs.setFutureGrantTo(ModeWrite, g)
 						}
-					} else {
-						// if not, then revoke this future grant
-						//
-						// Note that when we refreshed, we reset toRevokeFutureObjects to the empty slice
-						pd.toRevokeFutureObjects = append(pd.toRevokeFutureObjects, g)
+						// If we did not match the object, there are two possibilities:
+						// 1. The schema was created after we matched objects, but before we queried future grants on
+						// the write role.
+						// 2. Despite the fact that the grant_on column matches our grant template, the object is not of
+						// a kind that grupr is managing after all. At the moment, that should not occur, but it may
+						// occur in the future as Snowflake is changing continuously. 
+						// In both cases, it would be okay to leave the grant intact.
+						continue
 					}
-				default:
-					pd.toRevokeFutureObjects = append(pd.toRevokeFutureObjects, g)
+				case PrvUsage, PrvMonitor:
+					// Grupr does not normally assign these privileges, but sysadmins are encouraged to do so in case
+					// they want to grant privileges on objects in schemas to the write role that grupr does not (yet)
+					// manage. For that reason, we will leave these grants intact.
+					continue
 				}
-			default:
-				pd.toRevokeFutureObjects = append(pd.toRevokeFutureObjects, g)
 			}
-		default:
-			pd.toRevokeFutureObjects = append(pd.toRevokeFutureObjects, g)
 		}
+		// If we are still here, this grant will be a revoke candidate.
+		pd.toRevokeFutureObjects = append(pd.toRevokeFutureObjects, g)
 	}
 	return nil
 }
 
-func (pd *ProductDTAP) setGrantsToWriteRole(ctx context.Context, cnf *Config, conn *sql.DB,
+func (pd *ProductDTAP) setGrantActionsObjectsWriteRole(ctx context.Context, cnf *Config, conn *sql.DB,
 	grupinDisjointFromObject func(semantics.Ident, semantics.Ident, semantics.Ident) bool, productRoles map[ProductRole]struct{}) error {
+	// This function covers setting the todo and already done actions regarding privileges on objects for the product write role
+	// It does not cover compute privileges, and it does not cover usage of database roles.
 	if _, ok := productRoles[pd.WriteRole]; !ok && cnf.DryRun {
 		return nil
 	}
@@ -111,193 +118,37 @@ func (pd *ProductDTAP) setGrantsToWriteRole(ctx context.Context, cnf *Config, co
 		}
 		switch pc := g.Privileges[0]; pc.Privilege {
 		case PrvCreate:
-			switch pc.CreateObjectType {
-			case ObjTpTable, ObjTpView:
-				if !pd.Interface.ObjectMatchers.DisjointFromSchema(g.Database, g.Schema) {
-					if dbObjs, ok := pd.Interface.aggAccountObjects.DBs[g.Database]; ok {
-						if schemaObjs, ok := dbObjs.Schemas[g.Schema]; ok {
-							dbObjs.Schemas[g.Schema] = schemaObjs.setGrantTo(ModeWrite, g)
-						}
+			if !pd.Interface.ObjectMatchers.DisjointFromSchema(g.Database, g.Schema) {
+				if dbObjs, ok := pd.Interface.aggAccountObjects.DBs[g.Database]; ok {
+					if schemaObjs, ok := dbObjs.Schemas[g.Schema]; ok {
+						dbObjs.Schemas[g.Schema] = schemaObjs.setGrantTo(ModeWrite, g)
 					}
-					// ignore, we did not match the object last time we refreshed, but the grant is fine, we leave it
-				} else {
-					// Note that when we refreshed, toRevokeObjects was reset to an empty slice
-					pd.toRevokeObjects = append(pd.toRevokeObjects, g)
 				}
+				// Whether or not we actually found the schema in the database, the grant is fine
+				continue
 			}
-			// Ignore; unmanaged grant
 		case PrvOwnership:
-			switch g.GrantedOn {
-			case ObjTpTable, ObjTpView:
-				if !pd.Interface.ObjectMatchers.DisjointFromObject(g.Database, g.Schema, g.Object) {
-					if schemaObjs, ok := pd.Interface.aggAccountObjects.GetSchema(g.Database, g.Schema); ok {
-						if aggObjAttr, ok := schemaObjs.Objects[g.Object]; ok {
-							schemaObjs.Objects[g.Object] = aggObjAttr.setGrantTo(ModeWrite, g)
-						}
+			if !pd.Interface.ObjectMatchers.DisjointFromObject(g.Database, g.Schema, g.Object) {
+				if schemaObjs, ok := pd.Interface.aggAccountObjects.GetSchema(g.Database, g.Schema); ok {
+					if aggObjAttr, ok := schemaObjs.Objects[g.Object]; ok {
+						schemaObjs.Objects[g.Object] = aggObjAttr.setGrantTo(ModeWrite, g)
 					}
-				} else if grupinDisjointFromObject(g.Database, g.Schema, g.Object) {
-					// There will be no other product claiming ownership of this object, we need to
-					// transfer its ownership to a role that is not managed by grupr.
-					// Note that when we refreshed, toTransferOwnership was reset to an empty slice
-					pd.toTransferOwnership = append(pd.toTransferOwnership, g)
-					// WIP: We don't want to transfer ownership on unmanaged objects like dynamic tables!?
-					// even if they are disjoint from the grupin?! cause it would be like altering an
-					// unmanaged grant. How to distinguish in this case between regular tables disjoint
-					// from the grupin, and, say, external, event, hybrid, etc tables? Perhaps there will
-					// be no other way than to do another, ad hoc, query, to find out.
-					// Even that is not simple, however, because the way to query it depends on what it is,
-					// so that would be a piece of code that would have to try different kinds of strategies
-					// until it finds something. e.g., try DESCRIBE TABLE, then try DESCRIBE DYNAMIC TABLE, etc.
-					// Or do a SHOW OBJECTS, covering regular, hybrid, dynamic, and iceberg tables, and then
-					// if you still don't find it, do external tables, event tables, interactive tables, online feature
-					// tables, directory tables, etc. Actually, many of those would probably occur in the output
-					// of SHOW OBJECTS; only, it would not be possible to tell them apart from regular, normal tables.
-					// Unfortunately, the output does not contain a column "is_normal".
-					// Perhaps in our account cache we should actually keep all kinds of tables there are,
-					// so that we do have all the info, even if we are not managing grants on such types of
-					// objects yet.
-					// If we did that, it would be nice to have ObjType values for each kind, the only trouble
-					// is that when we query for grants in Snowflake, Snowflake will always just say TABLE,
-					// so when we deserialize a row like that, it would contain erroneous data. But, we'll just
-					// have to take that into account, then. Actually, it's worse, for like a hybrid table
-					// the granted_on column would just show TABLE, but, for example, for an interactive table,
-					// there is an example in the docs where it shows as "INTERACTIVE_TABLE". Unfortunately,
-					// the documentation does not provide an exhaustive list of possible values.
-					//
-					// And what about secure views, materialized views, and semantic views?
-					//
-					// You know, the Snowflake APIs for creating objects and querying grants on them have
-					// some inconsistencies, probably due to the speed with which new features are added and
-					// launched. That makes it harder for a tool like grupr to achieve consistent access management
-					// in a simple manner.
-					// Because the SHOW GRANTS APIs treat everything as a table, when I am now transfering ownership
-					// away, I am already managing grants on object types I do not manage. Managing all object types
-					// would make the code only simpler, actually, if a lot longer.
-
-					// TDOD what about interactive warehouses :-) I suppose grupr should add all interactive tables
-					// to all interactive warehouses that have been granted to either the product roles or product
-					// roles of consumers. And of course remove the tables if usage grants on those warehouses change
-
-					// Okay, so these Snowflake APIs are a bit of a mess actually, too bad. It's not even possible to
-					// query only "normal" tables and "normal" views. We can try something here:
-					// what if we say that, you know, if you have a grant here on an object that you don't match,
-					// in the YAML, that's already enough to revoke it, no matter what it is. And yes, even if
-					// that's ownership, you revoke it, which you do by transferring it, in this case. So, in this
-					// case, yes, we chose to risk to break something: we just have to say: please don't grant anything
-					// on an object to a grupr managed role unless it's matched by the relevant object expressions.
-					// and if you change those expressions, or if you change the name of a product or interface, be
-					// aware that those grants will be revoked.
-					// Okay, and, if we have a grant here, and it is on an object matched by the YAML, but, we
-					// did not find it, then maybe it is because SHOW objects did not return this type of object,
-					// (the documentation is not clear on exactly what is and is not returned), and therefore,
-					// by accident, by this circumstance, grupr does not support this type of object yet, and
-					// therefore we will leave the grant be.
-					// Okay, so now, if we try to live with not knowing the object type, then we should think about
-					// what to grant. Read privileges first. SELECT will always be okay. REFERENCES is not supported for dynamic tables and
-					// online feature tables. MONITOR is only relevant for certain types of tables, we might omit
-					// it altogether, if you want to enable people to monitor, say, a dynamic table, you are out of luck
-					// and you have to do it yourself. Now in this case, we should not revoke this privilege if it was
-					// there.
-					// For write privileges, we do need to revoke everything: except ownership, which is valid for all
-					// types of objects.
-					// You know, even if it may be very painful to write all the queries necessary to figure out exactly
-					// the type of object for each and every object, it would make reasoning about correctness of the
-					// code a lot easier if we made a decent attempt at exactly that.
-
-					// ouch, you know, when it would come to implement the ability to manage grants on objects
-					// exclusively, we will have to query grants on objects. And to do that, we'd definitely need
-					// to know the type of each object.
-					// Oh, wow, just created a hybrid table, and then queried the grants on it with these queries:
-					// - show grants on table x.y.z --works;
-					// - show grants on hybrid table x.y.z --error;
-					// - show grants on dynamic table x.y.z --works;
-					// - show grants on iceberg table x.y.z --works;
-					// - show grants on interactive table x.y.z --works;
-					// - show grants on external table x.y.z --works;
-					// - show grants on online feature table x.y.z --works;
-					//
-					// Not only is it completely undocumented for this statement what the valid object types are,
-					// the statement also fails to check whether the object is actually of the specified type.
-					//
-					// But, I guess, as Snowflake matures, eventually, eventually, they will correct their APIs,
-					// and, we should aim to use the correct statements.
-					// Already, as of Apr 2026, the GRANT statement is much more explicit about the possible schema level 
-					// object types: https://docs.snowflake.com/en/sql-reference/sql/grant-privilege
-					//
-					// We would be supporting, initially:
-					//
-					// DYNAMIC TABLE
-					// EVENT TABLE
-					// EXTERNAL TABLE
-					// ICEBERG TABLE
-					// INTERACTIVE TABLE
-					// MATERIALIZED VIEW
-					// ONLINE FEATURE TABLE
-					// SEMANTIC VIEW
-					// TABLE
-					// VIEW
-					//
-					// All of these are just tables and views, really, and that's what people would expect to
-					// be able to manage with a tool like grupr.
-					// Even just to correctly issue GRANT and REVOKE statements for these types of objects,
-					// many of which are already returned by SHOW OBJECTS (probably ;-)), we need to know
-					// the exact object type
-					// And we need to find out as well how these object types are represented in the output
-					// of SHOW GRANTS commands, I've seen myself that HYBRID TABLE is just represented as TABLE,
-					// while an INTERACTIVE TABLE is represented as INTERACTIVE_TABLE. HYBRID TABLE is also
-					// not a valid object_type in the GRANT TO ROLE statement. DYNAMIC TABLE is. Can we expect
-					// that the latter would appear as DYNAMIC_TABLE?
-					// So to validate this, we'd have no other way than to just create at least one example
-					// of each kind of table and view, hopefully the set-up costs won't be too high for any of
-					// them, but it will certainly take some time to figure out how, at this moment, in all
-					// the various "official" and partially documented APIs and output each of them is
-					// represented, if at all.
-					//
-					// We could also try to limit ourselves first and say we only manage normal tables, but
-					// even then we need to establish how to query only normal tables; sadly SHOW OBJECTS does
-					// not have a column "is_normal", and neither does "SHOW TABLES". Querying the information
-					// schema there is something called "BASE TABLE", but it might be referring to a slightly
-					// different distinction, and it is an entirely different API than what we have been using
-					// so far. The Snowflake REST API also mentions a table type "NORMAL", but, that API comes
-					// with its own quirks as well. Anyway, I gave some feedback on the Snowflake docs,
-					// and, am calling it a day.
-
-					// SOLUTION, WIP:
-					// We will process candidate objects for transferring ownership as follows:
-					// - for all schema's in the collection of to transfer objects, create a matching expression,
-					// - use the matching expressions to query the account cache
-					// - if the objects are subsequently found in the account cache, they are of a type that
-					//   is in scope for grupr normally, and ownership can be transferred.
-					// - if the objects are subsequently not found in the account cache, they are of a type
-					//   for which grupr is not (yet) managing privileges, in this case, sysadmins must have
-					//   granted the privilege using other means, and grupr will not revoke it and not
-					//   transfer ownership.
-					// We will treat revoke candidates the same way.
 				}
+			} else if grupinDisjointFromObject(g.Database, g.Schema, g.Object) {
+				// There will be no other product claiming ownership of this object, we need to
+				// transfer its ownership to a role that is not managed by grupr.
+				// Note that when we refreshed, toTransferOwnership was reset to an empty slice
+				pd.toTransferOwnership = append(pd.toTransferOwnership, g)
 			}
-			// Ignore, unmanaged grant
+			continue // There is no revoking ownersip, so, continue either way
+		case PrvUsage, PrvMonitor:
+			// Grupr does not normally assign these privileges, but sysadmins are encouraged to do so in case
+			// they want to grant privileges on objects in schemas to the write role that grupr does not (yet)
+			// manage. For that reason, we will leave these grants intact.
+			continue
 		}
-		case PrvInsert, PrvUpdate, PrvTruncate, PrvDelete, PrvEvolveSchema, PrvApplyBudget,
-        	PrvSelect, PrvSelectErrorTable, PrvReferences:
-			switch g.GrantedOn {
-			case ObjTpTable, ObjTpView:
-				// We revoke this grant, as it is redundant in grupr it's access management model. But, we need to check
-				// if we found the object in question, before we revoke: this could be a dynamic, event, external,
-				// hybrid, or iceberg table, which we do not manage yet; we leave unmanaged grants intact not to break
-				// anything.
-				// 
-				// If this is a regular table or view, and we did not find it, it means the object was created after we
-				// refreshed objects, and then some of these privileges were granted.  So if we do not have the table in
-				// our accountobjects in memory, we have no way of knowing for sure whether or not this is a type of
-				// table we don't support yet (dynamic, iceberg, hybrid, event, external, ...) Therefore, we will not
-				// revoke in that case also. If it was a regular table, the next time grupr runs, the object will be
-				// found, and the privilege revoked.
-				if _, ok := pd.Interface.aggAccountObjects.GetObject(g.Database, g.Schema, g.Object); ok {
-					pd.toRevokeObjects = append(pd.toRevokeObjects, g)
-				}
-			}
-			// Ignore
-		// Ignore; unmanaged grant
+		// If we are still here, this grant is a candidate for being revoked
+		pd.toRevokeObjects = append(pd.toRevokeObjects, g)
 	}
 	return nil
 }
@@ -305,37 +156,108 @@ func (pd *ProductDTAP) setGrantsToWriteRole(ctx context.Context, cnf *Config, co
 func (pd *ProductDTAP) setUserManagedOwnersOfObjects(semCnf *semantics.Config, cnf *Config,
 	userManagedOwners func(semantics.ProductDTAPID) map[semantics.Ident]struct{}) error {
 	pd.userManagedOwnersOfObjects = map[semantics.Ident]struct{}{}
-	for _, dbObjs := range pd.Interface.aggAccountObjects.DBs {
+	for db, dbObjs := range pd.Interface.aggAccountObjects.DBs {
 		for _, schemaObjs := range dbObjs.Schemas {
 			for _, aggObjAttr := range schemaObjs.Objects {
 				if slices.Contains(cnf.SystemDefinedRoles, aggObjAttr.Owner) {
 					continue
 				}
 				if strings.HasPrefix(string(aggObjAttr.Owner), string(semCnf.Prefix)) {
-					if r, err := newProductRoleFromString(semCnf, aggObjAttr.Owner); err != nil {
-						return err
-					} else {
-						if r.Mode != ModeWrite {
-							return fmt.Errorf("object was granted to grupr managed role '%v', which is not a write role, please check", r.ID)
+					r, err := newProductRoleFromIdent(semCnf, aggObjAttr.Owner); {
+					if err != nil {
+						// In this case, it would have to be a database role, or else other roles
+						// exist sharing the grupr prefix, this would be a good reason to crash
+						if _, err = newDatabaseRoleFromString(semCnf, db, aggObjAttr.Owner); err != nil {
+							return err
 						}
-						// It's a write role
-						if r.ProductID != pd.ProductID || r.DTAP != pd.DTAP {
-							// So, another write role owned this object before, we need to check what user managed roles
-							// have been granted this other write role; they would lose ownership of the object if we
-							// would claim it; so we need to grant our write role to those user managed roles, if any
-							for curOwner := range userManagedOwners(semantics.ProductDTAPID{ProductID: r.ProductID, DTAP: r.DTAP}) {
-								pd.userManagedOwnersOfObjects[curOwner] = struct{}{}
-							}
-							continue
-						}
-						// We own this object, all good here, move on.
-						continue
+						// Okay, so it was a database role that owned the object. Not something sysadmins
+						// should have done. Not something grupr would do. But we'll just not add any
+						// previous user managed owning roles. Ownership of the object will be sorted out
+						// for this object cause it was matched by this product: the write role will 
+						// claim ownership of it.
 					}
+					if r.Mode == ModeWrite && (r.ProductID != pd.ProductID || r.DTAP != pd.DTAP) {
+						// So, another write role owned this object before, we need to check what user managed roles
+						// have been granted this other write role; they would lose ownership of the object if we
+						// would claim it; so we need to grant our write role to those user managed roles, if any
+						//
+						// We do this as a service. It is a normal thing that can happen when people rename a product
+						// in the YAML, i.e., change it's product id. Or when an object matching expression moves
+						// from one product to another.
+						for curOwner := range userManagedOwners(semantics.ProductDTAPID{ProductID: r.ProductID, DTAP: r.DTAP}) {
+							pd.userManagedOwnersOfObjects[curOwner] = struct{}{}
+						}
+					}
+					continue
 				}
 				// It's a user managed role, we add it
 				pd.userManagedOwnersOfObjects[aggObjAttr.Owner] = struct{}{}
 			}
 		}
+	}
+	return nil
+}
+
+func (pd *ProductDTAP) setGrantActionsFutureObjectsReadRole(ctx context.Context, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{}) error {
+	// This function covers setting the todo and already done actions regarding privileges on future objects for the
+	// product read role. Objects are refreshed when a product is refreshed.
+	// It does not cover compute privileges, and it does not cover usage of database roles.
+	if _, ok := productRoles[pd.ReadRole]; !ok && cnf.DryRun {
+		return nil
+	}
+	for g, err := range QueryFutureGrantsToRoleFiltered(ctx, conn, pd.ReadRole.ID,	cnf.ObjectPrivileges, nil) {
+		if err != nil {
+			return err
+		}
+		switch g.GrantedIn {
+		case ObjTpDatabase:
+			switch g.GrantedOn {
+			case ObjTpSchema:
+				switch g.Privileges[0].Privilege {
+				case PrvUsage, PrvMonitor:
+					// Grupr does not normally assign these privileges, but sysadmins are encouraged to do so in case
+					// they want to grant privileges on objects in schemas directly to the read role that grupr does not (yet)
+					// manage. For that reason, we will leave these grants intact.
+					// Note though, that for read privileges, it would be more natural for sysadmins to assign them to database roles.
+					continue
+				}
+			}
+		}
+		// If we are still here, this grant will be a revoke candidate.
+		pd.toRevokeFutureObjects = append(pd.toRevokeFutureObjects, g)
+	}
+	return nil
+}
+
+func (pd *ProductDTAP) setGrantActionsObjectsReadRole(ctx context.Context, cnf *Config, conn *sql.DB,
+	grupinDisjointFromObject func(semantics.Ident, semantics.Ident, semantics.Ident) bool, productRoles map[ProductRole]struct{}) error {
+	// This function covers setting the todo and already done actions regarding privileges on objects for the product
+	// read role. Objects are refreshed when products are refreshed.
+	// It does not cover compute privileges, and it does not cover usage of database roles.
+	if _, ok := productRoles[pd.ReadRole]; !ok && cnf.DryRun {
+		return nil
+	}
+	for g, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, pd.ReadRole.ID, cnf.ObjectPrivileges, nil) {
+		if err != nil {
+			return err
+		}
+		switch pc := g.Privileges[0]; pc.Privilege {
+		case PrvOwnership:
+			if grupinDisjointFromObject(g.Database, g.Schema, g.Object) {
+				// There will be no other product claiming ownership of this object, we need to
+				// transfer its ownership to a role that is not managed by grupr.
+				// Note that when we refreshed, toTransferOwnership was reset to an empty slice
+				pd.toTransferOwnership = append(pd.toTransferOwnership, g)
+			}
+			continue // There is no revoking ownersip, so, continue either way
+		case PrvUsage, PrvMonitor:
+			// Grupr does not normally assign these privileges, but sysadmins are encouraged to do so in case
+			// they want to grant privileges on objects in schemas to the write role that grupr does not (yet)
+			// manage. For that reason, we will leave these grants intact.
+			continue
+		}
+		// If we are still here, this grant is a candidate for being revoked
+		pd.toRevokeObjects = append(pd.toRevokeObjects, g)
 	}
 	return nil
 }
@@ -350,18 +272,18 @@ func (pd *ProductDTAP) grant_(ctx context.Context, semCnf *semantics.Config, cnf
 
 	// Write grants go first, so that we do not have to copy all the read privileges we're about to set when granting ownership.
 	// As with read grants, future grants go first
-	if err := pd.setFutureGrantsToWriteRole(ctx, cnf, conn, productRoles); err != nil {
+	if err := pd.setGrantActionsFutureObjectsWriteRole(ctx, cnf, conn, productRoles); err != nil {
 		return err
 	}
-	if err := DoFutureGrants(ctx, cnf, conn, pd.getToDoFutureGrantsToWriteRole()); err != nil {
+	if err := DoFutureGrants(ctx, cnf, conn, pd.getTodoGrantsFutureObjectsWriteRole()); err != nil {
 		return err
 	}
 
 	// Now, regular grants to the write role
-	if err := pd.setGrantsToWriteRole(ctx, cnf, conn, grupinDisjointFromObject, productRoles); err != nil {
+	if err := pd.setGrantActionsObjectsWriteRole(ctx, cnf, conn, grupinDisjointFromObject, productRoles); err != nil {
 		return err
 	}
-	if err := DoGrants(ctx, cnf, conn, pd.getToDoGrantsToWriteRole()); err != nil {
+	if err := DoGrants(ctx, cnf, conn, pd.getToDoGrantsObjectsWriteRole()); err != nil {
 		return err
 	}
 	// We do ownership separately; we don't do them in batches, cause they can take longer due to copying outbound grants;
@@ -386,8 +308,10 @@ func (pd *ProductDTAP) grant_(ctx context.Context, semCnf *semantics.Config, cnf
 	if err := DoGrantsIndividually(ctx, cnf, conn, pd.getToDoOwnershipGrants()); err != nil {
 		return err
 	}
+	// At this point, granting of object privileges to the write role has been taken care of
 
-	// Future grants next, so that as quickly as possible newly created objects will have correct privileges granted
+	// Next, manage read privileges: we assign those to database roles.
+	// Future grants first, so that as quickly as possible newly created objects will have correct privileges granted
 	if err := pd.Interface.setFutureGrants(ctx, semCnf, cnf, conn, pd.ProductID, pd.DTAP, "", c); err != nil {
 		return err
 	}
@@ -396,7 +320,7 @@ func (pd *ProductDTAP) grant_(ctx context.Context, semCnf *semantics.Config, cnf
 			return err
 		}
 	}
-	if err := DoFutureGrants(ctx, cnf, conn, pd.getToDoFutureGrants()); err != nil {
+	if err := DoFutureGrants(ctx, cnf, conn, pd.getToDoFutureGrantsToDBRoles()); err != nil {
 		return err
 	}
 
@@ -409,7 +333,18 @@ func (pd *ProductDTAP) grant_(ctx context.Context, semCnf *semantics.Config, cnf
 			return err
 		}
 	}
-	if err := DoGrants(ctx, cnf, conn, pd.getToDoGrants()); err != nil {
+	if err := DoGrants(ctx, cnf, conn, pd.getToDoGrantsToDBRoles()); err != nil {
+		return err
+	}
+
+	// Finally, let's query the product read role for any spurious object privileges sysadmins
+	// may have granted it: privileges in scope for grupr, but, granted to the wrong role.
+	if err := pd.setGrantActionsFutureObjectsReadRole(ctx, cnf, conn, productRoles); err != nil {
+		return err
+	}
+
+	// Now, regular grants 
+	if err := pd.setGrantActionsObjectsReadRole(ctx, cnf, conn, grupinDisjointFromObject, productRoles); err != nil {
 		return err
 	}
 
@@ -417,7 +352,7 @@ func (pd *ProductDTAP) grant_(ctx context.Context, semCnf *semantics.Config, cnf
 }
 
 func (pd *ProductDTAP) revoke_(ctx context.Context, cnf *Config, conn *sql.DB) error {
-	// We first revoke write privileges, to stop the wrong roles from creating objects asap
+	// We first revoke privileges from product roles, to stop the wrong roles from creating objects asap
 	// As with read privileges, we start with future privileges
 	if err := DoFutureRevokes(ctx, cnf, conn, slices.Values(pd.toRevokeFutureObjects)); err != nil {
 		return err
@@ -456,19 +391,19 @@ func (pd *ProductDTAP) revoke_(ctx context.Context, cnf *Config, conn *sql.DB) e
 		log.Printf("WARN: multiple historic owners of objects that no longer should be owned by product '%s', dtap '%s', keeping ownership", pd.ProductID, pd.DTAP)
 	}
 
-	// Next, revoke read privileges
+	// Next, revoke read privileges from database roles
 	// Future grants are revoked first, in case objects are being concurrently created, at least those
 	// object will stop receiving incorrect grants first.
-	if err := DoFutureRevokes(ctx, cnf, conn, pd.getToDoFutureRevokes()); err != nil {
+	if err := DoFutureRevokes(ctx, cnf, conn, pd.getToDoFutureRevokesFromDBRoles()); err != nil {
 		return err
 	}
-	if err := DoRevokes(ctx, cnf, conn, pd.getToDoRevokes()); err != nil {
+	if err := DoRevokes(ctx, cnf, conn, pd.getToDoRevokesFromDBRoles()); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (pd *ProductDTAP) getToDoFutureGrantsToWriteRole() iter.Seq[FutureGrant] {
+func (pd *ProductDTAP) getTodoGrantsFutureObjectsWriteRole() iter.Seq[FutureGrant] {
 	return func(yield func(FutureGrant) bool) {
 		for db, dbObjs := range pd.Interface.aggAccountObjects.DBs {
 			if dbObjs.MatchAllSchemas {
@@ -498,7 +433,7 @@ func (pd *ProductDTAP) getToDoFutureGrantsToWriteRole() iter.Seq[FutureGrant] {
 	}
 }
 
-func (pd *ProductDTAP) getToDoGrantsToWriteRole() iter.Seq[Grant] {
+func (pd *ProductDTAP) getToDoGrantsObjectsWriteRole() iter.Seq[Grant] {
 	return func(yield func(Grant) bool) {
 		for db, dbObjs := range pd.Interface.aggAccountObjects.DBs {
 			for schema, schemaObjs := range dbObjs.Schemas {
@@ -570,7 +505,7 @@ func (pd *ProductDTAP) getToDoOwnershipGrants() iter.Seq[Grant] {
 	}
 }
 
-func (pd *ProductDTAP) getToDoFutureGrants() iter.Seq[FutureGrant] {
+func (pd *ProductDTAP) getToDoFutureGrantsToDBRoles() iter.Seq[FutureGrant] {
 	return func(yield func(FutureGrant) bool) {
 		if !pd.Interface.pushToDoFutureGrants(yield) {
 			return
@@ -583,7 +518,7 @@ func (pd *ProductDTAP) getToDoFutureGrants() iter.Seq[FutureGrant] {
 	}
 }
 
-func (pd *ProductDTAP) getToDoGrants() iter.Seq[Grant] {
+func (pd *ProductDTAP) getToDoGrantsToDBRoles() iter.Seq[Grant] {
 	return func(yield func(Grant) bool) {
 		if !pd.Interface.pushToDoGrants(yield) {
 			return
@@ -607,7 +542,7 @@ func (pd *ProductDTAP) getTransferOwnershipGrants(newOwner semantics.Ident) iter
 	}
 }
 
-func (pd *ProductDTAP) getToDoFutureRevokes() iter.Seq[FutureGrant] {
+func (pd *ProductDTAP) getToDoFutureRevokesFromDBRoles() iter.Seq[FutureGrant] {
 	return func(yield func(FutureGrant) bool) {
 		if !pd.Interface.pushToDoFutureRevokes(yield) {
 			return
@@ -620,7 +555,7 @@ func (pd *ProductDTAP) getToDoFutureRevokes() iter.Seq[FutureGrant] {
 	}
 }
 
-func (pd *ProductDTAP) getToDoRevokes() iter.Seq[Grant] {
+func (pd *ProductDTAP) getToDoRevokesFromDBRoles() iter.Seq[Grant] {
 	return func(yield func(Grant) bool) {
 		if !pd.Interface.pushToDoRevokes(yield) {
 			return

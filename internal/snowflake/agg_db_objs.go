@@ -221,14 +221,8 @@ func (o AggDBObjs) setGrants(ctx context.Context, semCnf *semantics.Config, cnf 
 	if !o.isReadDBRoleNew {
 		// First, check for unmanaged grants, and keep track of in which schemas the database role holds unmanaged grants;
 		// We should not revoke USAGE on these schemas from the database role, not even if the schema is disjoint from the YAML.
-
-		// WIP: TODO: there can also be unmanaged grants that are on tables (as they appear in grant records), but
-		// actually they are on types of tables (e.g., external tables, dynamic tables, etc.) that grupr does not manage
-		// access for yet. Therefore, we should only revoke access to schemas once we have processed all revoke
-		// candidates on objects. So, three passes, really. One query for unmanaged grants, one query for what appear to
-		// be managed grants on objects, and one query for grants on schemas.
 		o.schemasWithUnmanagedGrants = map[semantics.Ident]struct{}{}
-		for g, err := range QueryGrantsToDBRoleFiltered(ctx, cnf, conn, db, o.readDBRole.Name, nil, cnf.DatabaseRolePrivileges[ModeRead]) {
+		for g, err := range QueryGrantsToDBRoleFiltered(ctx, cnf, conn, db, o.readDBRole.Name, nil, cnf.ObjectPrivileges) {
 			if err != nil {
 				return o, err
 			}
@@ -239,7 +233,7 @@ func (o AggDBObjs) setGrants(ctx context.Context, semCnf *semantics.Config, cnf 
 		}
 
 		// Second, check for managed grants
-		for g, err := range QueryGrantsToDBRoleFiltered(ctx, cnf, conn, db, o.readDBRole.Name, cnf.DatabaseRolePrivileges[ModeRead], nil) {
+		for g, err := range QueryGrantsToDBRoleFiltered(ctx, cnf, conn, db, o.readDBRole.Name, cnf.ObjectPrivileges, nil) {
 			if err != nil {
 				return o, err
 			}

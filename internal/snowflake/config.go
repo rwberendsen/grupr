@@ -235,6 +235,17 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 	maps.Copy(cnf.ObjectPrivileges, cnf.ObjectPrivilegesWrite)
 	maps.Copy(cnf.ObjectPrivileges, cnf.ObjectPrivilegesRead)
 
+	cnf.ComputePrivileges = map[GrantTemplate]struct{}{
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvUsage},
+			GrantedOn:         ObjTpWarehouse,
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvOperate},
+			GrantedOn:         ObjTpWarehouse,
+		}: {},
+	}
+
 	cnf.ProductRolePrivileges = map[Mode]map[GrantTemplate]struct{}{}
 	cnf.ProductRolePrivileges[ModeRead] = map[GrantTemplate]struct{}{
 		GrantTemplate{

@@ -442,7 +442,7 @@ func (g *Grupin) setProductRoles(ctx context.Context, semCnf *semantics.Config, 
 		if err = rows.Scan(&roleName); err != nil {
 			return err
 		}
-		if r, err := newProductRoleFromString(semCnf, roleName); err != nil {
+		if r, err := newProductRoleFromIdent(semCnf, roleName); err != nil {
 			return err
 		} else {
 			g.productRoles[r] = struct{}{}

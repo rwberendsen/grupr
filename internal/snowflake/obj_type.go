@@ -11,17 +11,10 @@ const (
 	ObjTpAccount
 	ObjTpDatabase
 	ObjTpDatabaseRole
-	ObjTpDynamicTable
-	ObjTpEventTable
-	ObjTpExternalTable
 	ObjTpHybridTable
-	ObjTpIcebergTable
-	ObjTpInteractiveTable
 	ObjTpMaterializedView
-	ObjTpOnlineFeatureTable
 	ObjTpRole
 	ObjTpSchema
-	ObjTpSemanticView
 	ObjTpTable
 	ObjTpUser
 	ObjTpView
@@ -30,21 +23,20 @@ const (
 
 func ParseObjType(s string) ObjType {
 	// s is a statement-style object type string
+	// Note that even though hybrid tables are managed by grupr, they
+	// are just called TABLE in SQL statements, and they also
+	// appear as TABLE in the output of SHOW GRANTS commands.
+	//
+	// Afaik, currently hybrid tables are the only special table type
+	// that cannot be distinguished from regular tables in SQL statements
+	// and the output of SHOW GRANTS statements.
 	return map[string]ObjType{
 		"ACCOUNT":              ObjTpAccount,
 		"DATABASE":             ObjTpDatabase,
 		"DATABASE ROLE":        ObjTpDatabaseRole,
-		"DYNAMIC TABLE":        ObjTpDynamicTable,
-		"EVENT TABLE":          ObjTpEventTable,
-		"EXTERNAL TABLE":       ObjTpExternalTable,
-		"HYBRID TABLE":         ObjTpHybridTable,
-		"ICEBERG TABLE":        ObjTpIcebergTable,
-		"INTERACTIVE TABLE":    ObjTpInteractiveTable,
 		"MATERIALIZED VIEW":    ObjTpMaterializedView,
-		"ONLINE FEATURE TABLE": ObjTpOnlineFeatureTable,
 		"ROLE":                 ObjTpRole,
 		"SCHEMA":               ObjTpSchema,
-		"SEMANTIC VIEW":        ObjTpSemanticView,
 		"TABLE":                ObjTpTable,
 		"USER":                 ObjTpUser,
 		"VIEW":                 ObjTpView,
@@ -53,22 +45,17 @@ func ParseObjType(s string) ObjType {
 }
 
 func (ot ObjType) String() string {
+	// String representation of object type ready to be used
+	// in SQL statements
 	return map[ObjType]string{
 		ObjTpOther:              "OTHER",
 		ObjTpAccount:            "ACCOUNT",
 		ObjTpDatabase:           "DATABASE",
 		ObjTpDatabaseRole:       "DATABASE ROLE",
-		ObjTpDynamicTable:       "DYNAMIC TABLE",
-		ObjTpEventTable:         "EVENT TABLE",
-		ObjTpExternalTable:      "EXTERNAL TABLE",
-		ObjTpHybridTable:        "HYBRID TABLE",
-		ObjTpIcebergTable:       "ICEBERG TABLE",
-		ObjTpInteractiveTable:   "INTERACTIVE TABLE",
+		ObjTpHybridTable:        "TABLE", // Hybrid tables are indistinguishable from regular table in SQL statements
 		ObjTpMaterializedView:   "MATERIALIZED VIEW",
-		ObjTpOnlineFeatureTable: "ONLINE FEATURE TABLE",
 		ObjTpRole:               "ROLE",
 		ObjTpSchema:             "SCHEMA",
-		ObjTpSemanticView:       "SEMANTIC VIEW",
 		ObjTpTable:              "TABLE",
 		ObjTpUser:               "USER",
 		ObjTpView:               "VIEW",

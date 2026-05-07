@@ -29,7 +29,7 @@ func newProductRole(semCnf *semantics.Config, productID string, dtap string, mod
 	}
 }
 
-func newProductRoleFromString(semCnf *semantics.Config, role semantics.Ident) (ProductRole, error) {
+func newProductRoleFromIdent(semCnf *semantics.Config, role semantics.Ident) (ProductRole, error) {
 	r := ProductRole{ID: role}
 	roleStr := string(role)
 	if !strings.HasPrefix(roleStr, string(semCnf.Prefix)) {
