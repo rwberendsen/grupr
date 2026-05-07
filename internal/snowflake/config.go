@@ -157,6 +157,10 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 
 	cnf.ObjectPrivilegesRead = map[GrantTemplate]struct{}{
 		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvUsage},
+			GrantedOn:         ObjTpDatabase,
+		}: {},
+		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvMonitor},
 			GrantedOn:         ObjTpDatabase,
 		}: {},

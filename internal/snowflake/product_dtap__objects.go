@@ -145,6 +145,8 @@ func (pd *ProductDTAP) setGrantActionsObjectsWriteRole(ctx context.Context, cnf 
 			// Grupr does not normally assign these privileges, but sysadmins are encouraged to do so in case
 			// they want to grant privileges on objects in schemas to the write role that grupr does not (yet)
 			// manage. For that reason, we will leave these grants intact.
+			//
+			// Note that it does not matter if usage / monitor was granted on a database or a schema.
 			continue
 		}
 		// If we are still here, this grant is a candidate for being revoked
@@ -241,7 +243,7 @@ func (pd *ProductDTAP) setGrantActionsObjectsReadRole(ctx context.Context, cnf *
 		if err != nil {
 			return err
 		}
-		switch pc := g.Privileges[0]; pc.Privilege {
+		switch g.Privileges[0].Privilege {
 		case PrvOwnership:
 			if grupinDisjointFromObject(g.Database, g.Schema, g.Object) {
 				// There will be no other product claiming ownership of this object, we need to
@@ -254,6 +256,7 @@ func (pd *ProductDTAP) setGrantActionsObjectsReadRole(ctx context.Context, cnf *
 			// Grupr does not normally assign these privileges, but sysadmins are encouraged to do so in case
 			// they want to grant privileges on objects in schemas to the write role that grupr does not (yet)
 			// manage. For that reason, we will leave these grants intact.
+			// It does not matter whether this is on a database or a schema.
 			continue
 		}
 		// If we are still here, this grant is a candidate for being revoked

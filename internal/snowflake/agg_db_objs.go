@@ -239,36 +239,56 @@ func (o AggDBObjs) setGrants(ctx context.Context, semCnf *semantics.Config, cnf 
 			}
 
 			if g.Database != db {
-				// This grant should not be granted to this particular database role
-				o = o.setRevokeGrantTo(ModeRead, g)
-				continue
+				// This grant should not be granted to this particular database role, that should not be 
+				// possible in Snowflake, at the moment
+				return o, fmt.Errorf("privilege granted to database role on object from different database")
 			}
 
-			switch g.GrantedOn {
-			case ObjTpSchema:
-				if o.hasSchema(g.Schema) {
-					o.Schemas[g.Schema] = o.Schemas[g.Schema].setGrantTo(ModeRead, g)
-				} else if oms.DisjointFromSchema(g.Database, g.Schema) {
-					// Before we revoke schema level privileges, we need to make sure the database role
-					// does not hold any unmanaged grants on objects in the schema; as these would be broken
-					// by the absence of at least one grant on their container: the schema.
-					if _, ok := o.schemasWithUnmanagedGrants[g.Schema]; !ok {
-						o = o.setRevokeGrantTo(ModeRead, g)
+			switch g.Privileges[0].Privilege {
+			case PrvUsage, Monitor:
+				// At the moment, cnf.ObjectPrivileges has these only on databases and schemas
+				switch g.GrantedOn {
+				case ObjTpDatabase:
+					// We need to keep this grant
+					continue
+				case ObjTpSchema:
+					if oms.DisjointFromSchema(g.Database, g.Schema) {
+						// Before we revoke schema level privileges, we need to make sure the database role
+						// does not hold any unmanaged grants on objects in the schema; as these would be broken
+						// by the absence of at least one grant on their container: the schema.
+						if _, ok := o.schemasWithUnmanagedGrants[g.Schema]; ok {
+							// We need to keep this grant
+							continue
+						}
+						// We need to revoke
+					} else {
+						if o.hasSchema(g.Schema) {
+							o.Schemas[g.Schema] = o.Schemas[g.Schema].setGrantTo(ModeRead, g)
+						}
+						// Either way, if the schema is matched in the YAML, even if it was not there
+						// when we refreshed objects, the grant is fine, we keep it.
+						continue
+					} 
+				}
+			case PrvSelect, PrvReferences, PrvSelectErrorTable:
+				// At the moment, we only have this on ObjTpTable and ObjTpView in cnf.ObjectPrivileges
+				if !oms.DisjointFromObject(g.Database, g.Schema, g.Object) { // else, we need to revoke
+					if o.hasObject(g.Schema, g.Object) {
+						if o.Schemas[g.Schema].Objects[g.Object].ObjectType.String() != g.GrantedOn.String() {
+							// A (hybrid) table may have been dropped and a view with the same name created or vice versa
+							// A good reason to refresh the product
+							return o, ErrObjectNotExistOrAuthorized
+						}
+						o.Schemas[g.Schema].Objects[g.Object] = o.Schemas[g.Schema].Objects[g.Object].setGrantTo(ModeRead, g)
 					}
-				} // Ignore this grant, it is correct, even if we did not know about the object's existence yet (result of FUTURE grant, probably)
-			case ObjTpTable, ObjTpView:
-				if o.hasObject(g.Schema, g.Object) {
-					if o.Schemas[g.Schema].Objects[g.Object].ObjectType != g.GrantedOn {
-						// A table may have been dropped and a view with the same name created or vice versa
-						// A good reason to refresh the product
-						return o, ErrObjectNotExistOrAuthorized
-					}
-					o.Schemas[g.Schema].Objects[g.Object] = o.Schemas[g.Schema].Objects[g.Object].setGrantTo(ModeRead, g)
-				} else if oms.DisjointFromObject(g.Database, g.Schema, g.Object) {
-					o = o.setRevokeGrantTo(ModeRead, g)
-				} // Ignore this grant, it is correct, even if we did not know about the object's existence yet (result of FUTURE grant, probably)
+					// And we need to keep this grant
+					continue
+				}
+			case PrvOwnership:
+				// WIP TODO
 			}
-			// Ignore this grant, it is not managed by grupr at the moment, sysadmins may have granted it if it is not in grupr's scope currently
+			// If we are still here, we need to revoke this grant
+			o = o.setRevokeGrantTo(ModeRead, g)
 		}
 	}
 	return o, nil
