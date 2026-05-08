@@ -16,8 +16,8 @@ type AggDBObjs struct {
 	readDBRole      DatabaseRole
 	isReadDBRoleNew bool // if true, then no need to query grants
 
-	// In / on which schema's does the readDBrole have unmanaged grants?
-	schemasWithUnmanagedGrants map[semantics.Ident]struct{}
+	// Does the DB role have unmanaged privileges?
+	hasUnmanagedGrantsReadDBRole bool
 
 	// Grants to the readDBRole
 	isUsageGrantedOnFutureSchemasToReadDBRole bool
@@ -220,16 +220,21 @@ func (o AggDBObjs) setFutureGrants(ctx context.Context, semCnf *semantics.Config
 func (o AggDBObjs) setGrants(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, db semantics.Ident, oms semantics.ObjMatchers) (AggDBObjs, error) {
 	if !o.isReadDBRoleNew {
 		// First, check for unmanaged grants, and keep track of in which schemas the database role holds unmanaged grants;
+		// Since we don't know how to parse grants that grupr does not manage, if there is even a single unmanaged
+		// grant, no matter what it is, we are not going to revoke usage or monitor from any databases or schemas; even
+		// if those databases and schemas do not match any object expression from the YAML. After
+		// all, it could be that this would render ineffective an unmanaged privilege on an object in such a schema,
+		// and grupr would break some access that was legitimately put in place by sysadmins.
 		// We should not revoke USAGE on these schemas from the database role, not even if the schema is disjoint from the YAML.
-		o.schemasWithUnmanagedGrants = map[semantics.Ident]struct{}{}
-		for g, err := range QueryGrantsToDBRoleFiltered(ctx, cnf, conn, db, o.readDBRole.Name, nil, cnf.ObjectPrivileges) {
+		//
+		// Note that write privileges on objects are unmanaged from the perspective of a database role. If sysadmins
+		// would grant them to grupr managed database roles, despite best practices, they will have to revoke them also
+		// in case they want grupr to drop the role when it is no longer needed. 
+		for g, err := range QueryGrantsToDBRoleFilteredLimit(ctx, cnf, conn, db, o.readDBRole.Name, nil, cnf.ObjectPrivilegesRead, 1) {
 			if err != nil {
 				return o, err
 			}
-
-			if g.Schema != semantics.Ident("") {
-				o.schemasWithUnmanagedGrants[g.Schema] = struct{}{}
-			}
+			o.hasUnmanagedGrantsReadDBRole = true
 		}
 
 		// Second, check for managed grants
@@ -253,10 +258,7 @@ func (o AggDBObjs) setGrants(ctx context.Context, semCnf *semantics.Config, cnf 
 					continue
 				case ObjTpSchema:
 					if oms.DisjointFromSchema(g.Database, g.Schema) {
-						// Before we revoke schema level privileges, we need to make sure the database role
-						// does not hold any unmanaged grants on objects in the schema; as these would be broken
-						// by the absence of at least one grant on their container: the schema.
-						if _, ok := o.schemasWithUnmanagedGrants[g.Schema]; ok {
+						if o.hasUnmanagedGrantsReadDBRole {
 							// We need to keep this grant
 							continue
 						}
@@ -284,8 +286,6 @@ func (o AggDBObjs) setGrants(ctx context.Context, semCnf *semantics.Config, cnf 
 					// And we need to keep this grant
 					continue
 				}
-			case PrvOwnership:
-				// WIP TODO
 			}
 			// If we are still here, we need to revoke this grant
 			o = o.setRevokeGrantTo(ModeRead, g)

@@ -98,6 +98,7 @@ func newFutureGrant(privilege string, createObjType string, grantedOn string, na
 		g.Database = semantics.Ident(rec[0])
 		g.Schema = semantics.Ident(rec[1])
 	case ObjTpOther:
+		// We don't know how to interpret 'name' in this case.
 	default:
 		return g, fmt.Errorf("unsupported granted_on object type for future grant")
 	}
