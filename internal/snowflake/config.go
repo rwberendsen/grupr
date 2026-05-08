@@ -155,6 +155,7 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 		}
 	}
 
+	// These are the object privileges that are managed for read database roles
 	cnf.ObjectPrivilegesRead = map[GrantTemplate]struct{}{
 		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvUsage},
@@ -193,7 +194,8 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 			GrantedOn:         ObjTpView,
 		}: {},
 	}
-	cnf.ObjectPrivilegesWrite = map[GrantTemplate]struct{}{
+	// These are the object privileges that are managed for product write roles
+	cnf.ObjectPrivilegesOwnership = map[GrantTemplate]struct{}{
 		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpTable},
 			GrantedOn:         ObjTpSchema,
@@ -210,6 +212,10 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvOwnership},
 			GrantedOn:         ObjTpView,
 		}: {},
+	}
+	// We need the next one to manage access exclusively,
+	// when we will revoke such privileges from any user managed or even system roles
+	cnf.ObjectPrivilegesWrite = map[GrantTemplate]struct{}{
 		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvInsert},
 			GrantedOn:         ObjTpTable,
@@ -235,10 +241,13 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 			GrantedOn:         ObjTpTable,
 		}: {},
 	}
+	// This one, too, will be used for managing access exclusively
 	cnf.ObjectPrivileges = map[GrantTemplate]struct{}{}
-	maps.Copy(cnf.ObjectPrivileges, cnf.ObjectPrivilegesWrite)
 	maps.Copy(cnf.ObjectPrivileges, cnf.ObjectPrivilegesRead)
+	maps.Copy(cnf.ObjectPrivileges, cnf.ObjectPrivilegesWrite)
+	maps.Copy(cnf.ObjectPrivileges, cnf.ObjectPrivilegesOwnership)
 
+	// These are compute privileges that are managed for product roles
 	cnf.ComputePrivileges = map[GrantTemplate]struct{}{
 		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvUsage},
@@ -250,35 +259,15 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 		}: {},
 	}
 
-	cnf.ProductRolePrivileges = map[Mode]map[GrantTemplate]struct{}{}
-	cnf.ProductRolePrivileges[ModeRead] = map[GrantTemplate]struct{}{
+	// These are database role usage privileges which are managed for product roles
+	// The addition that the DB role should be grupr managed means that granting
+	// a non-grupr-managed DB role to a grupr managed product role is perfectly fine,
+	// it will be considered an unmanaged grant
+	cnf.DBRolePrivileges = map[GrantTemplate]struct{}{
 		GrantTemplate{
 			PrivilegeComplete:         PrivilegeComplete{Privilege: PrvUsage},
 			GrantedOn:                 ObjTpDatabaseRole,
 			GrantedRoleIsGruprManaged: util.NewTrue(),
-		}: {},
-		GrantTemplate{
-			PrivilegeComplete: PrivilegeComplete{Privilege: PrvUsage},
-			GrantedOn:         ObjTpWarehouse,
-		}: {},
-		GrantTemplate{
-			PrivilegeComplete: PrivilegeComplete{Privilege: PrvOperate},
-			GrantedOn:         ObjTpWarehouse,
-		}: {},
-	}
-	cnf.ProductRolePrivileges[ModeWrite] = map[GrantTemplate]struct{}{
-		GrantTemplate{
-			PrivilegeComplete:         PrivilegeComplete{Privilege: PrvUsage},
-			GrantedOn:                 ObjTpDatabaseRole,
-			GrantedRoleIsGruprManaged: util.NewTrue(),
-		}: {},
-		GrantTemplate{
-			PrivilegeComplete: PrivilegeComplete{Privilege: PrvUsage},
-			GrantedOn:         ObjTpWarehouse,
-		}: {},
-		GrantTemplate{
-			PrivilegeComplete: PrivilegeComplete{Privilege: PrvOperate},
-			GrantedOn:         ObjTpWarehouse,
 		}: {},
 	}
 

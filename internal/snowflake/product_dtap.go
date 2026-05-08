@@ -118,7 +118,7 @@ func (pd *ProductDTAP) createProductRoles(ctx context.Context, semCnf *semantics
 	conn *sql.DB, productRoles map[ProductRole]struct{}) error {
 	// Read role
 	pd.ReadRole = newProductRole(semCnf, pd.ProductID, pd.DTAP, ModeRead)
-	if _, ok := productRoles[pd.ReadRole]; !ok {
+	if _, ok := productRoles[pd.ReadRole]; !ok && !pd.isZombie {
 		if err := pd.ReadRole.Create(ctx, cnf, conn); err != nil {
 			return err
 		}
@@ -126,7 +126,7 @@ func (pd *ProductDTAP) createProductRoles(ctx context.Context, semCnf *semantics
 
 	// Write role, identical logic, maybe refactor
 	pd.WriteRole = newProductRole(semCnf, pd.ProductID, pd.DTAP, ModeWrite)
-	if _, ok := productRoles[pd.WriteRole]; !ok {
+	if _, ok := productRoles[pd.WriteRole]; !ok && !pd.isZombie {
 		if err := pd.WriteRole.Create(ctx, cnf, conn); err != nil {
 			return err
 		}
