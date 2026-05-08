@@ -200,71 +200,6 @@ func (pd *ProductDTAP) setUserManagedOwnersOfObjects(semCnf *semantics.Config, c
 	return nil
 }
 
-func (pd *ProductDTAP) setGrantActionsFutureObjectsReadRole(ctx context.Context, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{}) error {
-	// This function covers setting the todo and already done actions regarding privileges on future objects for the
-	// product read role. Objects are refreshed when a product is refreshed.
-	// It does not cover compute privileges, and it does not cover usage of database roles.
-	if _, ok := productRoles[pd.ReadRole]; !ok && cnf.DryRun {
-		return nil
-	}
-	for g, err := range QueryFutureGrantsToRoleFiltered(ctx, conn, pd.ReadRole.ID,	cnf.ObjectPrivileges, nil) {
-		if err != nil {
-			return err
-		}
-		switch g.GrantedIn {
-		case ObjTpDatabase:
-			switch g.GrantedOn {
-			case ObjTpSchema:
-				switch g.Privileges[0].Privilege {
-				case PrvUsage, PrvMonitor:
-					// Grupr does not normally assign these privileges, but sysadmins are encouraged to do so in case
-					// they want to grant privileges on objects in schemas directly to the read role that grupr does not (yet)
-					// manage. For that reason, we will leave these grants intact.
-					// Note though, that for read privileges, it would be more natural for sysadmins to assign them to database roles.
-					continue
-				}
-			}
-		}
-		// If we are still here, this grant will be a revoke candidate.
-		pd.toRevokeFutureObjects = append(pd.toRevokeFutureObjects, g)
-	}
-	return nil
-}
-
-func (pd *ProductDTAP) setGrantActionsObjectsReadRole(ctx context.Context, cnf *Config, conn *sql.DB,
-	grupinDisjointFromObject func(semantics.Ident, semantics.Ident, semantics.Ident) bool, productRoles map[ProductRole]struct{}) error {
-	// This function covers setting the todo and already done actions regarding privileges on objects for the product
-	// read role. Objects are refreshed when products are refreshed.
-	// It does not cover compute privileges, and it does not cover usage of database roles.
-	if _, ok := productRoles[pd.ReadRole]; !ok && cnf.DryRun {
-		return nil
-	}
-	for g, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, pd.ReadRole.ID, cnf.ObjectPrivileges, nil) {
-		if err != nil {
-			return err
-		}
-		switch g.Privileges[0].Privilege {
-		case PrvOwnership:
-			if grupinDisjointFromObject(g.Database, g.Schema, g.Object) {
-				// There will be no other product claiming ownership of this object, we need to
-				// transfer its ownership to a role that is not managed by grupr.
-				// Note that when we refreshed, toTransferOwnership was reset to an empty slice
-				pd.toTransferOwnership = append(pd.toTransferOwnership, g)
-			}
-			continue // There is no revoking ownersip, so, continue either way
-		case PrvUsage, PrvMonitor:
-			// Grupr does not normally assign these privileges, but sysadmins are encouraged to do so in case
-			// they want to grant privileges on objects in schemas to the write role that grupr does not (yet)
-			// manage. For that reason, we will leave these grants intact.
-			// It does not matter whether this is on a database or a schema.
-			continue
-		}
-		// If we are still here, this grant is a candidate for being revoked
-		pd.toRevokeObjects = append(pd.toRevokeObjects, g)
-	}
-	return nil
-}
-
 func (pd *ProductDTAP) grant_(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, productRoles map[ProductRole]struct{},
 	grupinDisjointFromObject func(semantics.Ident, semantics.Ident, semantics.Ident) bool,
 	userManagedOwners func(semantics.ProductDTAPID) map[semantics.Ident]struct{}, c *accountCache) error {
@@ -337,17 +272,6 @@ func (pd *ProductDTAP) grant_(ctx context.Context, semCnf *semantics.Config, cnf
 		}
 	}
 	if err := DoGrants(ctx, cnf, conn, pd.getToDoGrantsToDBRoles()); err != nil {
-		return err
-	}
-
-	// Finally, let's query the product read role for any spurious object privileges sysadmins
-	// may have granted it: privileges in scope for grupr, but, granted to the wrong role.
-	if err := pd.setGrantActionsFutureObjectsReadRole(ctx, cnf, conn, productRoles); err != nil {
-		return err
-	}
-
-	// Now, regular grants 
-	if err := pd.setGrantActionsObjectsReadRole(ctx, cnf, conn, grupinDisjointFromObject, productRoles); err != nil {
 		return err
 	}
 
