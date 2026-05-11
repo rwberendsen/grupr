@@ -20,13 +20,16 @@ type AggDBObjs struct {
 	hasUnmanagedGrantsReadDBRole bool
 
 	// Grants to the readDBRole
-	isUsageGrantedOnFutureSchemasToReadDBRole bool
+	isPrivilegeGrantedOnFutureSchemasToReadDBRole [2]bool
 	// Small lookup table, first index rows, second index columns
-	//   		0: PrvSelect	1: PrvRefernces
-	// 0: ObjTable
-	// 1: ObjView
+	//   		0: PrvSelect	1: PrvSelectErrorTable	2: PrvRefernces
+	// 0: ObjTpTable
+	// 1: ObjTpView
+	// 2: ObjTpMaterializedView
 	//
-	isPrivilegeOnFutureObjectGrantedToReadDBRole [2][2]bool
+	// Note: PrvSelectErrorTable is only applicable to ObjTpTable,
+	// so this representation does waste a little space.
+	isPrivilegeOnFutureObjectGrantedToReadDBRole [7]bool
 	revokeGrantsToReadDBRole                     []Grant
 	revokeFutureGrantsToReadDBRole               []FutureGrant
 
@@ -38,7 +41,7 @@ type AggDBObjs struct {
 	isReadDBRoleGrantedToProductRole [2]bool // directly set from within Grupin.setDBRoleGrants
 
 	// Grants to the product write role; only used if this AggDBObjs is part of a product level interface
-	isCreateObjectOnFutureSchemasGrantedToProductWriteRole [2]bool // 0: ObjTable, 1: ObjView
+	isCreateObjectOnFutureSchemasGrantedToProductWriteRole [3]bool // 0: ObjTpTable, 1: ObjTpView, 2: ObjTpMaterializedView
 
 }
 
@@ -73,31 +76,54 @@ func (o AggDBObjs) setFutureGrantTo(m Mode, g FutureGrant) AggDBObjs {
 		case ObjTpSchema:
 			switch g.Privileges[0].Privilege {
 			case PrvUsage:
-				o.isUsageGrantedOnFutureSchemasToReadDBRole = true
+				o.isPrivilegeGrantedOnFutureSchemasToReadDBRole[0] = true
+			case PrvMonitor:
+				o.isPrivilegeGrantedOnFutureSchemasToReadDBRole[1] = true
 			}
-			// Ignore; unmanaged grant
-		case ObjTpTable, ObjTpView:
+		case ObjTpTable:
 			switch g.Privileges[0].Privilege {
-			case PrvSelect, PrvReferences:
-				o.isPrivilegeOnFutureObjectGrantedToReadDBRole[g.GrantedOn.getIdxObjectLevel()][g.Privileges[0].Privilege.getIdxObjectLevel()] = true
+			case PrvSelect:
+				o.isPrivilegeOnFutureObjectGrantedToReadDBRole[0] = true
+			case PrvSelectErrorTable:
+				o.isPrivilegeOnFutureObjectGrantedToReadDBRole[1] = true
+			case PrvReferences:
+				o.isPrivilegeOnFutureObjectGrantedToReadDBRole[2] = true
 			}
-			// Ignore; unmanaged grant
+		case ObjTpView:
+			switch g.Privileges[0].Privilege {
+			case PrvSelect:
+				o.isPrivilegeOnFutureObjectGrantedToReadDBRole[3] = true
+			case PrvReferences:
+				o.isPrivilegeOnFutureObjectGrantedToReadDBRole[4] = true
+			}
+		case ObjTpMaterializedView:
+			switch g.Privileges[0].Privilege {
+			case PrvSelect:
+				o.isPrivilegeOnFutureObjectGrantedToReadDBRole[5] = true
+			case PrvReferences:
+				o.isPrivilegeOnFutureObjectGrantedToReadDBRole[6] = true
+			}
 		}
 	case ModeWrite:
 		switch g.GrantedOn {
 		case ObjTpSchema:
-			switch g.Privileges[0].Privilege {
+			switch pc := g.Privileges[0]; pc.Privilege {
 			case PrvCreate:
-				o.isCreateObjectOnFutureSchemasGrantedToProductWriteRole[g.Privileges[0].CreateObjectType.getIdxObjectLevel()] = true
+				switch pc.CreateObjectType {
+				case ObjTpTable:
+					o.isCreateObjectOnFutureSchemasGrantedToProductWriteRole[0] = true
+				case ObjTpView:
+					o.isCreateObjectOnFutureSchemasGrantedToProductWriteRole[1] = true
+				case ObjTpMaterializedView:
+					o.isCreateObjectOnFutureSchemasGrantedToProductWriteRole[2] = true
+				}
 			}
-			// Ignore, unmanaged grant
 		}
-		// Ignore, unmanaged grant
 	}
 	return o
 }
 
-func (o AggDBObjs) hasFutureGrantTo(m Mode, grantedOn ObjType, p PrivilegeComplete) bool {
+func (o AggDBObjs) hasFutureGrantTo(m Mode, grantedOn ObjType, pc PrivilegeComplete) bool {
 	// Used for setting if grants on future objects in AggDBObjs have been
 	// granted to either the readDBRole (ModeRead) or the ProductWriteRole
 	// (ModeWrite)
@@ -105,22 +131,49 @@ func (o AggDBObjs) hasFutureGrantTo(m Mode, grantedOn ObjType, p PrivilegeComple
 	case ModeRead:
 		switch grantedOn {
 		case ObjTpSchema:
-			switch p.Privilege {
+			switch pc.Privilege {
 			case PrvUsage:
-				return o.isUsageGrantedOnFutureSchemasToReadDBRole
+				return o.isPrivilegeGrantedOnFutureSchemasToReadDBRole[0]
+			case PrvMonitor:
+				return o.isPrivilegeGrantedOnFutureSchemasToReadDBRole[1]
 			}
-		case ObjTpTable, ObjTpView:
-			switch p.Privilege {
-			case PrvSelect, PrvReferences:
-				return o.isPrivilegeOnFutureObjectGrantedToReadDBRole[grantedOn.getIdxObjectLevel()][p.Privilege.getIdxObjectLevel()]
+		case ObjTpTable:
+			switch pc.Privilege {
+			case PrvSelect:
+				return o.isPrivilegeOnFutureObjectGrantedToReadDBRole[0]
+			case PrvSelectErrorTable:
+				return o.isPrivilegeOnFutureObjectGrantedToReadDBRole[1]
+			case PrvReferences:
+				return o.isPrivilegeOnFutureObjectGrantedToReadDBRole[2]
+			}
+		case ObjTpView:
+			switch pc.Privilege {
+			case PrvSelect:
+				return o.isPrivilegeOnFutureObjectGrantedToReadDBRole[3]
+			case PrvReferences:
+				return o.isPrivilegeOnFutureObjectGrantedToReadDBRole[4]
+			}
+		case ObjTpMaterializedView:
+			switch pc.Privilege {
+			case PrvSelect:
+				return o.isPrivilegeOnFutureObjectGrantedToReadDBRole[5]
+			case PrvReferences:
+				return o.isPrivilegeOnFutureObjectGrantedToReadDBRole[6]
 			}
 		}
 	case ModeWrite:
 		switch grantedOn {
 		case ObjTpSchema:
-			switch p.Privilege {
+			switch pc.Privilege {
 			case PrvCreate:
-				return o.isCreateObjectOnFutureSchemasGrantedToProductWriteRole[grantedOn.getIdxObjectLevel()]
+				switch pc.CreateObjectType {
+				case ObjTpTable:
+					return o.isCreateObjectOnFutureSchemasGrantedToProductWriteRole[0]
+				case ObjTpView:
+					return o.isCreateObjectOnFutureSchemasGrantedToProductWriteRole[1]
+				case ObjTpMaterializedView:
+					return o.isCreateObjectOnFutureSchemasGrantedToProductWriteRole[2]
+				}
 			}
 		}
 	}
@@ -186,7 +239,7 @@ func (o AggDBObjs) setFutureGrants(ctx context.Context, semCnf *semantics.Config
 					} else {
 						o = o.setRevokeFutureGrantTo(ModeRead, g)
 					}
-				case ObjTpTable, ObjTpView:
+				case ObjTpTable, ObjTpView, ObjTpMaterializedView:
 					if o.MatchAllObjects {
 						o = o.setFutureGrantTo(ModeRead, g)
 					} else {
@@ -304,6 +357,8 @@ func (o AggDBObjs) setConsumedByGranted(m Mode, pdID semantics.ProductDTAPID) Ag
 }
 
 func (o AggDBObjs) pushToDoFutureGrants(yield func(FutureGrant) bool) bool {
+	// All future read privileges; write privileges are collected from a ProductDTAP method directly
+	// WIP TODO: monitor in there, and select error table a bit below, much like this method in agg_schema_objs
 	if o.MatchAllSchemas {
 		if !o.hasFutureGrantTo(ModeRead, ObjTpSchema, PrivilegeComplete{Privilege: PrvUsage}) {
 			if !yield(FutureGrant{
@@ -320,7 +375,7 @@ func (o AggDBObjs) pushToDoFutureGrants(yield func(FutureGrant) bool) bool {
 		}
 	}
 	if o.MatchAllObjects {
-		for _, ot := range [2]ObjType{ObjTpTable, ObjTpView} {
+		for _, ot := range [2]ObjType{ObjTpTable, ObjTpView, ObjTpMaterializedView} {
 			prvs := []PrivilegeComplete{}
 			for _, p := range [2]PrivilegeComplete{PrivilegeComplete{Privilege: PrvSelect}, PrivilegeComplete{Privilege: PrvReferences}} {
 				if !o.hasFutureGrantTo(ModeRead, ot, p) {

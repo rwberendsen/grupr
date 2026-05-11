@@ -66,7 +66,7 @@ func (pd *ProductDTAP) setGrantActionsFutureObjectsWriteRole(ctx context.Context
 	if _, ok := productRoles[pd.WriteRole]; !ok && cnf.DryRun {
 		return nil
 	}
-	for g, err := range QueryFutureGrantsToRoleFiltered(ctx, conn, pd.WriteRole.ID,	cnf.ObjectPrivileges, nil) {
+	for g, err := range QueryFutureGrantsToRoleFiltered(ctx, conn, pd.WriteRole.ID,	cnf.ObjectPrivilegesOwnership, nil) {
 		if err != nil {
 			return err
 		}
@@ -86,9 +86,70 @@ func (pd *ProductDTAP) setGrantActionsFutureObjectsWriteRole(ctx context.Context
 						// 1. The schema was created after we matched objects, but before we queried future grants on
 						// the write role.
 						// 2. Despite the fact that the grant_on column matches our grant template, the object is not of
-						// a kind that grupr is managing after all. At the moment, that should not occur, but it may
-						// occur in the future as Snowflake is changing continuously. 
-						// In both cases, it would be okay to leave the grant intact.
+						// a kind that grupr is managing after all. 
+						//
+						// Case 2 is more likely to occur. This is at the moment the case with tables in 
+						// imported databases (like SNOWFLAKE_SAMPLE_DATA) and views in applications, as in
+						// SNOWFLAKE.ACCOUNT_USAGE.ACCESS_HISTORY). When scanning for objects, we currently only
+						// consider standard databases.
+						// So when users grant privileges on objects in such databases to the product role,
+						// but they are not matched by the YAML, then, currently, we drop them.
+						// If you want grupr to retain such grants, you should include them in the YAML.
+						// But if you want multiple product roles to have, say, select privileges on such an object,
+						// you would have to add the same object to the YAML of two different products, and you can't
+						// do that in grupr. So, this is an example where you would really get stuck if you used grupr.
+						// Unless, prior to revoking, we try once more if we can find the object; and then if not,
+						// then we conclude it was not a managed object, and therefore the grant is not managed.
+						//
+						// Consumer accounts lack privileges to grant privileges on individual objects in imported
+						// databases to roles. They can only grant usage on database roles in the exported database that
+						// exists in the producer account. Or they can grant IMPORTED PRIVILEGES and then the whole
+						// share is accessible to the grantee. Grants on individual objects in the imported database
+						// nevertheless show up in the output of SHOW GRANTS.
+						//
+						// The Snowflake datbase shows up as 'APPLICATION' in the output of SHOW DATABASES, but 
+						// is also an imported database and privilges on it can be granted to other roles in the same way.
+						// Grants on objects do show up in the output of SHOW GRANTS. A lot of them, especially if
+						// sysadmins granted IMPORTED PRIVILEGES.
+						//
+						// As of now grupr cannot grant privileges on objects in imported databases. To do so would
+						// require Snowflake specific YAML in which imported databases and their database roles are
+						// mentioned and can be granted to product (roles) explicitly. Until we get there, however,
+						// we need a way for grupr to ignore such grants. I see two ways, broadly:
+						//
+						// 1. Query explicitly for databases of types APPLICATION and IMPORTED DATABASE, and whenever
+						// we are processing the output of SHOW GRANTS, and the Databsase field of a grant equals 
+						// an imported database, ignore it, and skip to the next one (or even alter the SHOW GRANTS
+						// query to filter out such records server-side).
+						//
+						// 2. Like we do now, ignore everything but STANDARD databases when we query for databases.
+						// When people put YAML that matches such objects, no matching objects will be found.
+						// When we process the output of SHOW GRANTS, objects from other types of databases will
+						// either be ignored (if they are matched by the YAML), or, if they are not matched (more
+						// likely, reflecting correct YAML), then they will be a revoke candidate. However, prior
+						// to revoking, it will be checked if the object can be found using the same machinery
+						// (account cache) as was used to match objects in the YAML. Then, if the object can not
+						// be found, it will be regarded as an object that grupr apparently does not yet manage.
+						//
+						// The pro of method 2 is that it does not require us to model stuff we do not yet support.
+						// Snowflake can at any moment introduce yet new types of databases, schemas, and objects.
+						// Having a way to just use the way we normally get information on objects also when processing
+						// the output of SHOW GRANTS will give some piece of mind that grupr will less frequently 
+						// and less urgently need updatting.
+						// But it does come with a performance hit. We will be processing all this output from
+						// show grants. And some additional SHOW TABLES / VIEWS commands will be fired.
+						// Also, if we go with method 2, it will mean that there can be unmanaged grants hiding
+						// even in the results for our query for managed grants only.
+						// Fortunately, when it comes to our database roles, they will not have any such grants.
+						// So in that respect, no great code change is needed.
+						// Okay, so, we go with method 2, then.
+						//
+						// But, hey, no role would get CREATE on an imported database.
+						// And, SELECT rights, we exclusively manage them via DATABASE roles.
+						// So, we have no problem! We would ignore SELECT grants anyway, when they are
+						// granted to product roles, be they read roles or write roles.
+						// Any privileges that we do manage on behalf of product roles would never be granted
+						// directly on either imported or application databases--at least at the moment (May 2026).
 						continue
 					}
 				case PrvUsage, PrvMonitor:
@@ -100,6 +161,7 @@ func (pd *ProductDTAP) setGrantActionsFutureObjectsWriteRole(ctx context.Context
 			}
 		}
 		// If we are still here, this grant will be a revoke candidate.
+		// Note that we revoke ownership on future objects of types we manage this way, should sysadmins have granted that
 		pd.toRevokeFutureObjects = append(pd.toRevokeFutureObjects, g)
 	}
 	return nil
@@ -335,12 +397,13 @@ func (pd *ProductDTAP) getTodoGrantsFutureObjectsWriteRole() iter.Seq[FutureGran
 		for db, dbObjs := range pd.Interface.aggAccountObjects.DBs {
 			if dbObjs.MatchAllSchemas {
 				prvs := []PrivilegeComplete{}
-				for _, p := range [2]PrivilegeComplete{
+				for _, pc := range [2]PrivilegeComplete{
 					PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpTable},
 					PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpView},
+					PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpMaterializedView},
 				} {
-					if !dbObjs.hasFutureGrantTo(ModeWrite, ObjTpSchema, p) {
-						prvs = append(prvs, p)
+					if !dbObjs.hasFutureGrantTo(ModeWrite, ObjTpSchema, pc) {
+						prvs = append(prvs, pc)
 					}
 				}
 				if len(prvs) > 0 {
@@ -365,12 +428,13 @@ func (pd *ProductDTAP) getToDoGrantsObjectsWriteRole() iter.Seq[Grant] {
 		for db, dbObjs := range pd.Interface.aggAccountObjects.DBs {
 			for schema, schemaObjs := range dbObjs.Schemas {
 				prvs := []PrivilegeComplete{}
-				for _, p := range [2]PrivilegeComplete{
+				for _, pc := range [2]PrivilegeComplete{
 					PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpTable},
 					PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpView},
+					PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpMaterializedView},
 				} {
-					if !schemaObjs.hasGrantTo(ModeWrite, p) {
-						prvs = append(prvs, p)
+					if !schemaObjs.hasGrantTo(ModeWrite, pc) {
+						prvs = append(prvs, pc)
 					}
 				}
 				if len(prvs) > 0 {

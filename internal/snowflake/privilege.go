@@ -59,18 +59,8 @@ func (p Privilege) String() string {
 	}[p]
 }
 
-func (p Privilege) getIdxObjectLevel() int {
-	switch p {
-	case PrvSelect:
-		return 0
-	case PrvReferences:
-		return 1
-	default:
-		panic("not an object level privilege or not yet implemented")
-	}
-}
-
 func setFlagPrivilegeWarehouse(flags [2]bool, setFlag Privilege) [2]bool {
+	// TODO: add MONITOR
 	switch setFlag {
 	case PrvUsage:
 		flags[0] = true

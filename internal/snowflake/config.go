@@ -50,7 +50,14 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 			semantics.Ident("SECURITYADMIN"),
 			semantics.Ident("USERADMIN"),
 		},
-		ManagedObjTypes: map[ObjType]bool{},
+		// Later, we'll extend grupr with other object types, and when we do it and folks upgrade,
+		// we don't want grupr to all of a sudden claim management of all these other object types.
+		// So we build in a mechanism for people to explicity turn new object types on.
+		ManagedObjTypes: map[ObjType]bool{
+			ObjTpTable: true,
+			ObjTpHybridTable: true,
+			ObjTpView: true,
+		},
 		DryRun: true,
 	}
 
@@ -193,6 +200,14 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvReferences},
 			GrantedOn:         ObjTpView,
 		}: {},
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvSelect},
+			GrantedOn:         ObjTpMaterializedView,
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvReferences},
+			GrantedOn:         ObjTpMaterializedView,
+		}: {},
 	}
 	// These are the object privileges that are managed for product write roles
 	cnf.ObjectPrivilegesOwnership = map[GrantTemplate]struct{}{
@@ -205,12 +220,20 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 			GrantedOn:         ObjTpSchema,
 		}: {},
 		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpMaterializedView},
+			GrantedOn:         ObjTpSchema,
+		}: {},
+		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvOwnership},
 			GrantedOn:         ObjTpTable,
 		}: {},
 		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvOwnership},
 			GrantedOn:         ObjTpView,
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvOwnership},
+			GrantedOn:         ObjTpMaterializedView,
 		}: {},
 	}
 	// We need the next one to manage access exclusively,
@@ -240,6 +263,10 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvApplyBudget},
 			GrantedOn:         ObjTpTable,
 		}: {},
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvApplyBudget},
+			GrantedOn:         ObjTpMaterializedView,
+		}: {},
 	}
 	// This one, too, will be used for managing access exclusively
 	cnf.ObjectPrivileges = map[GrantTemplate]struct{}{}
@@ -248,6 +275,7 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 	maps.Copy(cnf.ObjectPrivileges, cnf.ObjectPrivilegesOwnership)
 
 	// These are compute privileges that are managed for product roles
+	// TODO: add MONITOR
 	cnf.ComputePrivileges = map[GrantTemplate]struct{}{
 		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvUsage},
@@ -271,13 +299,13 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 		}: {},
 	}
 
-	for ot := range []ObjType{ObjTpTable, ObjTpView} {
+	for ot := range []ObjType{ObjTpMaterializedView} {
 		envStr := fmt.Sprintf("GRUPR_SNOWFLAKE_MA_%v", ot)
 		if env, ok := os.LookupEnv(envStr); ok {
 			if b, err := strconv.ParseBool(env); err != nil {
 				return nil, fmt.Errorf("%s: %w", envStr, err)
 			} else {
-				cnf.ManagedObjectTypes[ot] = b
+				cnf.ManagedObjTypes[ot] = b
 			}
 		}
 	}
