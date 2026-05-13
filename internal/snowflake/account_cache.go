@@ -41,7 +41,7 @@ func (c *accountCache) match(ctx context.Context, semCnf *semantics.Config, cnf 
 			return err
 		}
 		for schema, schemaObjs := range dbObjs.getSchemas() {
-			err = c.matchObjects(ctx, conn, db, schema, om, schemaObjs)
+			err = c.matchObjects(ctx, conn, db, schema, om, cnf.ManagedObjTypes, schemaObjs)
 			if err != nil {
 				return err
 			}
@@ -107,7 +107,8 @@ func (c *accountCache) matchSchemas(ctx context.Context, conn *sql.DB, db semant
 	return nil
 }
 
-func (c *accountCache) matchObjects(ctx context.Context, conn *sql.DB, db semantics.Ident, schema semantics.Ident, om semantics.ObjMatcher, o *matchedSchemaObjs) error {
+func (c *accountCache) matchObjects(ctx context.Context, conn *sql.DB, db semantics.Ident, schema semantics.Ident, om semantics.ObjMatcher,
+	map[ObjType]bool mots, o *matchedSchemaObjs) error {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if !c.hasDB(db) {
@@ -122,7 +123,7 @@ func (c *accountCache) matchObjects(ctx context.Context, conn *sql.DB, db semant
 	defer c.dbs[db].schemas[schema].mu.Unlock()
 	if o.version == c.dbs[db].schemas[schema].version {
 		// cache entry is stale
-		if err := c.dbs[db].schemas[schema].refreshObjects(ctx, conn, db, schema); err != nil {
+		if err := c.dbs[db].schemas[schema].refreshObjects(ctx, conn, db, schema, mots); err != nil {
 			return err
 		}
 	}

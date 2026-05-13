@@ -17,17 +17,16 @@ type Obj struct {
 }
 
 func GetObjs(ctx context.Context, conn *sql.DB, db semantics.Ident, schema semantics.Ident, map[ObjType]bool mots) iter.Seq2[Obj, error] {
-	// TODO WIP: only get objects for types in cnf.ManagedObjects
 	return func(yield func(Obj, error) bool) {
 		for rec := range queryTables(ctx, conn, db, schema) {
-			if ot := rec.getObjType(); ot != ObjTpOther {
+			if ot := rec.getObjType(mots); ot != ObjTpOther {
 				if !yield(Obj{Name: rec.name, ObjectType: ot, Owner: rec.owner}, nil) {
 						return
 				}
 			}
 		}
 		for rec := range queryViews(ctx, conn, db, schema) {
-			if ot := rec.getObjType(); ot != ObjTpOther {
+			if ot := rec.getObjType(mots); ot != ObjTpOther {
 				if !yield(Obj{Name: rec.name, ObjectType: ot, Owner: rec.owner}, nil) {
 						return
 				}

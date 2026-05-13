@@ -14,10 +14,10 @@ type schemaCache struct {
 	objects map[semantics.Ident]ObjAttr // nil: never requested; empty: none present;
 }
 
-func (c *schemaCache) refreshObjects(ctx context.Context, conn *sql.DB, db semantics.Ident, schema semantics.Ident) error {
+func (c *schemaCache) refreshObjects(ctx context.Context, conn *sql.DB, db semantics.Ident, schema semantics.Ident, map[ObjType]bool mots) error {
 	// intended to be called from accountCache.match and friends, which will acquire locks on the appropriate mutexes
 	c.objects = map[semantics.Ident]ObjAttr{} // overwrite if it had a value
-	for obj, err := range QueryObjs(ctx, conn, db, schema) {
+	for obj, err := range QueryObjs(ctx, conn, db, schema, mots) {
 		if err != nil {
 			return err
 		}

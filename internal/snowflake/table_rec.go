@@ -23,11 +23,10 @@ type tableRec struct {
 	is_interactive string
 }
 
-func (r tableRec) getObjType() ObjType {
+func (r tableRec) getObjType(map[ObjType]bool mots) ObjType {
 	// First, exclude any object not owned by a role
-	// TODO WIP think through the implication of ignoring objects that are owned by a user (can that happen?)
-	// For example, if we hold grants on objects like that, what will happen? In cases where such objects are matched /
-	// not matched in the YAML / matched in the YAML for a different product, etc?
+	// Fortunately, in Snowflake, until now OWNERSHIP and CREATE cannot be granted to users yet (May 2026)
+	// See: https://docs.snowflake.com/en/sql-reference/sql/grant-privilege-user
 	if ParseObjType(r.owner_role_type) != ObjTpRole {
 		return ObjTpOther
 	}

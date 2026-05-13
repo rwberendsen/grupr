@@ -18,15 +18,24 @@ type viewRec struct {
 	owner_role_type ObjType
 }
 
-func (r viewRec) getObjType() ObjType {
+func (r viewRec) getObjType(maps[ObjType]bool mots) ObjType {
+	// First, exclude any object not owned by a role
+	// Fortunately, in Snowflake, until now OWNERSHIP and CREATE cannot be granted to users yet (May 2026)
+	// See: https://docs.snowflake.com/en/sql-reference/sql/grant-privilege-user
+	//
+	// mots stands for (Managed Object Type)S
 	if ParseObjType(r.owner_role_type) != ObjTpRole {
 		return ObjTpOther
 	}
-	// TODO WIP: recognize Materialize views as well
-	if r.is_secure || r.is_materialized {
-		return ObjTpOther
+	if !r.is_materialized {
+		return ObjTpView
 	}
-	return ObjTpView
+	if mots[ObjTpMaterializedView] {
+		if r.is_materialized {
+			return ObjTpMaterializedView
+		}
+	}
+	return ObjTpOther
 }
 
 func queryViews(ctx context.Context, conn *sql.DB, db semantics.Ident, schema semantics.Ident) iter.Seq2[viewRec, error] {
