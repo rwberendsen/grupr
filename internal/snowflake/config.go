@@ -12,35 +12,37 @@ import (
 )
 
 type Config struct {
-	User                    semantics.Ident
-	Role                    semantics.Ident
-	Account                 string
-	Database                semantics.Ident
-	Schema                  semantics.Ident
-	UseSQLOpen              bool
-	RSAKeyPath              string
-	MaxOpenConns            int
-	MaxIdleConns            int
-	MaxProductDTAPThreads   int
-	StmtBatchSize           int
-	MaxProductDTAPRefreshes int
-	Modes                   [1]Mode
-	SystemDefinedRoles      []semantics.Ident
-	DatabaseRolePrivileges  map[Mode]map[GrantTemplate]struct{}
-	ProductRolePrivileges   map[Mode]map[GrantTemplate]struct{}
-	ManagedObjTypes         map[ObjType]bool
-	DryRun                  bool
+	User                      semantics.Ident
+	Role                      semantics.Ident
+	Account                   string
+	Database                  semantics.Ident
+	Schema                    semantics.Ident
+	UseSQLOpen                bool
+	RSAKeyPath                string
+	MaxOpenConns              int
+	MaxIdleConns              int
+	MaxProductDTAPThreads     int
+	StmtBatchSize             int
+	MaxProductDTAPRefreshes   int
+	Modes                     [1]Mode
+	SystemDefinedRoles        []semantics.Ident
+	ObjectPrivilegesRead      map[GrantTemplate]struct{}
+	ObjectPrivilegesOwnership map[GrantTemplate]struct{}
+	ObjectPrivilegesWrite     map[GrantTemplate]struct{}
+	ObjectPrivileges          map[GrantTemplate]struct{}
+	ManagedObjTypes           map[ObjType]bool
+	DryRun                    bool
 }
 
 func GetConfig(semCnf *semantics.Config) (*Config, error) {
 	cnf := &Config{
-		UseSQLOpen:              false,
-		MaxOpenConns:            0, // unlimited
-		MaxIdleConns:            3, // MaxProductDTAPThreads - 1 (sometimes we use only one conn before quickly fanning out again)
-		MaxProductDTAPThreads:   4,
-		StmtBatchSize:           100,
-		MaxProductDTAPRefreshes: 4,
-		Modes:                   [1]Mode{ModeRead},
+		UseSQLOpen:                false,
+		MaxOpenConns:              0, // unlimited
+		MaxIdleConns:              3, // MaxProductDTAPThreads - 1 (sometimes we use only one conn before quickly fanning out again)
+		MaxProductDTAPThreads:     4,
+		StmtBatchSize:             100,
+		MaxProductDTAPRefreshes:   4,
+		Modes:                     [1]Mode{ModeRead},
 		SystemDefinedRoles: []semantics.Ident{
 			semantics.Ident("GLOBALORGADMIN"),
 			semantics.Ident("ORGADMIN"),
@@ -236,10 +238,6 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 			GrantedOn:         ObjTpSchema,
 		}: {},
 		GrantTemplate{
-			PrivilegeComplete: PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpMaterializedView},
-			GrantedOn:         ObjTpSchema,
-		}: {},
-		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvOwnership},
 			GrantedOn:         ObjTpTable,
 		}: {},
@@ -249,6 +247,10 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 		}: {},
 	}
 	if cnf.ManagedObjTypes[ObjTpMaterializedView] {
+		cnf.ObjectPrivilegesOwnership[GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpMaterializedView},
+			GrantedOn:         ObjTpSchema,
+		}] = {}
 		cnf.ObjectPrivilegesOwnership[GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvOwnership},
 			GrantedOn:         ObjTpMaterializedView,

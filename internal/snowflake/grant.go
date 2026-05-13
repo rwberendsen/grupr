@@ -111,7 +111,7 @@ func newGrantToRole(privilege string, createObjType string, grantedOn string, na
 	case ObjTpSchema:
 		g.Database = semantics.Ident(rec[0])
 		g.Schema = semantics.Ident(rec[1])
-	case ObjTpTable, ObjTpView:
+	case ObjTpTable, ObjTpView, ObjTpMaterializedView:
 		g.Database = semantics.Ident(rec[0])
 		g.Schema = semantics.Ident(rec[1])
 		g.Object = semantics.Ident(rec[2])

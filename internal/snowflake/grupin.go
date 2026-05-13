@@ -238,13 +238,7 @@ func (g *Grupin) setDBRoleGrants(ctx context.Context, semCnf *semantics.Config, 
 		if _, ok := g.productRoles[pr]; !ok && cnf.DryRun {
 			continue
 		}
-		for grant, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, pr.ID, map[GrantTemplate]struct{}{
-			GrantTemplate{
-				PrivilegeComplete:         PrivilegeComplete{Privilege: PrvUsage},
-				GrantedOn:                 ObjTpDatabaseRole,
-				GrantedRoleIsGruprManaged: util.NewTrue(),
-			}: {},
-		}, nil) {
+		for grant, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, pr.ID, cnf.DBRolePrivileges, nil) {
 			if err != nil {
 				return err
 			}

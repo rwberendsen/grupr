@@ -221,15 +221,14 @@ func (o AggDBObjs) setFutureGrants(ctx context.Context, semCnf *semantics.Config
 		return o, err
 	}
 	if !o.isReadDBRoleNew {
-		for g, err := range QueryFutureGrantsToDBRoleFiltered(ctx, conn, db, o.readDBRole.Name, cnf.DatabaseRolePrivileges[ModeRead], nil) {
+		for g, err := range QueryFutureGrantsToDBRoleFiltered(ctx, conn, db, o.readDBRole.Name, cnf.ObjectPrivilegesRead, nil) {
 			if err != nil {
 				return o, err
 			}
 
 			if g.Database != db {
-				// This grant should not be granted to this particular database role
-				o = o.setRevokeFutureGrantTo(ModeRead, g)
-				continue
+				// This grant should not be granted to this particular database role, this should not be possible in Snowflake atm (May 2026)
+				return o, fmt.Errorf("privilege granted to database role on future objects from different database")
 			}
 
 			switch g.GrantedIn {
@@ -238,35 +237,37 @@ func (o AggDBObjs) setFutureGrants(ctx context.Context, semCnf *semantics.Config
 				case ObjTpSchema:
 					if o.MatchAllSchemas {
 						o = o.setFutureGrantTo(ModeRead, g)
-					} else {
-						o = o.setRevokeFutureGrantTo(ModeRead, g)
+						continue
 					}
+					// We need to revoke
 				case ObjTpTable, ObjTpView, ObjTpMaterializedView:
 					if o.MatchAllObjects {
 						o = o.setFutureGrantTo(ModeRead, g)
-					} else {
-						o = o.setRevokeFutureGrantTo(ModeRead, g)
+						continue
 					}
+					// We need to revoke
 				}
-				// Ignore this grant, it's not in grupr its scope (unmanaged grant)
 			case ObjTpSchema:
-				if o.hasSchema(g.Schema) {
-					if o.Schemas[g.Schema].MatchAllObjects {
-						o.Schemas[g.Schema] = o.Schemas[g.Schema].setFutureGrantTo(ModeRead, g)
+				switch g.GrantedOn {
+				case ObjTpTable, ObjTpView, ObjTpMaterializedView:
+					if o.hasSchema(g.Schema) {
+						if o.Schemas[g.Schema].MatchAllObjects {
+							o.Schemas[g.Schema] = o.Schemas[g.Schema].setFutureGrantTo(ModeRead, g)
+						}
+						// We need to revoke 
 					} else {
-						o = o.setRevokeFutureGrantTo(ModeRead, g)
-					}
-				} else {
-					// A rare oddity. A schema was added after we loaded account objects,
-					// and future grants were granted in it to our database role, no less.
-					// But, if the YAML indicates this is correct, we will leave the grant intact
-					if !oms.MatchAllObjectsInSchema(db, g.Schema) {
-						o = o.setRevokeFutureGrantTo(ModeRead, g)
+						// A rare oddity. A schema was added after we loaded account objects,
+						// and future grants were granted in it to our database role, no less.
+						// But, if the YAML indicates this is correct, we will leave the grant intact
+						if oms.MatchAllObjectsInSchema(db, g.Schema) {
+							continue
+						}
+						// We need to revoke
 					}
 				}
-			default:
-				panic("unsupported granted_in object type in future grant")
 			}
+			// If we are still here, we need to revoke
+			o = o.setRevokeFutureGrantTo(ModeRead, g)
 		}
 	}
 	return o, nil
@@ -294,7 +295,7 @@ func (o AggDBObjs) setGrants(ctx context.Context, semCnf *semantics.Config, cnf 
 		}
 
 		// Second, check for managed grants
-		for g, err := range QueryGrantsToDBRoleFiltered(ctx, cnf, conn, db, o.readDBRole.Name, cnf.ObjectPrivileges, nil) {
+		for g, err := range QueryGrantsToDBRoleFiltered(ctx, cnf, conn, db, o.readDBRole.Name, cnf.ObjectPrivilegesRead, nil) {
 			if err != nil {
 				return o, err
 			}
@@ -309,7 +310,7 @@ func (o AggDBObjs) setGrants(ctx context.Context, semCnf *semantics.Config, cnf 
 			case ObjTpDatabase:
 				switch g.Privileges[0].Privilege {
 				case PrvMonitor:
-					o.isMonitorGranted = true					
+					o.isMonitorGranted = true
 				case PrvUsage:
 					// PrvUsage comes out of the box, we do not grant it, so no need to mark it as present
 					continue
