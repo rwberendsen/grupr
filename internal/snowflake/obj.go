@@ -16,7 +16,7 @@ type Obj struct {
 	Owner      semantics.Ident
 }
 
-func GetObjs(ctx context.Context, conn *sql.DB, db semantics.Ident, schema semantics.Ident) iter.Seq2[Obj, error] {
+func GetObjs(ctx context.Context, conn *sql.DB, db semantics.Ident, schema semantics.Ident, map[ObjType]bool mots) iter.Seq2[Obj, error] {
 	// TODO WIP: only get objects for types in cnf.ManagedObjects
 	return func(yield func(Obj, error) bool) {
 		for rec := range queryTables(ctx, conn, db, schema) {

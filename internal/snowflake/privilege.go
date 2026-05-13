@@ -59,23 +59,26 @@ func (p Privilege) String() string {
 	}[p]
 }
 
-func setFlagPrivilegeWarehouse(flags [2]bool, setFlag Privilege) [2]bool {
-	// TODO: add MONITOR
+func setFlagPrivilegeWarehouse(flags [3]bool, setFlag Privilege) [3]bool {
 	switch setFlag {
 	case PrvUsage:
 		flags[0] = true
-	case PrvOperate:
+	case PrvMonitor:
 		flags[1] = true
+	case PrvOperate:
+		flags[2] = true
 	}
 	return flags
 }
 
-func hasFlagPrivilegeWarehouse(flags [2]bool, flag Privilege) bool {
+func hasFlagPrivilegeWarehouse(flags [3]bool, flag Privilege) bool {
 	switch flag {
 	case PrvUsage:
 		return flags[0]
-	case PrvOperate:
+	case PrvMonitor:
 		return flags[1]
+	case PrvOperate:
+		return flags[2]
 	}
 	return false
 }

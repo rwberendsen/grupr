@@ -16,6 +16,8 @@ type AggDBObjs struct {
 	readDBRole      DatabaseRole
 	isReadDBRoleNew bool // if true, then no need to query grants
 
+	isMonitorGranted bool
+
 	// Does the DB role have unmanaged privileges?
 	hasUnmanagedGrantsReadDBRole bool
 
@@ -275,7 +277,8 @@ func (o AggDBObjs) setGrants(ctx context.Context, semCnf *semantics.Config, cnf 
 		// First, check for unmanaged grants, and keep track of in which schemas the database role holds unmanaged grants;
 		// Since we don't know how to parse grants that grupr does not manage, if there is even a single unmanaged
 		// grant, no matter what it is, we are not going to revoke usage or monitor from any databases or schemas; even
-		// if those databases and schemas do not match any object expression from the YAML. After
+		// if those databases and schemas do not match any object expression from the YAML; even if the objects are
+		// matched by a different product its YAML. After
 		// all, it could be that this would render ineffective an unmanaged privilege on an object in such a schema,
 		// and grupr would break some access that was legitimately put in place by sysadmins.
 		// We should not revoke USAGE on these schemas from the database role, not even if the schema is disjoint from the YAML.
@@ -302,14 +305,18 @@ func (o AggDBObjs) setGrants(ctx context.Context, semCnf *semantics.Config, cnf 
 				return o, fmt.Errorf("privilege granted to database role on object from different database")
 			}
 
-			switch g.Privileges[0].Privilege {
-			case PrvUsage, Monitor:
-				// At the moment, cnf.ObjectPrivileges has these only on databases and schemas
-				switch g.GrantedOn {
-				case ObjTpDatabase:
-					// We need to keep this grant
+			switch ot := g.GrantedOn; ot {
+			case ObjTpDatabase:
+				switch g.Privileges[0].Privilege {
+				case PrvMonitor:
+					o.isMonitorGranted = true					
+				case PrvUsage:
+					// PrvUsage comes out of the box, we do not grant it, so no need to mark it as present
 					continue
-				case ObjTpSchema:
+				}
+			case ObjTpSchema:
+				switch g.Privileges[0].Privilege {
+				case PrvUsage, PrvMonitor:
 					if oms.DisjointFromSchema(g.Database, g.Schema) {
 						if o.hasUnmanagedGrantsReadDBRole {
 							// We need to keep this grant
@@ -325,19 +332,24 @@ func (o AggDBObjs) setGrants(ctx context.Context, semCnf *semantics.Config, cnf 
 						continue
 					} 
 				}
-			case PrvSelect, PrvReferences, PrvSelectErrorTable:
-				// At the moment, we only have this on ObjTpTable and ObjTpView in cnf.ObjectPrivileges
-				if !oms.DisjointFromObject(g.Database, g.Schema, g.Object) { // else, we need to revoke
-					if o.hasObject(g.Schema, g.Object) {
-						if o.Schemas[g.Schema].Objects[g.Object].ObjectType.String() != g.GrantedOn.String() {
-							// A (hybrid) table may have been dropped and a view with the same name created or vice versa
-							// A good reason to refresh the product
-							return o, ErrObjectNotExistOrAuthorized
+			case ObjTpTable, ObjTpView, ObjTpMaterializedView:
+				switch g.Privileges[0].Privilege {
+				case PrvSelect, PrvReferences, PrvSelectErrorTable:
+					if !oms.DisjointFromObject(g.Database, g.Schema, g.Object) {
+						if o.hasObject(g.Schema, g.Object) {
+							// We call the String method on the object type to normalize AggObjAttr.ObjectType from
+							// ObjTpHybridTable to ObjTpTable
+							if o.Schemas[g.Schema].Objects[g.Object].ObjectType.String() != ot.String() {
+								// A (hybrid) table may have been dropped and a (materialized) view with the same name
+								// created or vice versa A good reason to refresh the product
+								return o, ErrObjectNotExistOrAuthorized
+							}
+							o.Schemas[g.Schema].Objects[g.Object] = o.Schemas[g.Schema].Objects[g.Object].setGrantTo(ModeRead, g)
 						}
-						o.Schemas[g.Schema].Objects[g.Object] = o.Schemas[g.Schema].Objects[g.Object].setGrantTo(ModeRead, g)
+						// And we need to keep this grant
+						continue
 					}
-					// And we need to keep this grant
-					continue
+					// We need to revoke
 				}
 			}
 			// If we are still here, we need to revoke this grant
@@ -358,11 +370,19 @@ func (o AggDBObjs) setConsumedByGranted(m Mode, pdID semantics.ProductDTAPID) Ag
 
 func (o AggDBObjs) pushToDoFutureGrants(cnf *Config, yield func(FutureGrant) bool, map[ObjType]bool mots) bool {
 	// All future read privileges; write privileges are collected from a ProductDTAP method directly
-	// WIP TODO: monitor in there, and select error table a bit below, much like this method in agg_schema_objs
 	if o.MatchAllSchemas {
-		if !o.hasFutureGrantTo(ModeRead, ObjTpSchema, PrivilegeComplete{Privilege: PrvUsage}) {
+		prvs := []PrivilegeComplete{}
+		for _, pc := range [2]PrivilegeComplete{
+			PrivilegeComplete{Privilege: PrvUsage},
+			PrivilegeComplete{Privilege: PrvMonitor},
+		} {
+			if !o.hasFutureGrantTo(ModeRead, ObjTpSchema, pc) {
+				prvs = append(prvs, pc)
+			}
+		}
+		if len(prvs) > 0 {
 			if !yield(FutureGrant{
-				Privileges:        []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage}},
+				Privileges:        prvs,
 				GrantedOn:         ObjTpSchema,
 				GrantedIn:         ObjTpDatabase,
 				Database:          o.readDBRole.Database,
@@ -382,6 +402,8 @@ func (o AggDBObjs) pushToDoFutureGrants(cnf *Config, yield func(FutureGrant) boo
 				PrivilegeComplete{Privilege: PrvReferences},
 			}
 			if ot == ObjTpTable {
+				// Note that this privilege does not apply to hybrid tables, but we count on
+				// Snowflake not giving problems when folks create a hybrid table
 				candidatePrvs = append(candidatePrvs, PrivilegeComplete{Privilege: PrvSelectErrorTable})
 			}
 			for _, pc := range candidatePrvs {
@@ -413,6 +435,18 @@ func (o AggDBObjs) pushToDoFutureGrants(cnf *Config, yield func(FutureGrant) boo
 }
 
 func (o AggDBObjs) pushToDoGrants(yield func(Grant) bool) bool {
+	if !o.isMonitorGranted {
+		if !yield(Grant{
+			Privileges:        []PrivilegeComplete{PrivilegeComplete{Privilege: PrvMonitor}},
+			GrantedOn:         ObjTpDatabase,
+			Database:          o.readDBRole.Database,
+			GrantedTo:         ObjTpDatabaseRole,
+			GrantedToDatabase: o.readDBRole.Database,
+			GrantedToName:     o.readDBRole.Name,
+		}) {
+			return false
+		}
+	}
 	for schema, schemaObjs := range o.Schemas {
 		if !schemaObjs.pushToDoGrants(yield, o.readDBRole, schema) {
 			return false

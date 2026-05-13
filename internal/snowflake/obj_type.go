@@ -24,7 +24,7 @@ const (
 func ParseObjType(s string) ObjType {
 	// s is a statement-style object type string
 	// Note that even though hybrid tables are managed by grupr, they
-	// are just called TABLE in SQL statements, and they also
+	// are just called TABLE in many SQL statements, and they also
 	// appear as TABLE in the output of SHOW GRANTS commands.
 	//
 	// Afaik, currently hybrid tables are the only special table type
@@ -52,7 +52,7 @@ func (ot ObjType) String() string {
 		ObjTpAccount:            "ACCOUNT",
 		ObjTpDatabase:           "DATABASE",
 		ObjTpDatabaseRole:       "DATABASE ROLE",
-		ObjTpHybridTable:        "TABLE", // Hybrid tables are indistinguishable from regular table in SQL statements
+		ObjTpHybridTable:        "TABLE", // Hybrid tables are indistinguishable from regular table in many SQL statements
 		ObjTpMaterializedView:   "MATERIALIZED VIEW",
 		ObjTpRole:               "ROLE",
 		ObjTpSchema:             "SCHEMA",

@@ -22,6 +22,7 @@ func (r viewRec) getObjType() ObjType {
 	if ParseObjType(r.owner_role_type) != ObjTpRole {
 		return ObjTpOther
 	}
+	// TODO WIP: recognize Materialize views as well
 	if r.is_secure || r.is_materialized {
 		return ObjTpOther
 	}

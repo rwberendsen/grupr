@@ -164,8 +164,18 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 		}
 	}
 
+	for ot := range []ObjType{ObjTpMaterializedView} {
+		envStr := fmt.Sprintf("GRUPR_SNOWFLAKE_MA_%v", ot)
+		if env, ok := os.LookupEnv(envStr); ok {
+			if b, err := strconv.ParseBool(env); err != nil {
+				return nil, fmt.Errorf("%s: %w", envStr, err)
+			} else {
+				cnf.ManagedObjTypes[ot] = b
+			}
+		}
+	}
+
 	// These are the object privileges that are managed for read database roles
-	// TODO WIP: make privileges that are included depend on cnf.ManagedObjects
 	cnf.ObjectPrivilegesRead = map[GrantTemplate]struct{}{
 		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvUsage},
@@ -203,15 +213,18 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvReferences},
 			GrantedOn:         ObjTpView,
 		}: {},
-		GrantTemplate{
-			PrivilegeComplete: PrivilegeComplete{Privilege: PrvSelect},
-			GrantedOn:         ObjTpMaterializedView,
-		}: {},
-		GrantTemplate{
+	}
+	if cnf.ManagedObjTypes[ObjTpMaterializedView] {
+		cnf.ObjectPrivilegesRead[GrantTemplate{
+				PrivilegeComplete: PrivilegeComplete{Privilege: PrvSelect},
+				GrantedOn:         ObjTpMaterializedView,
+		}] = {}
+		cnf.ObjectPrivilegesRead[GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvReferences},
 			GrantedOn:         ObjTpMaterializedView,
-		}: {},
+		}] = {}
 	}
+
 	// These are the object privileges that are managed for product write roles
 	cnf.ObjectPrivilegesOwnership = map[GrantTemplate]struct{}{
 		GrantTemplate{
@@ -234,11 +247,14 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvOwnership},
 			GrantedOn:         ObjTpView,
 		}: {},
-		GrantTemplate{
+	}
+	if cnf.ManagedObjTypes[ObjTpMaterializedView] {
+		cnf.ObjectPrivilegesOwnership[GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvOwnership},
 			GrantedOn:         ObjTpMaterializedView,
-		}: {},
+		}] = {}
 	}
+
 	// We need the next one to manage access exclusively,
 	// when we will revoke such privileges from any user managed or even system roles
 	cnf.ObjectPrivilegesWrite = map[GrantTemplate]struct{}{
@@ -266,11 +282,14 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvApplyBudget},
 			GrantedOn:         ObjTpTable,
 		}: {},
-		GrantTemplate{
+	}
+	if cnf.ManagedObjTypes[ObjTpMaterializedView] {
+		cnf.ObjectPrivilegesWrite[GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvApplyBudget},
 			GrantedOn:         ObjTpMaterializedView,
-		}: {},
+		}] = {}
 	}
+
 	// This one, too, will be used for managing access exclusively
 	cnf.ObjectPrivileges = map[GrantTemplate]struct{}{}
 	maps.Copy(cnf.ObjectPrivileges, cnf.ObjectPrivilegesRead)
@@ -278,10 +297,13 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 	maps.Copy(cnf.ObjectPrivileges, cnf.ObjectPrivilegesOwnership)
 
 	// These are compute privileges that are managed for product roles
-	// TODO: add MONITOR
 	cnf.ComputePrivileges = map[GrantTemplate]struct{}{
 		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvUsage},
+			GrantedOn:         ObjTpWarehouse,
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvMonitor},
 			GrantedOn:         ObjTpWarehouse,
 		}: {},
 		GrantTemplate{
@@ -298,20 +320,13 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 		GrantTemplate{
 			PrivilegeComplete:         PrivilegeComplete{Privilege: PrvUsage},
 			GrantedOn:                 ObjTpDatabaseRole,
-			GrantedRoleIsGruprManaged: util.NewTrue(),
+			// Note that it's a bit odd that if we created another entry just like this, because it's a different
+			// pointer, it would be a different key in the map.
+			// TODO: use slices instead of maps for cnf.DBROlePrivileges and friends
+			GrantedRoleIsGruprManaged: util.NewTrue(), 
 		}: {},
 	}
 
-	for ot := range []ObjType{ObjTpMaterializedView} {
-		envStr := fmt.Sprintf("GRUPR_SNOWFLAKE_MA_%v", ot)
-		if env, ok := os.LookupEnv(envStr); ok {
-			if b, err := strconv.ParseBool(env); err != nil {
-				return nil, fmt.Errorf("%s: %w", envStr, err)
-			} else {
-				cnf.ManagedObjTypes[ot] = b
-			}
-		}
-	}
 
 	if dryRun, ok := os.LookupEnv("GRUPR_SNOWFLAKE_DRY_RUN"); ok {
 		if b, err := strconv.ParseBool(dryRun); err != nil {

@@ -25,8 +25,8 @@ type ProductDTAP struct {
 	WriteRole             ProductRole
 	GrantReadRoleToUsers  map[semantics.Ident]bool    // initially set to false, then to true if GRANTS are found in Snowflake
 	GrantWriteRoleToUsers map[semantics.Ident]bool    // initially set to false, then to true if GRANTS are found in Snowflake
-	ReadWarehouses        map[semantics.Ident][2]bool // initially set to false, then to true if GRANTS (USAGE, OPERATE) are found in Snowflake
-	WriteWarehouses       map[semantics.Ident][2]bool // initially set to false, then to true if GRANTS (USAGE, OPERATE) are found in Snowflake
+	ReadWarehouses        map[semantics.Ident][3]bool // initially set to false, then to true if GRANTS (USAGE, MONITOR, OPERATE) are found in Snowflake
+	WriteWarehouses       map[semantics.Ident][3]bool // initially set to false, then to true if GRANTS (USAGE, MONITOR, OPERATE) are found in Snowflake
 
 	writeRoleGrantedToUserManagedRoles map[semantics.Ident]struct{}
 	userManagedOwnersOfObjects         map[semantics.Ident]struct{}
@@ -57,8 +57,8 @@ func NewProductDTAP(pdID semantics.ProductDTAPID, isProd bool, pSem semantics.Pr
 		Consumes:              map[syntax.InterfaceID]string{},
 		GrantReadRoleToUsers:  map[semantics.Ident]bool{},
 		GrantWriteRoleToUsers: map[semantics.Ident]bool{},
-		ReadWarehouses:        map[semantics.Ident][2]bool{},
-		WriteWarehouses:       map[semantics.Ident][2]bool{},
+		ReadWarehouses:        map[semantics.Ident][3]bool{},
+		WriteWarehouses:       map[semantics.Ident][3]bool{},
 		matchedAccountObjects: map[semantics.ObjExpr]*matchedAccountObjs{},
 	}
 

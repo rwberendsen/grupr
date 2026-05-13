@@ -25,6 +25,9 @@ type tableRec struct {
 
 func (r tableRec) getObjType() ObjType {
 	// First, exclude any object not owned by a role
+	// TODO WIP think through the implication of ignoring objects that are owned by a user (can that happen?)
+	// For example, if we hold grants on objects like that, what will happen? In cases where such objects are matched /
+	// not matched in the YAML / matched in the YAML for a different product, etc?
 	if ParseObjType(r.owner_role_type) != ObjTpRole {
 		return ObjTpOther
 	}
