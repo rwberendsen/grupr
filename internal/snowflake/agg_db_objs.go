@@ -356,7 +356,7 @@ func (o AggDBObjs) setConsumedByGranted(m Mode, pdID semantics.ProductDTAPID) Ag
 	return o
 }
 
-func (o AggDBObjs) pushToDoFutureGrants(yield func(FutureGrant) bool) bool {
+func (o AggDBObjs) pushToDoFutureGrants(cnf *Config, yield func(FutureGrant) bool, map[ObjType]bool mots) bool {
 	// All future read privileges; write privileges are collected from a ProductDTAP method directly
 	// WIP TODO: monitor in there, and select error table a bit below, much like this method in agg_schema_objs
 	if o.MatchAllSchemas {
@@ -375,11 +375,18 @@ func (o AggDBObjs) pushToDoFutureGrants(yield func(FutureGrant) bool) bool {
 		}
 	}
 	if o.MatchAllObjects {
-		for _, ot := range [2]ObjType{ObjTpTable, ObjTpView, ObjTpMaterializedView} {
+		for ot := range mots {
 			prvs := []PrivilegeComplete{}
-			for _, p := range [2]PrivilegeComplete{PrivilegeComplete{Privilege: PrvSelect}, PrivilegeComplete{Privilege: PrvReferences}} {
-				if !o.hasFutureGrantTo(ModeRead, ot, p) {
-					prvs = append(prvs, p)
+			candidatePrvs := []PrivilegeComplete{
+				PrivilegeComplete{Privilege: PrvSelect},
+				PrivilegeComplete{Privilege: PrvReferences},
+			}
+			if ot == ObjTpTable {
+				candidatePrvs = append(candidatePrvs, PrivilegeComplete{Privilege: PrvSelectErrorTable})
+			}
+			for _, pc := range candidatePrvs {
+				if !o.hasFutureGrantTo(ModeRead, ot, pc) {
+					prvs = append(prvs, pc)
 				}
 			}
 			if len(prvs) > 0 {
@@ -398,7 +405,7 @@ func (o AggDBObjs) pushToDoFutureGrants(yield func(FutureGrant) bool) bool {
 		}
 	}
 	for schema, schemaObjs := range o.Schemas {
-		if !schemaObjs.pushToDoFutureGrants(yield, o.readDBRole, schema) {
+		if !schemaObjs.pushToDoFutureGrants(cnf, yield, o.readDBRole, schema, mots) {
 			return false
 		}
 	}

@@ -53,9 +53,11 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 		// Later, we'll extend grupr with other object types, and when we do it and folks upgrade,
 		// we don't want grupr to all of a sudden claim management of all these other object types.
 		// So we build in a mechanism for people to explicity turn new object types on.
+		//
+		// Note that ObjTpTable implies we also manage ObjTpHybridTable; in the output of SHOW GRANTS,
+		// and in SQL statements like CREATE <object_type> the two are not distinguished
 		ManagedObjTypes: map[ObjType]bool{
 			ObjTpTable: true,
-			ObjTpHybridTable: true,
 			ObjTpView: true,
 		},
 		DryRun: true,
@@ -163,6 +165,7 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 	}
 
 	// These are the object privileges that are managed for read database roles
+	// TODO WIP: make privileges that are included depend on cnf.ManagedObjects
 	cnf.ObjectPrivilegesRead = map[GrantTemplate]struct{}{
 		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvUsage},

@@ -63,6 +63,7 @@ func (o AggObjAttr) pushToDoGrants(yield func(Grant) bool, dbRole DatabaseRole, 
 		PrivilegeComplete{Privilege: PrvReferences},
 	}
 	if o.ObjectType == ObjTpTable {
+		// We do not want this privilege for views, materialized views and hybrid tables
 		candidatePrvs = append(candidatePrvs, PrivilegeComplete{Privilege: PrvSelectErrorTable})
 	}
 	for _, pc := range candidatePrvs {
@@ -73,7 +74,7 @@ func (o AggObjAttr) pushToDoGrants(yield func(Grant) bool, dbRole DatabaseRole, 
 	if len(prvs) > 0 {
 		if !yield(Grant{
 			Privileges:        prvs,
-			GrantedOn:         o.ObjectType,
+			GrantedOn:         ParseObjType(o.ObjectType.String()), // will normalize ObjHybridTable to ObjTable
 			Database:          dbRole.Database,
 			Schema:            schema,
 			Object:            obj,

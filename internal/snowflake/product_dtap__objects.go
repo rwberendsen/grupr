@@ -320,7 +320,7 @@ func (pd *ProductDTAP) grant_(ctx context.Context, semCnf *semantics.Config, cnf
 			return err
 		}
 	}
-	if err := DoFutureGrants(ctx, cnf, conn, pd.getToDoFutureGrantsToDBRoles()); err != nil {
+	if err := DoFutureGrants(ctx, cnf, conn, pd.getToDoFutureGrantsToDBRoles(cnf.ManagedObjTypes)); err != nil {
 		return err
 	}
 
@@ -392,16 +392,16 @@ func (pd *ProductDTAP) revoke_(ctx context.Context, cnf *Config, conn *sql.DB) e
 	return nil
 }
 
-func (pd *ProductDTAP) getTodoGrantsFutureObjectsWriteRole() iter.Seq[FutureGrant] {
+func (pd *ProductDTAP) getTodoGrantsFutureObjectsWriteRole(map[ObjType]bool mots) iter.Seq[FutureGrant] {
 	return func(yield func(FutureGrant) bool) {
 		for db, dbObjs := range pd.Interface.aggAccountObjects.DBs {
 			if dbObjs.MatchAllSchemas {
 				prvs := []PrivilegeComplete{}
-				for _, pc := range [2]PrivilegeComplete{
-					PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpTable},
-					PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpView},
-					PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpMaterializedView},
-				} {
+				candidatePrvs := []PrivilegeComplete{}
+				for ot := range mots {
+					candidatePrvs = append(candidatePrvs, PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ot})
+				}
+				for _, pc := range candidatePrvs {
 					if !dbObjs.hasFutureGrantTo(ModeWrite, ObjTpSchema, pc) {
 						prvs = append(prvs, pc)
 					}
@@ -423,16 +423,16 @@ func (pd *ProductDTAP) getTodoGrantsFutureObjectsWriteRole() iter.Seq[FutureGran
 	}
 }
 
-func (pd *ProductDTAP) getToDoGrantsObjectsWriteRole() iter.Seq[Grant] {
+func (pd *ProductDTAP) getToDoGrantsObjectsWriteRole(map[ObjType]bool mots) iter.Seq[Grant] {
 	return func(yield func(Grant) bool) {
 		for db, dbObjs := range pd.Interface.aggAccountObjects.DBs {
 			for schema, schemaObjs := range dbObjs.Schemas {
 				prvs := []PrivilegeComplete{}
-				for _, pc := range [2]PrivilegeComplete{
-					PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpTable},
-					PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpView},
-					PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpMaterializedView},
-				} {
+				candidatePrvs := []PrivilegeComplete{}
+				for ot := range mots {
+					candidatePrvs = append(candidatePrvs, PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ot})
+				}
+				for _, pc := range candidatePrvs {
 					if !schemaObjs.hasGrantTo(ModeWrite, pc) {
 						prvs = append(prvs, pc)
 					}
@@ -478,6 +478,11 @@ func (pd *ProductDTAP) getToDoOwnershipGrants() iter.Seq[Grant] {
 			for schema, schemaObjs := range dbObjs.Schemas {
 				for obj, objAttr := range schemaObjs.Objects {
 					if !objAttr.isOwnedByProductWriteRole {
+						ot = objAttr.ObjectType
+						if ot == ObjTpHybridTable {
+							// In snowflake GRANT <privileges> ..., HYBRID TABLE is not a recongnized object type
+							ot = ObjTpTable
+						}
 						if !yield(Grant{
 							Privileges:    []PrivilegeComplete{PrivilegeComplete{Privilege: PrvOwnership}},
 							GrantedOn:     objAttr.ObjectType,
@@ -496,13 +501,13 @@ func (pd *ProductDTAP) getToDoOwnershipGrants() iter.Seq[Grant] {
 	}
 }
 
-func (pd *ProductDTAP) getToDoFutureGrantsToDBRoles() iter.Seq[FutureGrant] {
+func (pd *ProductDTAP) getToDoFutureGrantsToDBRoles(map[ObjType]bool mots) iter.Seq[FutureGrant] {
 	return func(yield func(FutureGrant) bool) {
-		if !pd.Interface.pushToDoFutureGrants(yield) {
+		if !pd.Interface.pushToDoFutureGrants(yield, mots) {
 			return
 		}
 		for _, i := range pd.Interfaces {
-			if !i.pushToDoFutureGrants(yield) {
+			if !i.pushToDoFutureGrants(yield, mots) {
 				return
 			}
 		}

@@ -147,11 +147,11 @@ func (o AggSchemaObjs) hasGrantTo(m Mode, pc PrivilegeComplete) bool {
 	return false
 }
 
-func (o AggSchemaObjs) pushToDoFutureGrants(yield func(FutureGrant) bool, dbRole DatabaseRole, schema semantics.Ident) bool {
+func (o AggSchemaObjs) pushToDoFutureGrants(yield func(FutureGrant) bool, dbRole DatabaseRole, schema semantics.Ident, map[ObjType]bool mots) bool {
 	if o.MatchAllObjects {
-		for _, ot := range [2]ObjType{ObjTpTable, ObjTpView, ObjTpMaterializedView} {
+		for ot := range mots {
 			prvs := []PrivilegeComplete{}
-			candidatePrvs:= []PrivilegeComplete{
+			candidatePrvs := []PrivilegeComplete{
 				PrivilegeComplete{Privilege: PrvSelect},
 				PrivilegeComplete{Privilege: PrvReferences},
 			}
