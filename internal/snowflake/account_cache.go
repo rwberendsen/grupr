@@ -20,12 +20,13 @@ type accountCache struct {
 	dbExists map[semantics.Ident]bool
 }
 
-func newAccountCache(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB) (c *accountCache, err error) {
+func newAccountCache(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB,
+	managedDBs map[semantics.Ident]bool) (c *accountCache, err error) {
 	c = &accountCache{}
 	// We initialize at least the databases before we start.
 	// That way, even if no object expressions at all are in the YAML, at least we
 	// still have the information which database roles exist (and thus, have to be dropped)
-	err = c.refreshDBs(ctx, semCnf, cnf, conn)
+	err = c.refreshDBs(ctx, semCnf, cnf, conn, managedDBs)
 	return
 }
 
@@ -55,7 +56,7 @@ func (c *accountCache) matchDBs(ctx context.Context, semCnf *semantics.Config, c
 	defer c.mu.Unlock()
 	if o.version == c.version {
 		// cache entry is stale
-		if err := c.refreshDBs(ctx, semCnf, cnf, conn); err != nil {
+		if err := c.refreshDBs(ctx, semCnf, cnf, conn, nil); err != nil {
 			return err
 		}
 	}
@@ -138,7 +139,11 @@ func (c *accountCache) matchObjects(ctx context.Context, conn *sql.DB, db semant
 	return nil
 }
 
-func (c *accountCache) refreshDBs(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB) error {
+func (c *accountCache) refreshDBs(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB,
+	managedDBs map[semantics.Ident]bool) error {
+	/*
+		managedDBs has dbs where the grupr role has already been granted CREATE DATABASE ROLE
+	*/
 	dbs, err := queryDBs(ctx, conn)
 	if err != nil {
 		return err
@@ -150,7 +155,7 @@ func (c *accountCache) refreshDBs(ctx context.Context, semCnf *semantics.Config,
 	}
 	for k := range dbs {
 		if !c.hasDB(k) {
-			if err := c.addDB(ctx, semCnf, cnf, conn, k); err != nil {
+			if err := c.addDB(ctx, semCnf, cnf, conn, k, !managedDBs[k]); err != nil {
 				return err
 			}
 		}
@@ -159,7 +164,8 @@ func (c *accountCache) refreshDBs(ctx context.Context, semCnf *semantics.Config,
 	return nil
 }
 
-func (c *accountCache) addDB(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, k semantics.Ident) error {
+func (c *accountCache) addDB(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB,
+	k semantics.Ident, grantCreateDBRole bool) error {
 	if c.dbs == nil {
 		c.dbs = map[semantics.Ident]*dbCache{}
 		c.dbExists = map[semantics.Ident]bool{}
@@ -170,7 +176,7 @@ func (c *accountCache) addDB(ctx context.Context, semCnf *semantics.Config, cnf 
 	// After a DB has been dropped and recreated, DB roles may have been dropped;
 	// Also, the privilege CREATE DATABASE ROLE that the grupr role should have may have been revoked.
 	// But, if this is the first time the DB was added, those things may be in place.
-	if err := c.dbs[k].refreshDBRoles(ctx, semCnf, cnf, conn, k); err != nil {
+	if err := c.dbs[k].refreshDBRoles(ctx, semCnf, cnf, conn, k, grantCreateDBRole); err != nil {
 		return err
 	}
 	c.dbExists[k] = true
@@ -204,7 +210,6 @@ func queryDBs(ctx context.Context, conn *sql.DB) (map[semantics.Ident]struct{}, 
 	dbs := map[semantics.Ident]struct{}{}
 	start := time.Now()
 	log.Printf("Querying Snowflake for database names...\n")
-	// TODO: Develop models (if any) for working with IMPORTED DATABASE, and APPLICATION DATABASE
 	// TODO: When there are more than 10K results, paginate
 	rows, err := conn.QueryContext(ctx, `SHOW TERSE DATABASES IN ACCOUNT ->> SELECT "name" FROM $1 WHERE "kind" = 'STANDARD'`)
 	if err != nil {

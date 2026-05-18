@@ -6,6 +6,7 @@ const (
 	PrvOther Privilege = iota // zero type is PrvOther
 	PrvApplyBudget
 	PrvCreate
+	PrvCreateDatabaseRole
 	PrvDelete
 	PrvEvolveSchema
 	PrvInsert
@@ -22,40 +23,42 @@ const (
 
 func ParsePrivilege(p string) Privilege {
 	return map[string]Privilege{
-		"APPLYBUDGET":        PrvApplyBudget,
-		"CREATE":             PrvCreate,
-		"DELETE":             PrvDelete,
-		"EVOLVE SCHEMA":      PrvEvolveSchema,
-		"INSERT":             PrvInsert,
-		"MONITOR":            PrvMonitor,
-		"OPERATE":            PrvOperate,
-		"OWNERSHIP":          PrvOwnership,
-		"REFERENCES":         PrvReferences,
-		"SELECT":             PrvSelect,
-		"SELECT ERROR TABLE": PrvSelect,
-		"TRUNCATE":           PrvTruncate,
-		"UPDATE":             PrvUpdate,
-		"USAGE":              PrvUsage,
+		"APPLYBUDGET":          PrvApplyBudget,
+		"CREATE":               PrvCreate,
+		"CREATE DATABASE ROLE": PrvCreateDatabaseRole,
+		"DELETE":               PrvDelete,
+		"EVOLVE SCHEMA":        PrvEvolveSchema,
+		"INSERT":               PrvInsert,
+		"MONITOR":              PrvMonitor,
+		"OPERATE":              PrvOperate,
+		"OWNERSHIP":            PrvOwnership,
+		"REFERENCES":           PrvReferences,
+		"SELECT":               PrvSelect,
+		"SELECT ERROR TABLE":   PrvSelect,
+		"TRUNCATE":             PrvTruncate,
+		"UPDATE":               PrvUpdate,
+		"USAGE":                PrvUsage,
 	}[p]
 }
 
 func (p Privilege) String() string {
 	return map[Privilege]string{
-		PrvOther:            "OTHER",
-		PrvApplyBudget:      "APPLYBUDGET",
-		PrvCreate:           "CREATE",
-		PrvDelete:           "DELETE",
-		PrvEvolveSchema:     "EVOLVE SCHEMA",
-		PrvInsert:           "INSERT",
-		PrvMonitor:          "MONITOR",
-		PrvOperate:          "OPERATE",
-		PrvOwnership:        "OWNERSHIP",
-		PrvReferences:       "REFERENCES",
-		PrvSelect:           "SELECT",
-		PrvSelectErrorTable: "SELECT ERROR TABLE",
-		PrvTruncate:         "TRUNCATE",
-		PrvUpdate:           "UPDATE",
-		PrvUsage:            "USAGE",
+		PrvOther:              "OTHER",
+		PrvApplyBudget:        "APPLYBUDGET",
+		PrvCreate:             "CREATE",
+		PrvCreateDatabaseRole: "CREATE DATABASE ROLE",
+		PrvDelete:             "DELETE",
+		PrvEvolveSchema:       "EVOLVE SCHEMA",
+		PrvInsert:             "INSERT",
+		PrvMonitor:            "MONITOR",
+		PrvOperate:            "OPERATE",
+		PrvOwnership:          "OWNERSHIP",
+		PrvReferences:         "REFERENCES",
+		PrvSelect:             "SELECT",
+		PrvSelectErrorTable:   "SELECT ERROR TABLE",
+		PrvTruncate:           "TRUNCATE",
+		PrvUpdate:             "UPDATE",
+		PrvUsage:              "USAGE",
 	}[p]
 }
 

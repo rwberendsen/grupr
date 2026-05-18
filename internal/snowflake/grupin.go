@@ -35,7 +35,14 @@ func NewGrupin(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn 
 		}
 	}
 
-	if c, err := newAccountCache(ctx, semCnf, cnf, conn); err != nil {
+	// before we create the account cache, which will be populated with the databases straight away,
+	// we query which databases the grupr role already has been granted CREATE DATABASE ROLE in
+	managedDBs, err := r.getManagedDBs(ctx, cnf, conn)
+	if err != nil {
+		return r, err
+	}
+
+	if c, err := newAccountCache(ctx, semCnf, cnf, conn, managedDBs); err != nil {
 		return r, err
 	} else {
 		r.accountCache = c
@@ -51,6 +58,26 @@ func NewGrupin(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn 
 	}
 
 	return r, nil
+}
+
+func (_ *Grupin) getManagedDBs(ctx context.Context, cnf *Config, conn *sql.DB) (map[semantics.Ident]bool, error) {
+	/*
+		We define this as a "method" of Grupin because it is related to the grupr role, of which there is just one,
+		just like there is just one grupin. The two are related, and it is a convenient namespace for this method.
+	*/
+	m := map[semantics.Ident]bool{}
+	for g, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, cnf.Role, map[GrantTemplate]struct{}{
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvCreateDatabaseRole},
+			GrantedOn: ObjTpDatabase,
+		}: {},
+	}, nil) {
+		if err != nil {
+			return m, err
+		}
+		m[g.Database] = true
+	}
+	return m, nil
 }
 
 func (g *Grupin) setWarehouses(semCnf *semantics.Config, warehouses []WarehouseDecoded) error {
