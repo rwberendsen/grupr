@@ -11,14 +11,14 @@ import (
 )
 
 type viewRec struct {
-	name semantics.Ident
-	owner semantics.Ident
-	is_secure bool
+	name            semantics.Ident
+	owner           semantics.Ident
+	is_secure       bool
 	is_materialized bool
 	owner_role_type ObjType
 }
 
-func (r viewRec) getObjType(maps[ObjType]bool mots) ObjType {
+func (r viewRec) getObjType(mots map[ObjType]bool) ObjType {
 	// First, exclude any object not owned by a role
 	// Fortunately, in Snowflake, until now OWNERSHIP and CREATE cannot be granted to users yet (May 2026)
 	// See: https://docs.snowflake.com/en/sql-reference/sql/grant-privilege-user

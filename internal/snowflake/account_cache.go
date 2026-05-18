@@ -108,7 +108,7 @@ func (c *accountCache) matchSchemas(ctx context.Context, conn *sql.DB, db semant
 }
 
 func (c *accountCache) matchObjects(ctx context.Context, conn *sql.DB, db semantics.Ident, schema semantics.Ident, om semantics.ObjMatcher,
-	map[ObjType]bool mots, o *matchedSchemaObjs) error {
+	mots map[ObjType]bool, o *matchedSchemaObjs) error {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if !c.hasDB(db) {

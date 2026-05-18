@@ -254,7 +254,7 @@ func (o AggDBObjs) setFutureGrants(ctx context.Context, semCnf *semantics.Config
 						if o.Schemas[g.Schema].MatchAllObjects {
 							o.Schemas[g.Schema] = o.Schemas[g.Schema].setFutureGrantTo(ModeRead, g)
 						}
-						// We need to revoke 
+						// We need to revoke
 					} else {
 						// A rare oddity. A schema was added after we loaded account objects,
 						// and future grants were granted in it to our database role, no less.
@@ -286,7 +286,7 @@ func (o AggDBObjs) setGrants(ctx context.Context, semCnf *semantics.Config, cnf 
 		//
 		// Note that write privileges on objects are unmanaged from the perspective of a database role. If sysadmins
 		// would grant them to grupr managed database roles, despite best practices, they will have to revoke them also
-		// in case they want grupr to drop the role when it is no longer needed. 
+		// in case they want grupr to drop the role when it is no longer needed.
 		for g, err := range QueryGrantsToDBRoleFilteredLimit(ctx, cnf, conn, db, o.readDBRole.Name, nil, cnf.ObjectPrivilegesRead, 1) {
 			if err != nil {
 				return o, err
@@ -301,7 +301,7 @@ func (o AggDBObjs) setGrants(ctx context.Context, semCnf *semantics.Config, cnf 
 			}
 
 			if g.Database != db {
-				// This grant should not be granted to this particular database role, that should not be 
+				// This grant should not be granted to this particular database role, that should not be
 				// possible in Snowflake, at the moment
 				return o, fmt.Errorf("privilege granted to database role on object from different database")
 			}
@@ -331,7 +331,7 @@ func (o AggDBObjs) setGrants(ctx context.Context, semCnf *semantics.Config, cnf 
 						// Either way, if the schema is matched in the YAML, even if it was not there
 						// when we refreshed objects, the grant is fine, we keep it.
 						continue
-					} 
+					}
 				}
 			case ObjTpTable, ObjTpView, ObjTpMaterializedView:
 				switch g.Privileges[0].Privilege {
@@ -369,7 +369,7 @@ func (o AggDBObjs) setConsumedByGranted(m Mode, pdID semantics.ProductDTAPID) Ag
 	return o
 }
 
-func (o AggDBObjs) pushToDoFutureGrants(cnf *Config, yield func(FutureGrant) bool, map[ObjType]bool mots) bool {
+func (o AggDBObjs) pushToDoFutureGrants(cnf *Config, yield func(FutureGrant) bool, mots map[ObjType]bool) bool {
 	// All future read privileges; write privileges are collected from a ProductDTAP method directly
 	if o.MatchAllSchemas {
 		prvs := []PrivilegeComplete{}

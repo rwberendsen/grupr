@@ -11,19 +11,19 @@ import (
 )
 
 type tableRec struct {
-	name semantics.Ident
-	owner semantics.Ident
-	is_external string
+	name            semantics.Ident
+	owner           semantics.Ident
+	is_external     string
 	owner_role_type string
-	is_event string
-	is_hybrid string
-	is_iceberg string
-	is_dynamic string
-	is_immutable string // should always be N anyway, since we filter out temporary tables, but, never mind, could change in the future.
-	is_interactive string
+	is_event        string
+	is_hybrid       string
+	is_iceberg      string
+	is_dynamic      string
+	is_immutable    string // should always be N anyway, since we filter out temporary tables, but, never mind, could change in the future.
+	is_interactive  string
 }
 
-func (r tableRec) getObjType(map[ObjType]bool mots) ObjType {
+func (r tableRec) getObjType(mots map[ObjType]bool) ObjType {
 	// First, exclude any object not owned by a role
 	// Fortunately, in Snowflake, until now OWNERSHIP and CREATE cannot be granted to users yet (May 2026)
 	// See: https://docs.snowflake.com/en/sql-reference/sql/grant-privilege-user
@@ -59,7 +59,7 @@ func queryTables(ctx context.Context, conn *sql.DB, db semantics.Ident, schema s
 	// If new types of tables are returned in the future, with flags like "is_new_type_X", "is_new_type_Y",
 	// grupr will treat it like a regular table. That means grupr may crash, for example, when it tries to
 	// grant SELECT ERROR TABLE, which, as of Apr 2026, is only applicable to normal tables.
-	// 
+	//
 	// Until Snowflake adds a flag "is_normal" to the output of the SHOW TABLES function (and friends like SHOW OBJECTS,
 	// SHOW VIEWS, etc, I see no easy way to prevent this problem, other than quickly fixing grupr each time Snowflake
 	// comes out with something new (again).

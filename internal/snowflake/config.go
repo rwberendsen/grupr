@@ -36,13 +36,13 @@ type Config struct {
 
 func GetConfig(semCnf *semantics.Config) (*Config, error) {
 	cnf := &Config{
-		UseSQLOpen:                false,
-		MaxOpenConns:              0, // unlimited
-		MaxIdleConns:              3, // MaxProductDTAPThreads - 1 (sometimes we use only one conn before quickly fanning out again)
-		MaxProductDTAPThreads:     4,
-		StmtBatchSize:             100,
-		MaxProductDTAPRefreshes:   4,
-		Modes:                     [1]Mode{ModeRead},
+		UseSQLOpen:              false,
+		MaxOpenConns:            0, // unlimited
+		MaxIdleConns:            3, // MaxProductDTAPThreads - 1 (sometimes we use only one conn before quickly fanning out again)
+		MaxProductDTAPThreads:   4,
+		StmtBatchSize:           100,
+		MaxProductDTAPRefreshes: 4,
+		Modes:                   [1]Mode{ModeRead},
 		SystemDefinedRoles: []semantics.Ident{
 			semantics.Ident("GLOBALORGADMIN"),
 			semantics.Ident("ORGADMIN"),
@@ -60,7 +60,7 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 		// and in SQL statements like CREATE <object_type> the two are not distinguished
 		ManagedObjTypes: map[ObjType]bool{
 			ObjTpTable: true,
-			ObjTpView: true,
+			ObjTpView:  true,
 		},
 		DryRun: true,
 	}
@@ -218,13 +218,13 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 	}
 	if cnf.ManagedObjTypes[ObjTpMaterializedView] {
 		cnf.ObjectPrivilegesRead[GrantTemplate{
-				PrivilegeComplete: PrivilegeComplete{Privilege: PrvSelect},
-				GrantedOn:         ObjTpMaterializedView,
-		}] = {}
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvSelect},
+			GrantedOn:         ObjTpMaterializedView,
+		}] = struct{}{}
 		cnf.ObjectPrivilegesRead[GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvReferences},
 			GrantedOn:         ObjTpMaterializedView,
-		}] = {}
+		}] = struct{}{}
 	}
 
 	// These are the object privileges that are managed for product write roles
@@ -250,11 +250,11 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 		cnf.ObjectPrivilegesOwnership[GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpMaterializedView},
 			GrantedOn:         ObjTpSchema,
-		}] = {}
+		}] = struct{}{}
 		cnf.ObjectPrivilegesOwnership[GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvOwnership},
 			GrantedOn:         ObjTpMaterializedView,
-		}] = {}
+		}] = struct{}{}
 	}
 
 	// We need the next one to manage access exclusively,
@@ -289,7 +289,7 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 		cnf.ObjectPrivilegesWrite[GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvApplyBudget},
 			GrantedOn:         ObjTpMaterializedView,
-		}] = {}
+		}] = struct{}{}
 	}
 
 	// This one, too, will be used for managing access exclusively
@@ -320,15 +320,14 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 	// it will be considered an unmanaged grant
 	cnf.DBRolePrivileges = map[GrantTemplate]struct{}{
 		GrantTemplate{
-			PrivilegeComplete:         PrivilegeComplete{Privilege: PrvUsage},
-			GrantedOn:                 ObjTpDatabaseRole,
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvUsage},
+			GrantedOn:         ObjTpDatabaseRole,
 			// Note that it's a bit odd that if we created another entry just like this, because it's a different
 			// pointer, it would be a different key in the map.
 			// TODO: use slices instead of maps for cnf.DBROlePrivileges and friends
-			GrantedRoleIsGruprManaged: util.NewTrue(), 
+			GrantedRoleIsGruprManaged: util.NewTrue(),
 		}: {},
 	}
-
 
 	if dryRun, ok := os.LookupEnv("GRUPR_SNOWFLAKE_DRY_RUN"); ok {
 		if b, err := strconv.ParseBool(dryRun); err != nil {

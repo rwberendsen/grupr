@@ -66,7 +66,7 @@ func (pd *ProductDTAP) setGrantActionsFutureObjectsWriteRole(ctx context.Context
 	if _, ok := productRoles[pd.WriteRole]; !ok && cnf.DryRun {
 		return nil
 	}
-	for g, err := range QueryFutureGrantsToRoleFiltered(ctx, conn, pd.WriteRole.ID,	cnf.ObjectPrivilegesOwnership, nil) {
+	for g, err := range QueryFutureGrantsToRoleFiltered(ctx, conn, pd.WriteRole.ID, cnf.ObjectPrivilegesOwnership, nil) {
 		if err != nil {
 			return err
 		}
@@ -148,7 +148,7 @@ func (pd *ProductDTAP) setUserManagedOwnersOfObjects(semCnf *semantics.Config, c
 					continue
 				}
 				if strings.HasPrefix(string(aggObjAttr.Owner), string(semCnf.Prefix)) {
-					r, err := newProductRoleFromIdent(semCnf, aggObjAttr.Owner); {
+					r, err := newProductRoleFromIdent(semCnf, aggObjAttr.Owner)
 					if err != nil {
 						// In this case, it would have to be a database role, or else other roles
 						// exist sharing the grupr prefix, this would be a good reason to crash
@@ -158,7 +158,7 @@ func (pd *ProductDTAP) setUserManagedOwnersOfObjects(semCnf *semantics.Config, c
 						// Okay, so it was a database role that owned the object. Not something sysadmins
 						// should have done. Not something grupr would do. But we'll just not add any
 						// previous user managed owning roles. Ownership of the object will be sorted out
-						// for this object cause it was matched by this product: the write role will 
+						// for this object cause it was matched by this product: the write role will
 						// claim ownership of it.
 					}
 					if r.Mode == ModeWrite && (r.ProductID != pd.ProductID || r.DTAP != pd.DTAP) {
@@ -313,7 +313,7 @@ func (pd *ProductDTAP) revoke_(ctx context.Context, cnf *Config, conn *sql.DB) e
 	return nil
 }
 
-func (pd *ProductDTAP) getTodoGrantsFutureObjectsWriteRole(map[ObjType]bool mots) iter.Seq[FutureGrant] {
+func (pd *ProductDTAP) getTodoGrantsFutureObjectsWriteRole(mots map[ObjType]bool) iter.Seq[FutureGrant] {
 	return func(yield func(FutureGrant) bool) {
 		for db, dbObjs := range pd.Interface.aggAccountObjects.DBs {
 			if dbObjs.MatchAllSchemas {
@@ -346,7 +346,7 @@ func (pd *ProductDTAP) getTodoGrantsFutureObjectsWriteRole(map[ObjType]bool mots
 	}
 }
 
-func (pd *ProductDTAP) getToDoGrantsObjectsWriteRole(map[ObjType]bool mots) iter.Seq[Grant] {
+func (pd *ProductDTAP) getToDoGrantsObjectsWriteRole(mots map[ObjType]bool) iter.Seq[Grant] {
 	return func(yield func(Grant) bool) {
 		for db, dbObjs := range pd.Interface.aggAccountObjects.DBs {
 			for schema, schemaObjs := range dbObjs.Schemas {
@@ -424,7 +424,7 @@ func (pd *ProductDTAP) getToDoOwnershipGrants() iter.Seq[Grant] {
 	}
 }
 
-func (pd *ProductDTAP) getToDoFutureGrantsToDBRoles(map[ObjType]bool mots) iter.Seq[FutureGrant] {
+func (pd *ProductDTAP) getToDoFutureGrantsToDBRoles(mots map[ObjType]bool) iter.Seq[FutureGrant] {
 	return func(yield func(FutureGrant) bool) {
 		if !pd.Interface.pushToDoFutureGrants(yield, mots) {
 			return

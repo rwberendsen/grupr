@@ -21,7 +21,7 @@ func main() {
 	yamlPath := flag.Arg(0)
 	var snowflakeYamlPath string
 	if len(flag.Args()) == 2 {
-		snowflakeYamlPath = flag.Arg(1)	
+		snowflakeYamlPath = flag.Arg(1)
 	}
 
 	// TODO: while deserializing into Grupin, also gunzip, and

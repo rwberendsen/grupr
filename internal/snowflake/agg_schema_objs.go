@@ -88,7 +88,7 @@ func (o AggSchemaObjs) hasFutureGrantTo(_ Mode, grantedOn ObjType, p Privilege) 
 			return o.isPrivilegeOnFutureObjectGrantedToReadDBRole[6]
 		}
 	}
-	return false 
+	return false
 }
 
 func (o AggSchemaObjs) setGrantTo(m Mode, g Grant) AggSchemaObjs {
@@ -147,7 +147,8 @@ func (o AggSchemaObjs) hasGrantTo(m Mode, pc PrivilegeComplete) bool {
 	return false
 }
 
-func (o AggSchemaObjs) pushToDoFutureGrants(yield func(FutureGrant) bool, dbRole DatabaseRole, schema semantics.Ident, map[ObjType]bool mots) bool {
+func (o AggSchemaObjs) pushToDoFutureGrants(yield func(FutureGrant) bool, dbRole DatabaseRole, schema semantics.Ident,
+	mots map[ObjType]bool) bool {
 	if o.MatchAllObjects {
 		for ot := range mots {
 			prvs := []PrivilegeComplete{}
@@ -163,8 +164,7 @@ func (o AggSchemaObjs) pushToDoFutureGrants(yield func(FutureGrant) bool, dbRole
 			// valid on a hybrid table
 			for _, pc := range candidatePrvs {
 				if !o.hasFutureGrantTo(ModeRead, ot, pc.Privilege) {
-						prvs = append(prvs, pc)
-					}
+					prvs = append(prvs, pc)
 				}
 			}
 			if len(prvs) > 0 {
