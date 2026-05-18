@@ -63,9 +63,9 @@ func (o AggSchemaObjs) setFutureGrantTo(_ Mode, g FutureGrant) AggSchemaObjs {
 
 func (o AggSchemaObjs) hasFutureGrantTo(_ Mode, grantedOn ObjType, p Privilege) bool {
 	// Currently, only ModeRead privileges on future objects in schemas are managed
-	switch g.GrantedOn {
+	switch grantedOn {
 	case ObjTpTable:
-		switch g.Privileges[0].Privilege {
+		switch p {
 		case PrvSelect:
 			return o.isPrivilegeOnFutureObjectGrantedToReadDBRole[0]
 		case PrvSelectErrorTable:
@@ -74,14 +74,14 @@ func (o AggSchemaObjs) hasFutureGrantTo(_ Mode, grantedOn ObjType, p Privilege) 
 			return o.isPrivilegeOnFutureObjectGrantedToReadDBRole[2]
 		}
 	case ObjTpView:
-		switch g.Privileges[0].Privilege {
+		switch p {
 		case PrvSelect:
 			return o.isPrivilegeOnFutureObjectGrantedToReadDBRole[3]
 		case PrvReferences:
 			return o.isPrivilegeOnFutureObjectGrantedToReadDBRole[4]
 		}
 	case ObjTpMaterializedView:
-		switch g.Privileges[0].Privilege {
+		switch p {
 		case PrvSelect:
 			return o.isPrivilegeOnFutureObjectGrantedToReadDBRole[5]
 		case PrvReferences:
@@ -108,7 +108,7 @@ func (o AggSchemaObjs) setGrantTo(m Mode, g Grant) AggSchemaObjs {
 		case ObjTpSchema:
 			switch pc := g.Privileges[0]; pc.Privilege {
 			case PrvCreate:
-				switch pc.CreateObjType {
+				switch pc.CreateObjectType {
 				case ObjTpTable:
 					o.isCreateGrantedToProductWriteRole[0] = true
 				case ObjTpView:
@@ -134,7 +134,7 @@ func (o AggSchemaObjs) hasGrantTo(m Mode, pc PrivilegeComplete) bool {
 	case ModeWrite:
 		switch pc.Privilege {
 		case PrvCreate:
-			switch pc.CreateObjType {
+			switch pc.CreateObjectType {
 			case ObjTpTable:
 				return o.isCreateGrantedToProductWriteRole[0]
 			case ObjTpView:

@@ -15,7 +15,7 @@ type viewRec struct {
 	owner           semantics.Ident
 	is_secure       bool
 	is_materialized bool
-	owner_role_type ObjType
+	owner_role_type string
 }
 
 func (r viewRec) getObjType(mots map[ObjType]bool) ObjType {
@@ -80,7 +80,7 @@ FROM $1
 				if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
 					err = ErrObjectNotExistOrAuthorized
 				}
-				yield(Obj{}, err)
+				yield(viewRec{}, err)
 				return
 			}
 			defer rows.Close()

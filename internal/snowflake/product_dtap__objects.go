@@ -152,7 +152,7 @@ func (pd *ProductDTAP) setUserManagedOwnersOfObjects(semCnf *semantics.Config, c
 					if err != nil {
 						// In this case, it would have to be a database role, or else other roles
 						// exist sharing the grupr prefix, this would be a good reason to crash
-						if _, err = newDatabaseRoleFromString(semCnf, db, aggObjAttr.Owner); err != nil {
+						if _, err = newDatabaseRoleFromIdent(semCnf, db, aggObjAttr.Owner); err != nil {
 							return err
 						}
 						// Okay, so it was a database role that owned the object. Not something sysadmins
@@ -196,7 +196,7 @@ func (pd *ProductDTAP) grant_(ctx context.Context, semCnf *semantics.Config, cnf
 	if err := pd.setGrantActionsFutureObjectsWriteRole(ctx, cnf, conn, productRoles); err != nil {
 		return err
 	}
-	if err := DoFutureGrants(ctx, cnf, conn, pd.getTodoGrantsFutureObjectsWriteRole()); err != nil {
+	if err := DoFutureGrants(ctx, cnf, conn, pd.getTodoGrantsFutureObjectsWriteRole(cnf.ManagedObjTypes)); err != nil {
 		return err
 	}
 
@@ -204,7 +204,7 @@ func (pd *ProductDTAP) grant_(ctx context.Context, semCnf *semantics.Config, cnf
 	if err := pd.setGrantActionsObjectsWriteRole(ctx, cnf, conn, grupinDisjointFromObject, productRoles); err != nil {
 		return err
 	}
-	if err := DoGrants(ctx, cnf, conn, pd.getToDoGrantsObjectsWriteRole()); err != nil {
+	if err := DoGrants(ctx, cnf, conn, pd.getToDoGrantsObjectsWriteRole(cnf.ManagedObjTypes)); err != nil {
 		return err
 	}
 	// We do ownership separately; we don't do them in batches, cause they can take longer due to copying outbound grants;
@@ -401,7 +401,7 @@ func (pd *ProductDTAP) getToDoOwnershipGrants() iter.Seq[Grant] {
 			for schema, schemaObjs := range dbObjs.Schemas {
 				for obj, objAttr := range schemaObjs.Objects {
 					if !objAttr.isOwnedByProductWriteRole {
-						ot = objAttr.ObjectType
+						ot := objAttr.ObjectType
 						if ot == ObjTpHybridTable {
 							// In snowflake GRANT <privileges> ..., HYBRID TABLE is not a recongnized object type
 							ot = ObjTpTable

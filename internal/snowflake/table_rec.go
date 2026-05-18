@@ -114,7 +114,7 @@ FROM $1
 				if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
 					err = ErrObjectNotExistOrAuthorized
 				}
-				yield(Obj{}, err)
+				yield(tableRec{}, err)
 				return
 			}
 			defer rows.Close()

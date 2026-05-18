@@ -8,7 +8,6 @@ import (
 
 	"github.com/rwberendsen/grupr/internal/semantics"
 	"github.com/rwberendsen/grupr/internal/syntax"
-	"github.com/rwberendsen/grupr/internal/util"
 	"golang.org/x/sync/errgroup"
 )
 

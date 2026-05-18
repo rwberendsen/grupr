@@ -3,9 +3,7 @@ package snowflake
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"iter"
-	"strings"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
 )
@@ -16,7 +14,7 @@ type Obj struct {
 	Owner      semantics.Ident
 }
 
-func GetObjs(ctx context.Context, conn *sql.DB, db semantics.Ident, schema semantics.Ident, mots map[ObjType]bool) iter.Seq2[Obj, error] {
+func QueryObjs(ctx context.Context, conn *sql.DB, db semantics.Ident, schema semantics.Ident, mots map[ObjType]bool) iter.Seq2[Obj, error] {
 	return func(yield func(Obj, error) bool) {
 		for rec := range queryTables(ctx, conn, db, schema) {
 			if ot := rec.getObjType(mots); ot != ObjTpOther {

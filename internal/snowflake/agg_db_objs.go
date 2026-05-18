@@ -3,6 +3,7 @@ package snowflake
 import (
 	"context"
 	"database/sql"
+	"fmt"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
 )
@@ -287,7 +288,7 @@ func (o AggDBObjs) setGrants(ctx context.Context, semCnf *semantics.Config, cnf 
 		// Note that write privileges on objects are unmanaged from the perspective of a database role. If sysadmins
 		// would grant them to grupr managed database roles, despite best practices, they will have to revoke them also
 		// in case they want grupr to drop the role when it is no longer needed.
-		for g, err := range QueryGrantsToDBRoleFilteredLimit(ctx, cnf, conn, db, o.readDBRole.Name, nil, cnf.ObjectPrivilegesRead, 1) {
+		for _, err := range QueryGrantsToDBRoleFilteredLimit(ctx, cnf, conn, db, o.readDBRole.Name, nil, cnf.ObjectPrivilegesRead, 1) {
 			if err != nil {
 				return o, err
 			}
@@ -369,7 +370,7 @@ func (o AggDBObjs) setConsumedByGranted(m Mode, pdID semantics.ProductDTAPID) Ag
 	return o
 }
 
-func (o AggDBObjs) pushToDoFutureGrants(cnf *Config, yield func(FutureGrant) bool, mots map[ObjType]bool) bool {
+func (o AggDBObjs) pushToDoFutureGrants(yield func(FutureGrant) bool, mots map[ObjType]bool) bool {
 	// All future read privileges; write privileges are collected from a ProductDTAP method directly
 	if o.MatchAllSchemas {
 		prvs := []PrivilegeComplete{}
@@ -428,7 +429,7 @@ func (o AggDBObjs) pushToDoFutureGrants(cnf *Config, yield func(FutureGrant) boo
 		}
 	}
 	for schema, schemaObjs := range o.Schemas {
-		if !schemaObjs.pushToDoFutureGrants(cnf, yield, o.readDBRole, schema, mots) {
+		if !schemaObjs.pushToDoFutureGrants(yield, o.readDBRole, schema, mots) {
 			return false
 		}
 	}

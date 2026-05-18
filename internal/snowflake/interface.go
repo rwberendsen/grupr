@@ -136,9 +136,9 @@ func (i *Interface) setGrants(ctx context.Context, semCnf *semantics.Config, cnf
 	return nil
 }
 
-func (i *Interface) pushToDoFutureGrants(yield func(FutureGrant) bool) bool {
+func (i *Interface) pushToDoFutureGrants(yield func(FutureGrant) bool, mots map[ObjType]bool) bool {
 	for _, dbObjs := range i.aggAccountObjects.DBs {
-		if !dbObjs.pushToDoFutureGrants(yield) {
+		if !dbObjs.pushToDoFutureGrants(yield, mots) {
 			return false
 		}
 	}

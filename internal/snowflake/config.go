@@ -30,6 +30,8 @@ type Config struct {
 	ObjectPrivilegesOwnership map[GrantTemplate]struct{}
 	ObjectPrivilegesWrite     map[GrantTemplate]struct{}
 	ObjectPrivileges          map[GrantTemplate]struct{}
+	ComputePrivileges         map[GrantTemplate]struct{}
+	DBRolePrivileges          map[GrantTemplate]struct{}
 	ManagedObjTypes           map[ObjType]bool
 	DryRun                    bool
 }
@@ -166,7 +168,7 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 		}
 	}
 
-	for ot := range []ObjType{ObjTpMaterializedView} {
+	for _, ot := range []ObjType{ObjTpMaterializedView} {
 		envStr := fmt.Sprintf("GRUPR_SNOWFLAKE_MA_%v", ot)
 		if env, ok := os.LookupEnv(envStr); ok {
 			if b, err := strconv.ParseBool(env); err != nil {
