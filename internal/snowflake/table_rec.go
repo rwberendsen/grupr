@@ -86,7 +86,7 @@ SELECT
   , "is_interactive" AS is_interactive
 FROM $1
 WHERE
-    kind IN ('TABLE', 'TRANSIENT')
+    "kind" IN ('TABLE', 'TRANSIENT')
 AND owner_role_type = '%s'
 AND is_external = 'N'
 AND is_event = 'N'
