@@ -83,7 +83,7 @@ func newGrantToRole(privilege string, createObjType string, grantedOn string, na
 	grantedToDatabase semantics.Ident, grantedToName semantics.Ident, grantOption bool, grantedBy semantics.Ident) (Grant, error) {
 	g := Grant{
 		Privileges:                []PrivilegeComplete{ParsePrivilegeComplete(privilege, createObjType)},
-		GrantedOn:                 ParseObjType(grantedOn),
+		GrantedOn:                 ParseObjTypeFromRecord(grantedOn),
 		GrantedRoleIsGruprManaged: grantedRoleIsGruprManaged,
 		GrantedTo:                 grantedTo,
 		GrantedToDatabase:         grantedToDatabase,

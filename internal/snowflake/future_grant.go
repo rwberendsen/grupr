@@ -76,7 +76,7 @@ func newFutureGrant(privilege string, createObjType string, grantedOn string, na
 	grantedToDatabase semantics.Ident, grantedToName semantics.Ident, grantOption bool) (FutureGrant, error) {
 	g := FutureGrant{
 		Privileges:        []PrivilegeComplete{ParsePrivilegeComplete(privilege, createObjType)},
-		GrantedOn:         ParseObjType(grantedOn),
+		GrantedOn:         ParseObjTypeFromRecord(grantedOn),
 		GrantedTo:         grantedTo,
 		GrantedToDatabase: grantedToDatabase,
 		GrantedToName:     grantedToName,

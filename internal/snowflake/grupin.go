@@ -68,7 +68,7 @@ func (_ *Grupin) getManagedDBs(ctx context.Context, cnf *Config, conn *sql.DB) (
 	m := map[semantics.Ident]bool{}
 	for g, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, cnf.Role, map[GrantTemplate]struct{}{
 		GrantTemplate{
-			PrivilegeComplete: PrivilegeComplete{Privilege: PrvCreateDatabaseRole},
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpDatabaseRole},
 			GrantedOn: ObjTpDatabase,
 		}: {},
 	}, nil) {

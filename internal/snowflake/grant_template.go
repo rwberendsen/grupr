@@ -20,7 +20,7 @@ func (g GrantTemplate) buildSQLFilter() (string, int) {
 		}
 	}
 	if g.GrantedOn != ObjTpOther {
-		clauses = append(clauses, fmt.Sprintf("granted_on = '%v'", g.GrantedOn))
+		clauses = append(clauses, fmt.Sprintf("granted_on = '%s'", g.GrantedOn.RecordString()))
 	}
 	if (g.GrantedOn == ObjTpRole || g.GrantedOn == ObjTpDatabaseRole) && g.GrantedRoleIsGruprManaged != nil {
 		clauses = append(clauses, "granted_role_is_grupr_managed")

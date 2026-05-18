@@ -6,7 +6,6 @@ const (
 	PrvOther Privilege = iota // zero type is PrvOther
 	PrvApplyBudget
 	PrvCreate
-	PrvCreateDatabaseRole
 	PrvDelete
 	PrvEvolveSchema
 	PrvInsert
@@ -25,7 +24,6 @@ func ParsePrivilege(p string) Privilege {
 	return map[string]Privilege{
 		"APPLYBUDGET":          PrvApplyBudget,
 		"CREATE":               PrvCreate,
-		"CREATE DATABASE ROLE": PrvCreateDatabaseRole,
 		"DELETE":               PrvDelete,
 		"EVOLVE SCHEMA":        PrvEvolveSchema,
 		"INSERT":               PrvInsert,
@@ -46,7 +44,6 @@ func (p Privilege) String() string {
 		PrvOther:              "OTHER",
 		PrvApplyBudget:        "APPLYBUDGET",
 		PrvCreate:             "CREATE",
-		PrvCreateDatabaseRole: "CREATE DATABASE ROLE",
 		PrvDelete:             "DELETE",
 		PrvEvolveSchema:       "EVOLVE SCHEMA",
 		PrvInsert:             "INSERT",
