@@ -254,6 +254,7 @@ func (o AggDBObjs) setFutureGrants(ctx context.Context, semCnf *semantics.Config
 					if o.hasSchema(g.Schema) {
 						if o.Schemas[g.Schema].MatchAllObjects {
 							o.Schemas[g.Schema] = o.Schemas[g.Schema].setFutureGrantTo(ModeRead, g)
+							continue
 						}
 						// We need to revoke
 					} else {
