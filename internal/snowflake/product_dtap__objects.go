@@ -80,7 +80,7 @@ func (pd *ProductDTAP) setGrantActionsFutureObjectsWriteRole(ctx context.Context
 					if pd.Interface.ObjectMatchers.MatchAllSchemasInDB(g.Database) {
 						// If yes, then, if we also have matched the object, mark on it that privilege on future objects was already granted
 						if dbObjs, ok := pd.Interface.aggAccountObjects.DBs[g.Database]; ok {
-							dbObjs.setFutureGrantTo(ModeWrite, g)
+							pd.Interface.aggAccountObjects.DBs[g.Database] = dbObjs.setFutureGrantTo(ModeWrite, g) // value semantics
 						}
 						continue
 					}
