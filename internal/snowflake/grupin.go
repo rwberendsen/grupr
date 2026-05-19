@@ -8,7 +8,6 @@ import (
 
 	"github.com/rwberendsen/grupr/internal/semantics"
 	"github.com/rwberendsen/grupr/internal/syntax"
-	"github.com/rwberendsen/grupr/internal/util"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -36,7 +35,14 @@ func NewGrupin(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn 
 		}
 	}
 
-	if c, err := newAccountCache(ctx, semCnf, cnf, conn); err != nil {
+	// before we create the account cache, which will be populated with the databases straight away,
+	// we query which databases the grupr role already has been granted CREATE DATABASE ROLE in
+	managedDBs, err := r.getManagedDBs(ctx, cnf, conn)
+	if err != nil {
+		return r, err
+	}
+
+	if c, err := newAccountCache(ctx, semCnf, cnf, conn, managedDBs); err != nil {
 		return r, err
 	} else {
 		r.accountCache = c
@@ -52,6 +58,26 @@ func NewGrupin(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn 
 	}
 
 	return r, nil
+}
+
+func (_ *Grupin) getManagedDBs(ctx context.Context, cnf *Config, conn *sql.DB) (map[semantics.Ident]bool, error) {
+	/*
+		We define this as a "method" of Grupin because it is related to the grupr role, of which there is just one,
+		just like there is just one grupin. The two are related, and it is a convenient namespace for this method.
+	*/
+	m := map[semantics.Ident]bool{}
+	for g, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, cnf.Role, map[GrantTemplate]struct{}{
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpDatabaseRole},
+			GrantedOn: ObjTpDatabase,
+		}: {},
+	}, nil) {
+		if err != nil {
+			return m, err
+		}
+		m[g.Database] = true
+	}
+	return m, nil
 }
 
 func (g *Grupin) setWarehouses(semCnf *semantics.Config, warehouses []WarehouseDecoded) error {
@@ -238,13 +264,7 @@ func (g *Grupin) setDBRoleGrants(ctx context.Context, semCnf *semantics.Config, 
 		if _, ok := g.productRoles[pr]; !ok && cnf.DryRun {
 			continue
 		}
-		for grant, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, pr.ID, map[GrantTemplate]struct{}{
-			GrantTemplate{
-				PrivilegeComplete:         PrivilegeComplete{Privilege: PrvUsage},
-				GrantedOn:                 ObjTpDatabaseRole,
-				GrantedRoleIsGruprManaged: util.NewTrue(),
-			}: {},
-		}, nil) {
+		for grant, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, pr.ID, cnf.DBRolePrivileges, nil) {
 			if err != nil {
 				return err
 			}
@@ -258,12 +278,14 @@ func (g *Grupin) setDBRoleGrants(ctx context.Context, semCnf *semantics.Config, 
 			// - Read database roles of interfaces that pd consumes
 			if grantedDBRole.ProductID == pd.ProductID {
 				if grantedDBRole.InterfaceID != "" {
+					// A product is not allowed to consume its own interface
 					pd.revokeGrantFromProductRole(grant)
 					continue
 				}
 				// grantedDBRole.InterfaceID == ""
 				if dbObjs, ok := pd.Interface.aggAccountObjects.DBs[grant.Database]; ok {
 					dbObjs.isReadDBRoleGrantedToProductRole[pr.Mode.getIdx()] = true
+					pd.Interface.aggAccountObjects.DBs[grant.Database] = dbObjs // value semantics
 				} else if pd.Interface.ObjectMatchers.DisjointFromDB(grant.Database) {
 					pd.revokeGrantFromProductRole(grant)
 				}
@@ -442,7 +464,7 @@ func (g *Grupin) setProductRoles(ctx context.Context, semCnf *semantics.Config, 
 		if err = rows.Scan(&roleName); err != nil {
 			return err
 		}
-		if r, err := newProductRoleFromString(semCnf, roleName); err != nil {
+		if r, err := newProductRoleFromIdent(semCnf, roleName); err != nil {
 			return err
 		} else {
 			g.productRoles[r] = struct{}{}

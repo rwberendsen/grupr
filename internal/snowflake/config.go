@@ -2,6 +2,7 @@ package snowflake
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"strconv"
 	"strings"
@@ -11,23 +12,28 @@ import (
 )
 
 type Config struct {
-	User                    semantics.Ident
-	Role                    semantics.Ident
-	Account                 string
-	Database                semantics.Ident
-	Schema                  semantics.Ident
-	UseSQLOpen              bool
-	RSAKeyPath              string
-	MaxOpenConns            int
-	MaxIdleConns            int
-	MaxProductDTAPThreads   int
-	StmtBatchSize           int
-	MaxProductDTAPRefreshes int
-	Modes                   [1]Mode
-	SystemDefinedRoles      []semantics.Ident
-	DatabaseRolePrivileges  map[Mode]map[GrantTemplate]struct{}
-	ProductRolePrivileges   map[Mode]map[GrantTemplate]struct{}
-	DryRun                  bool
+	User                      semantics.Ident
+	Role                      semantics.Ident
+	Account                   string
+	Database                  semantics.Ident
+	Schema                    semantics.Ident
+	UseSQLOpen                bool
+	RSAKeyPath                string
+	MaxOpenConns              int
+	MaxIdleConns              int
+	MaxProductDTAPThreads     int
+	StmtBatchSize             int
+	MaxProductDTAPRefreshes   int
+	Modes                     [1]Mode
+	SystemDefinedRoles        []semantics.Ident
+	ObjectPrivilegesRead      map[GrantTemplate]struct{}
+	ObjectPrivilegesOwnership map[GrantTemplate]struct{}
+	ObjectPrivilegesWrite     map[GrantTemplate]struct{}
+	ObjectPrivileges          map[GrantTemplate]struct{}
+	ComputePrivileges         map[GrantTemplate]struct{}
+	DBRolePrivileges          map[GrantTemplate]struct{}
+	ManagedObjTypes           map[ObjType]bool
+	DryRun                    bool
 }
 
 func GetConfig(semCnf *semantics.Config) (*Config, error) {
@@ -47,6 +53,16 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 			semantics.Ident("PUBLIC"),
 			semantics.Ident("SECURITYADMIN"),
 			semantics.Ident("USERADMIN"),
+		},
+		// Later, we'll extend grupr with other object types, and when we do it and folks upgrade,
+		// we don't want grupr to all of a sudden claim management of all these other object types.
+		// So we build in a mechanism for people to explicity turn new object types on.
+		//
+		// Note that ObjTpTable implies we also manage ObjTpHybridTable; in the output of SHOW GRANTS,
+		// and in SQL statements like CREATE <object_type> the two are not distinguished
+		ManagedObjTypes: map[ObjType]bool{
+			ObjTpTable: true,
+			ObjTpView:  true,
 		},
 		DryRun: true,
 	}
@@ -152,10 +168,25 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 		}
 	}
 
-	cnf.DatabaseRolePrivileges = map[Mode]map[GrantTemplate]struct{}{}
-	cnf.DatabaseRolePrivileges[ModeRead] = map[GrantTemplate]struct{}{
+	for _, ot := range []ObjType{ObjTpMaterializedView} {
+		envStr := fmt.Sprintf("GRUPR_SNOWFLAKE_MA_%v", ot)
+		if env, ok := os.LookupEnv(envStr); ok {
+			if b, err := strconv.ParseBool(env); err != nil {
+				return nil, fmt.Errorf("%s: %w", envStr, err)
+			} else {
+				cnf.ManagedObjTypes[ot] = b
+			}
+		}
+	}
+
+	// These are the object privileges that are managed for read database roles
+	cnf.ObjectPrivilegesRead = map[GrantTemplate]struct{}{
 		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvUsage},
+			GrantedOn:         ObjTpDatabase,
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvMonitor},
 			GrantedOn:         ObjTpDatabase,
 		}: {},
 		GrantTemplate{
@@ -163,7 +194,19 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 			GrantedOn:         ObjTpSchema,
 		}: {},
 		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvMonitor},
+			GrantedOn:         ObjTpSchema,
+		}: {},
+		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvSelect},
+			GrantedOn:         ObjTpTable,
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvSelectErrorTable},
+			GrantedOn:         ObjTpTable,
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvReferences},
 			GrantedOn:         ObjTpTable,
 		}: {},
 		GrantTemplate{
@@ -172,36 +215,22 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 		}: {},
 		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvReferences},
-			GrantedOn:         ObjTpTable,
-		}: {},
-		GrantTemplate{
-			PrivilegeComplete: PrivilegeComplete{Privilege: PrvReferences},
 			GrantedOn:         ObjTpView,
 		}: {},
+	}
+	if cnf.ManagedObjTypes[ObjTpMaterializedView] {
+		cnf.ObjectPrivilegesRead[GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvSelect},
+			GrantedOn:         ObjTpMaterializedView,
+		}] = struct{}{}
+		cnf.ObjectPrivilegesRead[GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvReferences},
+			GrantedOn:         ObjTpMaterializedView,
+		}] = struct{}{}
 	}
 
-	cnf.ProductRolePrivileges = map[Mode]map[GrantTemplate]struct{}{}
-	cnf.ProductRolePrivileges[ModeRead] = map[GrantTemplate]struct{}{
-		GrantTemplate{
-			PrivilegeComplete:         PrivilegeComplete{Privilege: PrvUsage},
-			GrantedOn:                 ObjTpDatabaseRole,
-			GrantedRoleIsGruprManaged: util.NewTrue(),
-		}: {},
-		GrantTemplate{
-			PrivilegeComplete: PrivilegeComplete{Privilege: PrvUsage},
-			GrantedOn:         ObjTpWarehouse,
-		}: {},
-		GrantTemplate{
-			PrivilegeComplete: PrivilegeComplete{Privilege: PrvOperate},
-			GrantedOn:         ObjTpWarehouse,
-		}: {},
-	}
-	cnf.ProductRolePrivileges[ModeWrite] = map[GrantTemplate]struct{}{
-		GrantTemplate{
-			PrivilegeComplete:         PrivilegeComplete{Privilege: PrvUsage},
-			GrantedOn:                 ObjTpDatabaseRole,
-			GrantedRoleIsGruprManaged: util.NewTrue(),
-		}: {},
+	// These are the object privileges that are managed for product write roles
+	cnf.ObjectPrivilegesOwnership = map[GrantTemplate]struct{}{
 		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpTable},
 			GrantedOn:         ObjTpSchema,
@@ -218,13 +247,87 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvOwnership},
 			GrantedOn:         ObjTpView,
 		}: {},
+	}
+	if cnf.ManagedObjTypes[ObjTpMaterializedView] {
+		cnf.ObjectPrivilegesOwnership[GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvCreate, CreateObjectType: ObjTpMaterializedView},
+			GrantedOn:         ObjTpSchema,
+		}] = struct{}{}
+		cnf.ObjectPrivilegesOwnership[GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvOwnership},
+			GrantedOn:         ObjTpMaterializedView,
+		}] = struct{}{}
+	}
+
+	// We need the next one to manage access exclusively,
+	// when we will revoke such privileges from any user managed or even system roles
+	cnf.ObjectPrivilegesWrite = map[GrantTemplate]struct{}{
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvInsert},
+			GrantedOn:         ObjTpTable,
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvUpdate},
+			GrantedOn:         ObjTpTable,
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvTruncate},
+			GrantedOn:         ObjTpTable,
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvDelete},
+			GrantedOn:         ObjTpTable,
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvEvolveSchema},
+			GrantedOn:         ObjTpTable,
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvApplyBudget},
+			GrantedOn:         ObjTpTable,
+		}: {},
+	}
+	if cnf.ManagedObjTypes[ObjTpMaterializedView] {
+		cnf.ObjectPrivilegesWrite[GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvApplyBudget},
+			GrantedOn:         ObjTpMaterializedView,
+		}] = struct{}{}
+	}
+
+	// This one, too, will be used for managing access exclusively
+	cnf.ObjectPrivileges = map[GrantTemplate]struct{}{}
+	maps.Copy(cnf.ObjectPrivileges, cnf.ObjectPrivilegesRead)
+	maps.Copy(cnf.ObjectPrivileges, cnf.ObjectPrivilegesWrite)
+	maps.Copy(cnf.ObjectPrivileges, cnf.ObjectPrivilegesOwnership)
+
+	// These are compute privileges that are managed for product roles
+	cnf.ComputePrivileges = map[GrantTemplate]struct{}{
 		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvUsage},
 			GrantedOn:         ObjTpWarehouse,
 		}: {},
 		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvMonitor},
+			GrantedOn:         ObjTpWarehouse,
+		}: {},
+		GrantTemplate{
 			PrivilegeComplete: PrivilegeComplete{Privilege: PrvOperate},
 			GrantedOn:         ObjTpWarehouse,
+		}: {},
+	}
+
+	// These are database role usage privileges which are managed for product roles
+	// The addition that the DB role should be grupr managed means that granting
+	// a non-grupr-managed DB role to a grupr managed product role is perfectly fine,
+	// it will be considered an unmanaged grant
+	cnf.DBRolePrivileges = map[GrantTemplate]struct{}{
+		GrantTemplate{
+			PrivilegeComplete: PrivilegeComplete{Privilege: PrvUsage},
+			GrantedOn:         ObjTpDatabaseRole,
+			// Note that it's a bit odd that if we created another entry just like this, because it's a different
+			// pointer, it would be a different key in the map.
+			// TODO: use slices instead of maps for cnf.DBROlePrivileges and friends
+			GrantedRoleIsGruprManaged: util.NewTrue(),
 		}: {},
 	}
 

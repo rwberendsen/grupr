@@ -9,9 +9,10 @@ type AggSchemaObjs struct {
 	MatchAllObjects bool
 
 	// set while grants are being set
-	isUsageGrantedToReadDBRole                   bool
-	isPrivilegeOnFutureObjectGrantedToReadDBRole [2][2]bool // [ObjType][Privilege]
-	isCreateGrantedToProductWriteRole            [2]bool    // [ObjType]
+	// We need also monitor
+	isPrivilegeOnFutureObjectGrantedToReadDBRole [7]bool
+	isPrivilegeGrantedToReadDBRole               [2]bool
+	isCreateGrantedToProductWriteRole            [3]bool
 }
 
 func newAggSchemaObjs(o SchemaObjs) AggSchemaObjs {
@@ -33,64 +34,137 @@ func (o AggSchemaObjs) hasObject(k semantics.Ident) bool {
 func (o AggSchemaObjs) setFutureGrantTo(_ Mode, g FutureGrant) AggSchemaObjs {
 	// Currently, only ModeRead privileges on future objects in schemas are managed
 	switch g.GrantedOn {
-	case ObjTpTable, ObjTpView:
+	case ObjTpTable:
 		switch g.Privileges[0].Privilege {
-		case PrvSelect, PrvReferences:
-			o.isPrivilegeOnFutureObjectGrantedToReadDBRole[g.GrantedOn.getIdxObjectLevel()][g.Privileges[0].Privilege.getIdxObjectLevel()] = true
+		case PrvSelect:
+			o.isPrivilegeOnFutureObjectGrantedToReadDBRole[0] = true
+		case PrvSelectErrorTable:
+			o.isPrivilegeOnFutureObjectGrantedToReadDBRole[1] = true
+		case PrvReferences:
+			o.isPrivilegeOnFutureObjectGrantedToReadDBRole[2] = true
 		}
-		// Ignore; unmanaged grant
+	case ObjTpView:
+		switch g.Privileges[0].Privilege {
+		case PrvSelect:
+			o.isPrivilegeOnFutureObjectGrantedToReadDBRole[3] = true
+		case PrvReferences:
+			o.isPrivilegeOnFutureObjectGrantedToReadDBRole[4] = true
+		}
+	case ObjTpMaterializedView:
+		switch g.Privileges[0].Privilege {
+		case PrvSelect:
+			o.isPrivilegeOnFutureObjectGrantedToReadDBRole[5] = true
+		case PrvReferences:
+			o.isPrivilegeOnFutureObjectGrantedToReadDBRole[6] = true
+		}
 	}
-	// Ignore; unmanaged grant
 	return o
 }
 
 func (o AggSchemaObjs) hasFutureGrantTo(_ Mode, grantedOn ObjType, p Privilege) bool {
 	// Currently, only ModeRead privileges on future objects in schemas are managed
 	switch grantedOn {
-	case ObjTpTable, ObjTpView:
+	case ObjTpTable:
 		switch p {
-		case PrvSelect, PrvReferences:
-			return o.isPrivilegeOnFutureObjectGrantedToReadDBRole[grantedOn.getIdxObjectLevel()][p.getIdxObjectLevel()]
+		case PrvSelect:
+			return o.isPrivilegeOnFutureObjectGrantedToReadDBRole[0]
+		case PrvSelectErrorTable:
+			return o.isPrivilegeOnFutureObjectGrantedToReadDBRole[1]
+		case PrvReferences:
+			return o.isPrivilegeOnFutureObjectGrantedToReadDBRole[2]
+		}
+	case ObjTpView:
+		switch p {
+		case PrvSelect:
+			return o.isPrivilegeOnFutureObjectGrantedToReadDBRole[3]
+		case PrvReferences:
+			return o.isPrivilegeOnFutureObjectGrantedToReadDBRole[4]
+		}
+	case ObjTpMaterializedView:
+		switch p {
+		case PrvSelect:
+			return o.isPrivilegeOnFutureObjectGrantedToReadDBRole[5]
+		case PrvReferences:
+			return o.isPrivilegeOnFutureObjectGrantedToReadDBRole[6]
 		}
 	}
 	return false
 }
 
 func (o AggSchemaObjs) setGrantTo(m Mode, g Grant) AggSchemaObjs {
-	if m == ModeRead && g.Privileges[0].Privilege == PrvUsage {
-		o.isUsageGrantedToReadDBRole = true
+	switch m {
+	case ModeRead:
+		switch g.GrantedOn {
+		case ObjTpSchema:
+			switch g.Privileges[0].Privilege {
+			case PrvUsage:
+				o.isPrivilegeGrantedToReadDBRole[0] = true
+			case PrvMonitor:
+				o.isPrivilegeGrantedToReadDBRole[1] = true
+			}
+		}
+	case ModeWrite:
+		switch g.GrantedOn {
+		case ObjTpSchema:
+			switch pc := g.Privileges[0]; pc.Privilege {
+			case PrvCreate:
+				switch pc.CreateObjectType {
+				case ObjTpTable:
+					o.isCreateGrantedToProductWriteRole[0] = true
+				case ObjTpView:
+					o.isCreateGrantedToProductWriteRole[1] = true
+				case ObjTpMaterializedView:
+					o.isCreateGrantedToProductWriteRole[2] = true
+				}
+			}
+		}
 	}
-	if m == ModeWrite && g.Privileges[0].Privilege == PrvCreate &&
-		(g.Privileges[0].CreateObjectType == ObjTpTable || g.Privileges[0].CreateObjectType == ObjTpView) {
-		o.isCreateGrantedToProductWriteRole[g.Privileges[0].CreateObjectType.getIdxObjectLevel()] = true
-	}
-	// Ignore; unmanaged grant
 	return o
 }
 
-func (o AggSchemaObjs) hasGrantTo(m Mode, p PrivilegeComplete) bool {
+func (o AggSchemaObjs) hasGrantTo(m Mode, pc PrivilegeComplete) bool {
 	switch m {
 	case ModeRead:
-		switch p.Privilege {
+		switch pc.Privilege {
 		case PrvUsage:
-			return o.isUsageGrantedToReadDBRole
+			return o.isPrivilegeGrantedToReadDBRole[0]
+		case PrvMonitor:
+			return o.isPrivilegeGrantedToReadDBRole[1]
 		}
 	case ModeWrite:
-		switch p.Privilege {
+		switch pc.Privilege {
 		case PrvCreate:
-			return o.isCreateGrantedToProductWriteRole[p.CreateObjectType.getIdxObjectLevel()]
+			switch pc.CreateObjectType {
+			case ObjTpTable:
+				return o.isCreateGrantedToProductWriteRole[0]
+			case ObjTpView:
+				return o.isCreateGrantedToProductWriteRole[1]
+			case ObjTpMaterializedView:
+				return o.isCreateGrantedToProductWriteRole[2]
+			}
 		}
 	}
 	return false
 }
 
-func (o AggSchemaObjs) pushToDoFutureGrants(yield func(FutureGrant) bool, dbRole DatabaseRole, schema semantics.Ident) bool {
+func (o AggSchemaObjs) pushToDoFutureGrants(yield func(FutureGrant) bool, dbRole DatabaseRole, schema semantics.Ident,
+	mots map[ObjType]bool) bool {
 	if o.MatchAllObjects {
-		for _, ot := range [2]ObjType{ObjTpTable, ObjTpView} {
+		for ot := range mots {
 			prvs := []PrivilegeComplete{}
-			for _, p := range [2]Privilege{PrvSelect, PrvReferences} {
-				if !o.hasFutureGrantTo(ModeRead, ot, p) {
-					prvs = append(prvs, PrivilegeComplete{Privilege: p})
+			candidatePrvs := []PrivilegeComplete{
+				PrivilegeComplete{Privilege: PrvSelect},
+				PrivilegeComplete{Privilege: PrvReferences},
+			}
+			if ot == ObjTpTable {
+				candidatePrvs = append(candidatePrvs, PrivilegeComplete{Privilege: PrvSelectErrorTable})
+			}
+			// Note: counting on this: if you grant select error table on future tables, and you later create a
+			// hybrid table, then Snowflake should not generate an error somehow that select error table is not
+			// valid on a hybrid table
+			for _, pc := range candidatePrvs {
+				if !o.hasFutureGrantTo(ModeRead, ot, pc.Privilege) {
+					prvs = append(prvs, pc)
 				}
 			}
 			if len(prvs) > 0 {
@@ -113,9 +187,18 @@ func (o AggSchemaObjs) pushToDoFutureGrants(yield func(FutureGrant) bool, dbRole
 }
 
 func (o AggSchemaObjs) pushToDoGrants(yield func(Grant) bool, dbRole DatabaseRole, schema semantics.Ident) bool {
-	if !o.hasGrantTo(ModeRead, PrivilegeComplete{Privilege: PrvUsage}) {
+	prvs := []PrivilegeComplete{}
+	for _, pc := range [2]PrivilegeComplete{
+		PrivilegeComplete{Privilege: PrvUsage},
+		PrivilegeComplete{Privilege: PrvMonitor},
+	} {
+		if !o.hasGrantTo(ModeRead, pc) {
+			prvs = append(prvs, pc)
+		}
+	}
+	if len(prvs) > 0 {
 		if !yield(Grant{
-			Privileges:        []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage}},
+			Privileges:        prvs,
 			GrantedOn:         ObjTpSchema,
 			Database:          dbRole.Database,
 			Schema:            schema,

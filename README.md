@@ -234,47 +234,82 @@ which we will discuss here. A simplified overview of the idea is in this figure:
 
 ![grupr access management model](grupr_access_management_model.svg)
 
-For each combination of data product and dtap, grupr creates a read role, and a
-write role. Employees working on this data product can assume the read role.
-The write role is intended for service accounts to assume.
+We see two products. In reality, when we deploy software, we do this in a dtap.  And grupr can manage different dtaps in
+a single YAML description, as you have already seen. So, in the grupr code, we call the products in the above diagram
+`ProductDTAP`s. Below, when we write "product" we are often referring to a product dtap combination. When we leave out
+the "dtap" part, you can assume that we are talking about a production environment only. Grupr does allow different
+products to define a different set of dtaps in the YAML, and some cross dtap relationships are allowed. In such cases,
+the documentation will be more explicit.
 
-A quick note--below, when we write "product" we are often referring to a
-"product-dtap" combination, actually, for simplicity we often leave out the
-"dtap" part, you can assume that we are talking about a production environment
-only. That being said, grupr does allow different products to have a different
-set of dtaps, and some cross dtap relationships are allowed. In such cases, the
-documentation will be more explicit.
+For each combination of data product and dtap, grupr creates a read role, and a write role. Employees working on this
+data product can assume the read role.  The write role is intended for service accounts to assume.
 
-Products and interfaces are a collection of objects, e.g., tables and views.
-Products do not overlap. Interfaces are subsets of products. But interfaces
-can overlap. In the figure above, product B consumes interface 1 of product A.
+Products and interfaces are a collection of objects, e.g., tables and views.  Products do not overlap. Interfaces are
+subsets of products. But interfaces can overlap. In the figure above, product B consumes interface 1 of product A.
 
-The read role for product B gets read access to all objects in product B, as
-well as read access to all objects in interface A1 consumed by the product;
-this is why interface A1 and product B are shown in bold. The write role for
-product B gets write access to all objects in product B, but only read access
-to all objects in interface A1. Note that it is accepted in grupr YAML for a
-non-production product-dtap to consume a production interface--but not the
-other way around.
+The read role for product B gets read access to all objects in product B, as well as read access to all objects in
+interface A1 consumed by the product; this is why interface A1 and product B are shown in bold. The write role for
+product B gets write access to all objects in product B, but only read access to all objects in interface A1. Note that
+it is accepted in grupr YAML for a non-production product-dtap to consume a production interface--but not the other way
+around.
 
-Rather than directly getting privileges on the objects,for efficiency reasons
-(fewer relations to manage) read privileges to objects are granted to database
-roles. Each product and each interface has a set of associated database roles.
-Usually this set will have just one database role, but there can be more if
-objects of a sinlge product or interface reside in different databases.
+Rather than directly getting privileges on the objects,for efficiency reasons (fewer relations to manage) read
+privileges to objects are granted to database roles. Each product and each interface has a set of associated database
+roles.  Usually this set will have just one database role, but there can be more if objects of a sinlge product or
+interface reside in different databases.
 
-Concretely then, the product read role is granted the database roles of the product
-objects, and the database roles of all interface it consumes.
+Grupr manages the following privileges for the product-dtap read role:
+|  Object types | Privileges |
+| --- | --- |
+|  Database role (grupr-managed) | Usage |
+|  Warehouse     | Usage, Operate |
 
-The product write role also gets granted the same database roles. But on top of
-that, the write role gets the ownership privilege on all objects in the product
-dtap. This privilege is granted directly to the write role, not via database
-roles.  Before granting ownership of an object to a product write role, the
-product write role itself is granted to the current owner. This way, the
-current owner retains ownership of the object. After running grupr, you can
-update your production deployments to assume the product write role when
-connecting to Snowflake. When you are sure everything runs smoothly, you can
-revoke the product write role from the role that previously owned the object.
+This means that grupr will decide based on the YAML which grupr-owned database roles a product read role will be
+granted. If you manually grant a different grupr-owned database role to the product role, grupr will revoke it.
+But if you manually grant a database role that you created without using grupr, grupr will not revoke it. For 
+example, it is encouraged to grant database roles of imported databases to the product-dtap read roles. Grupr
+will not touch them. Even if, contrary to Snowflake best practices, you grant IMPORTED PRIVILEGES to a product
+read role, and the product read role consequently has SELECT privileges on many objects, grupr will not revoke
+them; from the perspective of a product read role, SELECT is an unmanaged privilege.
+For warehouses, grupr will decide based on the YAML which warehouses a product role may use.
+
+For the product-dtap write role, grupr manages:
+|  Object types | Privileges |
+| --- | --- |
+|  Database role (grupr-managed) | Usage |
+|  Warehouse     | Usage, Operate |
+|  Table, Hybrid table, View, Materialized View | Ownership |
+
+This means that for the listed object types, grupr will decide based on your YAML which objects the product
+write role will claim ownership of. It also means that if you grant ownership on another object of the
+managed object types to the product write role, grupr will attempt to transfer that ownership away from the product
+write role again. But if you grant ownership on an object type that grupr does not yet manage, for example
+a dynamic table, then that is not a grant grupr normally manages, and it will leave it intact. Also, note
+that privileges like update, insert, etc, are also not managed. You can grant such privileges to the product
+write role, and grupr will not revoke them. Granting that on objects on which grupr already claims ownership
+would just be redundant, of course. But you might want the product write role to be able to update a table
+outside of its own product, perhaps if you want to write some operational metadata in a common table, or
+whatever. Such grants will not be revoked by grupr.
+
+Concretely then, the product read role is granted the database roles of the product objects, and the database roles of
+all interface it consumes. If you want to grant read privileges to objects of types that grupr does not yet manage, you
+can do so. Grupr will leave these grants intact, and as long as any remain, it will also keep the USAGE privilege on the
+containing schemas intact. If you insist, it is also possible to grant such privileges directly to the product read
+role, but if you make that choice, you have to also grant USAGE on the containing schemas and databases to the product
+write role directly; being privileges that grupr normally does not manage for a product read role, it would leave such
+grants intact as well.
+
+The product write role also gets granted the same database roles. But on top of that, the write role gets the ownership
+privilege on all objects in the product dtap. This privilege is granted directly to the write role, not via database
+roles.  Before granting ownership of an object to a product write role, the product write role itself is granted to the
+current owner. This way, the current owner retains ownership of the object. After running grupr, you can update your
+production deployments to assume the product write role when connecting to Snowflake. When you are sure everything runs
+smoothly, you can revoke the product write role from the role that previously owned the object.
+
+If you grant privileges directly to the write role that grupr does not normally manage; or privileges on object types that grupr
+does not normally manage; then you should also grant USAGE on the containing schemas and databases directly to the write
+role. Not doing so means you will rely on managed privileges to still exist based on the YAML in those same schemas and
+databases.
 
 If you change the YAML, it can be that privileges that have been granted in the
 database, based on an earlier YAML version, need to be revoked, and grupr will
@@ -288,7 +323,7 @@ with a configurable prefix) but that are not found in the YAML will be removed.
 However, if such roles have privileges that are outside of grupr its scope, 
 and therefore must have been granted outside of grupr, grupr logs a message but
 keeps the role and those additional privileges intact. If a product write role
-needs to be removed, but still ownis an object, grupr will transfer
+needs to be removed, but still owns an object, grupr will transfer
 ownership back to SYSADMIN if the product write role is not currently granted
 to any user managed role. If the product write role is granted to one user managed role, 
 that user managed role will get ownership. If the product write role is granted

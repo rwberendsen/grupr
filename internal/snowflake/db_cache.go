@@ -77,9 +77,12 @@ func (c *dbCache) refreshSchemas(ctx context.Context, conn *sql.DB, db semantics
 	return nil
 }
 
-func (c *dbCache) refreshDBRoles(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, db semantics.Ident) error {
-	if err := GrantCreateDatabaseRoleToSelf(ctx, cnf, conn, db); err != nil {
-		return err
+func (c *dbCache) refreshDBRoles(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB,
+	db semantics.Ident, grantCreateDBRole bool) error {
+	if grantCreateDBRole {
+		if err := GrantCreateDatabaseRoleToSelf(ctx, cnf, conn, db); err != nil {
+			return err
+		}
 	}
 	c.dbRoles = map[DatabaseRole]struct{}{} // overwrite if c.dbRoles already had a value
 	for r, err := range QueryDatabaseRoles(ctx, semCnf, cnf, conn, db) {

@@ -25,8 +25,8 @@ type ProductDTAP struct {
 	WriteRole             ProductRole
 	GrantReadRoleToUsers  map[semantics.Ident]bool    // initially set to false, then to true if GRANTS are found in Snowflake
 	GrantWriteRoleToUsers map[semantics.Ident]bool    // initially set to false, then to true if GRANTS are found in Snowflake
-	ReadWarehouses        map[semantics.Ident][2]bool // initially set to false, then to true if GRANTS (USAGE, OPERATE) are found in Snowflake
-	WriteWarehouses       map[semantics.Ident][2]bool // initially set to false, then to true if GRANTS (USAGE, OPERATE) are found in Snowflake
+	ReadWarehouses        map[semantics.Ident][3]bool // initially set to false, then to true if GRANTS (USAGE, MONITOR, OPERATE) are found in Snowflake
+	WriteWarehouses       map[semantics.Ident][3]bool // initially set to false, then to true if GRANTS (USAGE, MONITOR, OPERATE) are found in Snowflake
 
 	writeRoleGrantedToUserManagedRoles map[semantics.Ident]struct{}
 	userManagedOwnersOfObjects         map[semantics.Ident]struct{}
@@ -57,8 +57,8 @@ func NewProductDTAP(pdID semantics.ProductDTAPID, isProd bool, pSem semantics.Pr
 		Consumes:              map[syntax.InterfaceID]string{},
 		GrantReadRoleToUsers:  map[semantics.Ident]bool{},
 		GrantWriteRoleToUsers: map[semantics.Ident]bool{},
-		ReadWarehouses:        map[semantics.Ident][2]bool{},
-		WriteWarehouses:       map[semantics.Ident][2]bool{},
+		ReadWarehouses:        map[semantics.Ident][3]bool{},
+		WriteWarehouses:       map[semantics.Ident][3]bool{},
 		matchedAccountObjects: map[semantics.ObjExpr]*matchedAccountObjs{},
 	}
 
@@ -118,7 +118,7 @@ func (pd *ProductDTAP) createProductRoles(ctx context.Context, semCnf *semantics
 	conn *sql.DB, productRoles map[ProductRole]struct{}) error {
 	// Read role
 	pd.ReadRole = newProductRole(semCnf, pd.ProductID, pd.DTAP, ModeRead)
-	if _, ok := productRoles[pd.ReadRole]; !ok {
+	if _, ok := productRoles[pd.ReadRole]; !ok && !pd.isZombie {
 		if err := pd.ReadRole.Create(ctx, cnf, conn); err != nil {
 			return err
 		}
@@ -126,7 +126,7 @@ func (pd *ProductDTAP) createProductRoles(ctx context.Context, semCnf *semantics
 
 	// Write role, identical logic, maybe refactor
 	pd.WriteRole = newProductRole(semCnf, pd.ProductID, pd.DTAP, ModeWrite)
-	if _, ok := productRoles[pd.WriteRole]; !ok {
+	if _, ok := productRoles[pd.WriteRole]; !ok && !pd.isZombie {
 		if err := pd.WriteRole.Create(ctx, cnf, conn); err != nil {
 			return err
 		}

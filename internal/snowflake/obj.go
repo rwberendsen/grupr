@@ -3,9 +3,7 @@ package snowflake
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"iter"
-	"strings"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
 )
@@ -16,79 +14,20 @@ type Obj struct {
 	Owner      semantics.Ident
 }
 
-func newObj(name semantics.Ident, objType ObjType, owner semantics.Ident) (Obj, error) {
-	if len(name) == 0 {
-		return Obj{}, fmt.Errorf("zero length identifier")
-	}
-	if objType != ObjTpTable && objType != ObjTpView {
-		panic("ObjTp not implemented")
-	}
-	return Obj{Name: name, ObjectType: objType, Owner: owner}, nil
-}
-
-func QueryObjs(ctx context.Context, conn *sql.DB, db semantics.Ident, schema semantics.Ident) iter.Seq2[Obj, error] {
+func QueryObjs(ctx context.Context, conn *sql.DB, db semantics.Ident, schema semantics.Ident, mots map[ObjType]bool) iter.Seq2[Obj, error] {
 	return func(yield func(Obj, error) bool) {
-		// When there are more than 10K results, paginate.
-		// Because we apply filters, even if fewer results are returned, perhaps there are still more.
-		// For that reason, our last row has a count of the first query result
-		mayHaveMore := true
-		var fromClause string
-		limit := 10000
-		for mayHaveMore {
-			rows, err := conn.QueryContext(ctx, fmt.Sprintf(`SHOW OBJECTS IN SCHEMA IDENTIFIER($$%s.%s$$) LIMIT %d%s ->>
-SELECT
-    NULL AS n
-  , "name" AS name
-  , "kind" As kind
-  , "owner" AS owner
-FROM $1 WHERE kind in ('%s', '%s')
-UNION ALL
-SELECT
-    COUNT(*)
-  , '' AS name
-  , '' AS kind
-  , '' AS owner
-FROM $1
-`, db, schema, limit, fromClause, ObjTpTable, ObjTpView))
-			if err != nil {
-				if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
-					err = ErrObjectNotExistOrAuthorized
+		for rec := range queryTables(ctx, conn, db, schema) {
+			if ot := rec.getObjType(mots); ot != ObjTpOther {
+				if !yield(Obj{Name: rec.name, ObjectType: ot, Owner: rec.owner}, nil) {
+					return
 				}
-				yield(Obj{}, err)
-				return
 			}
-			defer rows.Close()
-			var lastName semantics.Ident
-			for rows.Next() {
-				var n *int
-				var name semantics.Ident
-				var kind string
-				var owner semantics.Ident
-				if err = rows.Scan(&n, &name, &kind, &owner); err != nil {
-					err = fmt.Errorf("QueryObjs: error scanning row: %w", err)
-					yield(Obj{}, err)
+		}
+		for rec := range queryViews(ctx, conn, db, schema) {
+			if ot := rec.getObjType(mots); ot != ObjTpOther {
+				if !yield(Obj{Name: rec.name, ObjectType: ot, Owner: rec.owner}, nil) {
 					return
 				}
-				if n != nil { // this is the last row holding the count
-					if *n < limit {
-						mayHaveMore = false
-					} else {
-						fromClause = fmt.Sprintf(" FROM '%s'", string(lastName))
-					}
-					continue
-				}
-				if obj, err := newObj(name, ParseObjType(kind), owner); err != nil {
-					yield(Obj{}, err)
-					return
-				} else if !yield(obj, nil) {
-					return
-				}
-				lastName = name
-			}
-			if err = rows.Err(); err != nil {
-				err = fmt.Errorf("QueryObjs: error after looping over results: %w", err)
-				yield(Obj{}, err)
-				return
 			}
 		}
 	}

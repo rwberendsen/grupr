@@ -9,9 +9,10 @@ type AggObjAttr struct {
 	Owner      semantics.Ident
 
 	// set when grant() is called on AggDBObjs
-	isSelectGrantedToReadDBRole     bool
-	isReferencesGrantedToReadDBRole bool
-	isOwnedByProductWriteRole       bool
+	isSelectGrantedToReadDBRole           bool
+	isSelectErrorTableGrantedToReadDBRole bool
+	isReferencesGrantedToReadDBRole       bool
+	isOwnedByProductWriteRole             bool
 }
 
 func (o AggObjAttr) setGrantTo(m Mode, g Grant) AggObjAttr {
@@ -20,6 +21,10 @@ func (o AggObjAttr) setGrantTo(m Mode, g Grant) AggObjAttr {
 		switch g.Privileges[0].Privilege {
 		case PrvSelect:
 			o.isSelectGrantedToReadDBRole = true
+		case PrvSelectErrorTable:
+			// Note, this is of course only valid for a regular table,
+			// but, we won't expect it to be called with an invalid grant like doing this on a view, for example.
+			o.isSelectErrorTableGrantedToReadDBRole = true
 		case PrvReferences:
 			o.isReferencesGrantedToReadDBRole = true
 		}
@@ -42,6 +47,8 @@ func (o AggObjAttr) hasGrantTo(m Mode, p Privilege) bool {
 		switch p {
 		case PrvSelect:
 			return o.isSelectGrantedToReadDBRole
+		case PrvSelectErrorTable:
+			return o.isSelectErrorTableGrantedToReadDBRole
 		case PrvReferences:
 			return o.isReferencesGrantedToReadDBRole
 		}
@@ -51,15 +58,23 @@ func (o AggObjAttr) hasGrantTo(m Mode, p Privilege) bool {
 
 func (o AggObjAttr) pushToDoGrants(yield func(Grant) bool, dbRole DatabaseRole, schema semantics.Ident, obj semantics.Ident) bool {
 	prvs := []PrivilegeComplete{}
-	for _, p := range [2]Privilege{PrvSelect, PrvReferences} {
-		if !o.hasGrantTo(ModeRead, p) {
-			prvs = append(prvs, PrivilegeComplete{Privilege: p})
+	candidatePrvs := []PrivilegeComplete{
+		PrivilegeComplete{Privilege: PrvSelect},
+		PrivilegeComplete{Privilege: PrvReferences},
+	}
+	if o.ObjectType == ObjTpTable {
+		// We do not want this privilege for views, materialized views and hybrid tables
+		candidatePrvs = append(candidatePrvs, PrivilegeComplete{Privilege: PrvSelectErrorTable})
+	}
+	for _, pc := range candidatePrvs {
+		if !o.hasGrantTo(ModeRead, pc.Privilege) {
+			prvs = append(prvs, pc)
 		}
 	}
 	if len(prvs) > 0 {
 		if !yield(Grant{
 			Privileges:        prvs,
-			GrantedOn:         o.ObjectType,
+			GrantedOn:         ParseObjType(o.ObjectType.String()), // will normalize ObjHybridTable to ObjTable
 			Database:          dbRole.Database,
 			Schema:            schema,
 			Object:            obj,

@@ -3,6 +3,7 @@ package snowflake
 import (
 	"context"
 	"database/sql"
+	"fmt"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
 )
@@ -16,17 +17,22 @@ type AggDBObjs struct {
 	readDBRole      DatabaseRole
 	isReadDBRoleNew bool // if true, then no need to query grants
 
-	// In / on which schema's does the readDBrole have unmanaged grants?
-	schemasWithUnmanagedGrants map[semantics.Ident]struct{}
+	isMonitorGranted bool
+
+	// Does the DB role have unmanaged privileges?
+	hasUnmanagedGrantsReadDBRole bool
 
 	// Grants to the readDBRole
-	isUsageGrantedOnFutureSchemasToReadDBRole bool
+	isPrivilegeGrantedOnFutureSchemasToReadDBRole [2]bool
 	// Small lookup table, first index rows, second index columns
-	//   		0: PrvSelect	1: PrvRefernces
-	// 0: ObjTable
-	// 1: ObjView
+	//   		0: PrvSelect	1: PrvSelectErrorTable	2: PrvRefernces
+	// 0: ObjTpTable
+	// 1: ObjTpView
+	// 2: ObjTpMaterializedView
 	//
-	isPrivilegeOnFutureObjectGrantedToReadDBRole [2][2]bool
+	// Note: PrvSelectErrorTable is only applicable to ObjTpTable,
+	// so this representation does waste a little space.
+	isPrivilegeOnFutureObjectGrantedToReadDBRole [7]bool
 	revokeGrantsToReadDBRole                     []Grant
 	revokeFutureGrantsToReadDBRole               []FutureGrant
 
@@ -38,7 +44,7 @@ type AggDBObjs struct {
 	isReadDBRoleGrantedToProductRole [2]bool // directly set from within Grupin.setDBRoleGrants
 
 	// Grants to the product write role; only used if this AggDBObjs is part of a product level interface
-	isCreateObjectOnFutureSchemasGrantedToProductWriteRole [2]bool // 0: ObjTable, 1: ObjView
+	isCreateObjectOnFutureSchemasGrantedToProductWriteRole [3]bool // 0: ObjTpTable, 1: ObjTpView, 2: ObjTpMaterializedView
 
 }
 
@@ -73,31 +79,54 @@ func (o AggDBObjs) setFutureGrantTo(m Mode, g FutureGrant) AggDBObjs {
 		case ObjTpSchema:
 			switch g.Privileges[0].Privilege {
 			case PrvUsage:
-				o.isUsageGrantedOnFutureSchemasToReadDBRole = true
+				o.isPrivilegeGrantedOnFutureSchemasToReadDBRole[0] = true
+			case PrvMonitor:
+				o.isPrivilegeGrantedOnFutureSchemasToReadDBRole[1] = true
 			}
-			// Ignore; unmanaged grant
-		case ObjTpTable, ObjTpView:
+		case ObjTpTable:
 			switch g.Privileges[0].Privilege {
-			case PrvSelect, PrvReferences:
-				o.isPrivilegeOnFutureObjectGrantedToReadDBRole[g.GrantedOn.getIdxObjectLevel()][g.Privileges[0].Privilege.getIdxObjectLevel()] = true
+			case PrvSelect:
+				o.isPrivilegeOnFutureObjectGrantedToReadDBRole[0] = true
+			case PrvSelectErrorTable:
+				o.isPrivilegeOnFutureObjectGrantedToReadDBRole[1] = true
+			case PrvReferences:
+				o.isPrivilegeOnFutureObjectGrantedToReadDBRole[2] = true
 			}
-			// Ignore; unmanaged grant
+		case ObjTpView:
+			switch g.Privileges[0].Privilege {
+			case PrvSelect:
+				o.isPrivilegeOnFutureObjectGrantedToReadDBRole[3] = true
+			case PrvReferences:
+				o.isPrivilegeOnFutureObjectGrantedToReadDBRole[4] = true
+			}
+		case ObjTpMaterializedView:
+			switch g.Privileges[0].Privilege {
+			case PrvSelect:
+				o.isPrivilegeOnFutureObjectGrantedToReadDBRole[5] = true
+			case PrvReferences:
+				o.isPrivilegeOnFutureObjectGrantedToReadDBRole[6] = true
+			}
 		}
 	case ModeWrite:
 		switch g.GrantedOn {
 		case ObjTpSchema:
-			switch g.Privileges[0].Privilege {
+			switch pc := g.Privileges[0]; pc.Privilege {
 			case PrvCreate:
-				o.isCreateObjectOnFutureSchemasGrantedToProductWriteRole[g.Privileges[0].CreateObjectType.getIdxObjectLevel()] = true
+				switch pc.CreateObjectType {
+				case ObjTpTable:
+					o.isCreateObjectOnFutureSchemasGrantedToProductWriteRole[0] = true
+				case ObjTpView:
+					o.isCreateObjectOnFutureSchemasGrantedToProductWriteRole[1] = true
+				case ObjTpMaterializedView:
+					o.isCreateObjectOnFutureSchemasGrantedToProductWriteRole[2] = true
+				}
 			}
-			// Ignore, unmanaged grant
 		}
-		// Ignore, unmanaged grant
 	}
 	return o
 }
 
-func (o AggDBObjs) hasFutureGrantTo(m Mode, grantedOn ObjType, p PrivilegeComplete) bool {
+func (o AggDBObjs) hasFutureGrantTo(m Mode, grantedOn ObjType, pc PrivilegeComplete) bool {
 	// Used for setting if grants on future objects in AggDBObjs have been
 	// granted to either the readDBRole (ModeRead) or the ProductWriteRole
 	// (ModeWrite)
@@ -105,22 +134,49 @@ func (o AggDBObjs) hasFutureGrantTo(m Mode, grantedOn ObjType, p PrivilegeComple
 	case ModeRead:
 		switch grantedOn {
 		case ObjTpSchema:
-			switch p.Privilege {
+			switch pc.Privilege {
 			case PrvUsage:
-				return o.isUsageGrantedOnFutureSchemasToReadDBRole
+				return o.isPrivilegeGrantedOnFutureSchemasToReadDBRole[0]
+			case PrvMonitor:
+				return o.isPrivilegeGrantedOnFutureSchemasToReadDBRole[1]
 			}
-		case ObjTpTable, ObjTpView:
-			switch p.Privilege {
-			case PrvSelect, PrvReferences:
-				return o.isPrivilegeOnFutureObjectGrantedToReadDBRole[grantedOn.getIdxObjectLevel()][p.Privilege.getIdxObjectLevel()]
+		case ObjTpTable:
+			switch pc.Privilege {
+			case PrvSelect:
+				return o.isPrivilegeOnFutureObjectGrantedToReadDBRole[0]
+			case PrvSelectErrorTable:
+				return o.isPrivilegeOnFutureObjectGrantedToReadDBRole[1]
+			case PrvReferences:
+				return o.isPrivilegeOnFutureObjectGrantedToReadDBRole[2]
+			}
+		case ObjTpView:
+			switch pc.Privilege {
+			case PrvSelect:
+				return o.isPrivilegeOnFutureObjectGrantedToReadDBRole[3]
+			case PrvReferences:
+				return o.isPrivilegeOnFutureObjectGrantedToReadDBRole[4]
+			}
+		case ObjTpMaterializedView:
+			switch pc.Privilege {
+			case PrvSelect:
+				return o.isPrivilegeOnFutureObjectGrantedToReadDBRole[5]
+			case PrvReferences:
+				return o.isPrivilegeOnFutureObjectGrantedToReadDBRole[6]
 			}
 		}
 	case ModeWrite:
 		switch grantedOn {
 		case ObjTpSchema:
-			switch p.Privilege {
+			switch pc.Privilege {
 			case PrvCreate:
-				return o.isCreateObjectOnFutureSchemasGrantedToProductWriteRole[grantedOn.getIdxObjectLevel()]
+				switch pc.CreateObjectType {
+				case ObjTpTable:
+					return o.isCreateObjectOnFutureSchemasGrantedToProductWriteRole[0]
+				case ObjTpView:
+					return o.isCreateObjectOnFutureSchemasGrantedToProductWriteRole[1]
+				case ObjTpMaterializedView:
+					return o.isCreateObjectOnFutureSchemasGrantedToProductWriteRole[2]
+				}
 			}
 		}
 	}
@@ -166,15 +222,14 @@ func (o AggDBObjs) setFutureGrants(ctx context.Context, semCnf *semantics.Config
 		return o, err
 	}
 	if !o.isReadDBRoleNew {
-		for g, err := range QueryFutureGrantsToDBRoleFiltered(ctx, conn, db, o.readDBRole.Name, cnf.DatabaseRolePrivileges[ModeRead], nil) {
+		for g, err := range QueryFutureGrantsToDBRoleFiltered(ctx, conn, db, o.readDBRole.Name, cnf.ObjectPrivilegesRead, nil) {
 			if err != nil {
 				return o, err
 			}
 
 			if g.Database != db {
-				// This grant should not be granted to this particular database role
-				o = o.setRevokeFutureGrantTo(ModeRead, g)
-				continue
+				// This grant should not be granted to this particular database role, this should not be possible in Snowflake atm (May 2026)
+				return o, fmt.Errorf("privilege granted to database role on future objects from different database")
 			}
 
 			switch g.GrantedIn {
@@ -183,35 +238,38 @@ func (o AggDBObjs) setFutureGrants(ctx context.Context, semCnf *semantics.Config
 				case ObjTpSchema:
 					if o.MatchAllSchemas {
 						o = o.setFutureGrantTo(ModeRead, g)
-					} else {
-						o = o.setRevokeFutureGrantTo(ModeRead, g)
+						continue
 					}
-				case ObjTpTable, ObjTpView:
+					// We need to revoke
+				case ObjTpTable, ObjTpView, ObjTpMaterializedView:
 					if o.MatchAllObjects {
 						o = o.setFutureGrantTo(ModeRead, g)
-					} else {
-						o = o.setRevokeFutureGrantTo(ModeRead, g)
+						continue
 					}
+					// We need to revoke
 				}
-				// Ignore this grant, it's not in grupr its scope (unmanaged grant)
 			case ObjTpSchema:
-				if o.hasSchema(g.Schema) {
-					if o.Schemas[g.Schema].MatchAllObjects {
-						o.Schemas[g.Schema] = o.Schemas[g.Schema].setFutureGrantTo(ModeRead, g)
+				switch g.GrantedOn {
+				case ObjTpTable, ObjTpView, ObjTpMaterializedView:
+					if o.hasSchema(g.Schema) {
+						if o.Schemas[g.Schema].MatchAllObjects {
+							o.Schemas[g.Schema] = o.Schemas[g.Schema].setFutureGrantTo(ModeRead, g)
+							continue
+						}
+						// We need to revoke
 					} else {
-						o = o.setRevokeFutureGrantTo(ModeRead, g)
-					}
-				} else {
-					// A rare oddity. A schema was added after we loaded account objects,
-					// and future grants were granted in it to our database role, no less.
-					// But, if the YAML indicates this is correct, we will leave the grant intact
-					if !oms.MatchAllObjectsInSchema(db, g.Schema) {
-						o = o.setRevokeFutureGrantTo(ModeRead, g)
+						// A rare oddity. A schema was added after we loaded account objects,
+						// and future grants were granted in it to our database role, no less.
+						// But, if the YAML indicates this is correct, we will leave the grant intact
+						if oms.MatchAllObjectsInSchema(db, g.Schema) {
+							continue
+						}
+						// We need to revoke
 					}
 				}
-			default:
-				panic("unsupported granted_in object type in future grant")
 			}
+			// If we are still here, we need to revoke
+			o = o.setRevokeFutureGrantTo(ModeRead, g)
 		}
 	}
 	return o, nil
@@ -220,55 +278,85 @@ func (o AggDBObjs) setFutureGrants(ctx context.Context, semCnf *semantics.Config
 func (o AggDBObjs) setGrants(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, db semantics.Ident, oms semantics.ObjMatchers) (AggDBObjs, error) {
 	if !o.isReadDBRoleNew {
 		// First, check for unmanaged grants, and keep track of in which schemas the database role holds unmanaged grants;
+		// Since we don't know how to parse grants that grupr does not manage, if there is even a single unmanaged
+		// grant, no matter what it is, we are not going to revoke usage or monitor from any databases or schemas; even
+		// if those databases and schemas do not match any object expression from the YAML; even if the objects are
+		// matched by a different product its YAML. After
+		// all, it could be that this would render ineffective an unmanaged privilege on an object in such a schema,
+		// and grupr would break some access that was legitimately put in place by sysadmins.
 		// We should not revoke USAGE on these schemas from the database role, not even if the schema is disjoint from the YAML.
-		o.schemasWithUnmanagedGrants = map[semantics.Ident]struct{}{}
-		for g, err := range QueryGrantsToDBRoleFiltered(ctx, cnf, conn, db, o.readDBRole.Name, nil, cnf.DatabaseRolePrivileges[ModeRead]) {
+		//
+		// Note that write privileges on objects are unmanaged from the perspective of a database role. If sysadmins
+		// would grant them to grupr managed database roles, despite best practices, they will have to revoke them also
+		// in case they want grupr to drop the role when it is no longer needed.
+		for _, err := range QueryGrantsToDBRoleFilteredLimit(ctx, cnf, conn, db, o.readDBRole.Name, nil, cnf.ObjectPrivilegesRead, 1) {
 			if err != nil {
 				return o, err
 			}
-
-			if g.Schema != semantics.Ident("") {
-				o.schemasWithUnmanagedGrants[g.Schema] = struct{}{}
-			}
+			o.hasUnmanagedGrantsReadDBRole = true
 		}
 
 		// Second, check for managed grants
-		for g, err := range QueryGrantsToDBRoleFiltered(ctx, cnf, conn, db, o.readDBRole.Name, cnf.DatabaseRolePrivileges[ModeRead], nil) {
+		for g, err := range QueryGrantsToDBRoleFiltered(ctx, cnf, conn, db, o.readDBRole.Name, cnf.ObjectPrivilegesRead, nil) {
 			if err != nil {
 				return o, err
 			}
 
 			if g.Database != db {
-				// This grant should not be granted to this particular database role
-				o = o.setRevokeGrantTo(ModeRead, g)
-				continue
+				// This grant should not be granted to this particular database role, that should not be
+				// possible in Snowflake, at the moment
+				return o, fmt.Errorf("privilege granted to database role on object from different database")
 			}
 
-			switch g.GrantedOn {
+			switch ot := g.GrantedOn; ot {
+			case ObjTpDatabase:
+				switch g.Privileges[0].Privilege {
+				case PrvMonitor:
+					o.isMonitorGranted = true
+				case PrvUsage:
+					// PrvUsage comes out of the box, we do not grant it, so no need to mark it as present
+					continue
+				}
 			case ObjTpSchema:
-				if o.hasSchema(g.Schema) {
-					o.Schemas[g.Schema] = o.Schemas[g.Schema].setGrantTo(ModeRead, g)
-				} else if oms.DisjointFromSchema(g.Database, g.Schema) {
-					// Before we revoke schema level privileges, we need to make sure the database role
-					// does not hold any unmanaged grants on objects in the schema; as these would be broken
-					// by the absence of at least one grant on their container: the schema.
-					if _, ok := o.schemasWithUnmanagedGrants[g.Schema]; !ok {
-						o = o.setRevokeGrantTo(ModeRead, g)
+				switch g.Privileges[0].Privilege {
+				case PrvUsage, PrvMonitor:
+					if oms.DisjointFromSchema(g.Database, g.Schema) {
+						if o.hasUnmanagedGrantsReadDBRole {
+							// We need to keep this grant
+							continue
+						}
+						// We need to revoke
+					} else {
+						if o.hasSchema(g.Schema) {
+							o.Schemas[g.Schema] = o.Schemas[g.Schema].setGrantTo(ModeRead, g)
+						}
+						// Either way, if the schema is matched in the YAML, even if it was not there
+						// when we refreshed objects, the grant is fine, we keep it.
+						continue
 					}
-				} // Ignore this grant, it is correct, even if we did not know about the object's existence yet (result of FUTURE grant, probably)
-			case ObjTpTable, ObjTpView:
-				if o.hasObject(g.Schema, g.Object) {
-					if o.Schemas[g.Schema].Objects[g.Object].ObjectType != g.GrantedOn {
-						// A table may have been dropped and a view with the same name created or vice versa
-						// A good reason to refresh the product
-						return o, ErrObjectNotExistOrAuthorized
+				}
+			case ObjTpTable, ObjTpView, ObjTpMaterializedView:
+				switch g.Privileges[0].Privilege {
+				case PrvSelect, PrvReferences, PrvSelectErrorTable:
+					if !oms.DisjointFromObject(g.Database, g.Schema, g.Object) {
+						if o.hasObject(g.Schema, g.Object) {
+							// We call the String method on the object type to normalize AggObjAttr.ObjectType from
+							// ObjTpHybridTable to ObjTpTable
+							if o.Schemas[g.Schema].Objects[g.Object].ObjectType.String() != ot.String() {
+								// A (hybrid) table may have been dropped and a (materialized) view with the same name
+								// created or vice versa A good reason to refresh the product
+								return o, ErrObjectNotExistOrAuthorized
+							}
+							o.Schemas[g.Schema].Objects[g.Object] = o.Schemas[g.Schema].Objects[g.Object].setGrantTo(ModeRead, g)
+						}
+						// And we need to keep this grant
+						continue
 					}
-					o.Schemas[g.Schema].Objects[g.Object] = o.Schemas[g.Schema].Objects[g.Object].setGrantTo(ModeRead, g)
-				} else if oms.DisjointFromObject(g.Database, g.Schema, g.Object) {
-					o = o.setRevokeGrantTo(ModeRead, g)
-				} // Ignore this grant, it is correct, even if we did not know about the object's existence yet (result of FUTURE grant, probably)
+					// We need to revoke
+				}
 			}
-			// Ignore this grant, it is not managed by grupr at the moment, sysadmins may have granted it if it is not in grupr's scope currently
+			// If we are still here, we need to revoke this grant
+			o = o.setRevokeGrantTo(ModeRead, g)
 		}
 	}
 	return o, nil
@@ -283,11 +371,21 @@ func (o AggDBObjs) setConsumedByGranted(m Mode, pdID semantics.ProductDTAPID) Ag
 	return o
 }
 
-func (o AggDBObjs) pushToDoFutureGrants(yield func(FutureGrant) bool) bool {
+func (o AggDBObjs) pushToDoFutureGrants(yield func(FutureGrant) bool, mots map[ObjType]bool) bool {
+	// All future read privileges; write privileges are collected from a ProductDTAP method directly
 	if o.MatchAllSchemas {
-		if !o.hasFutureGrantTo(ModeRead, ObjTpSchema, PrivilegeComplete{Privilege: PrvUsage}) {
+		prvs := []PrivilegeComplete{}
+		for _, pc := range [2]PrivilegeComplete{
+			PrivilegeComplete{Privilege: PrvUsage},
+			PrivilegeComplete{Privilege: PrvMonitor},
+		} {
+			if !o.hasFutureGrantTo(ModeRead, ObjTpSchema, pc) {
+				prvs = append(prvs, pc)
+			}
+		}
+		if len(prvs) > 0 {
 			if !yield(FutureGrant{
-				Privileges:        []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage}},
+				Privileges:        prvs,
 				GrantedOn:         ObjTpSchema,
 				GrantedIn:         ObjTpDatabase,
 				Database:          o.readDBRole.Database,
@@ -300,11 +398,20 @@ func (o AggDBObjs) pushToDoFutureGrants(yield func(FutureGrant) bool) bool {
 		}
 	}
 	if o.MatchAllObjects {
-		for _, ot := range [2]ObjType{ObjTpTable, ObjTpView} {
+		for ot := range mots {
 			prvs := []PrivilegeComplete{}
-			for _, p := range [2]PrivilegeComplete{PrivilegeComplete{Privilege: PrvSelect}, PrivilegeComplete{Privilege: PrvReferences}} {
-				if !o.hasFutureGrantTo(ModeRead, ot, p) {
-					prvs = append(prvs, p)
+			candidatePrvs := []PrivilegeComplete{
+				PrivilegeComplete{Privilege: PrvSelect},
+				PrivilegeComplete{Privilege: PrvReferences},
+			}
+			if ot == ObjTpTable {
+				// Note that this privilege does not apply to hybrid tables, but we count on
+				// Snowflake not giving problems when folks create a hybrid table
+				candidatePrvs = append(candidatePrvs, PrivilegeComplete{Privilege: PrvSelectErrorTable})
+			}
+			for _, pc := range candidatePrvs {
+				if !o.hasFutureGrantTo(ModeRead, ot, pc) {
+					prvs = append(prvs, pc)
 				}
 			}
 			if len(prvs) > 0 {
@@ -323,7 +430,7 @@ func (o AggDBObjs) pushToDoFutureGrants(yield func(FutureGrant) bool) bool {
 		}
 	}
 	for schema, schemaObjs := range o.Schemas {
-		if !schemaObjs.pushToDoFutureGrants(yield, o.readDBRole, schema) {
+		if !schemaObjs.pushToDoFutureGrants(yield, o.readDBRole, schema, mots) {
 			return false
 		}
 	}
@@ -331,6 +438,18 @@ func (o AggDBObjs) pushToDoFutureGrants(yield func(FutureGrant) bool) bool {
 }
 
 func (o AggDBObjs) pushToDoGrants(yield func(Grant) bool) bool {
+	if !o.isMonitorGranted {
+		if !yield(Grant{
+			Privileges:        []PrivilegeComplete{PrivilegeComplete{Privilege: PrvMonitor}},
+			GrantedOn:         ObjTpDatabase,
+			Database:          o.readDBRole.Database,
+			GrantedTo:         ObjTpDatabaseRole,
+			GrantedToDatabase: o.readDBRole.Database,
+			GrantedToName:     o.readDBRole.Name,
+		}) {
+			return false
+		}
+	}
 	for schema, schemaObjs := range o.Schemas {
 		if !schemaObjs.pushToDoGrants(yield, o.readDBRole, schema) {
 			return false

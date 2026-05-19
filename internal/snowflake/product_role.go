@@ -29,7 +29,7 @@ func newProductRole(semCnf *semantics.Config, productID string, dtap string, mod
 	}
 }
 
-func newProductRoleFromString(semCnf *semantics.Config, role semantics.Ident) (ProductRole, error) {
+func newProductRoleFromIdent(semCnf *semantics.Config, role semantics.Ident) (ProductRole, error) {
 	r := ProductRole{ID: role}
 	roleStr := string(role)
 	if !strings.HasPrefix(roleStr, string(semCnf.Prefix)) {
@@ -60,8 +60,12 @@ func (r ProductRole) Create(ctx context.Context, cnf *Config, conn *sql.DB) erro
 	return nil
 }
 
-func (r ProductRole) hasUnmanagedPrivileges(ctx context.Context, cnf *Config, conn *sql.DB) (bool, error) {
-	for _, err := range QueryGrantsToRoleFilteredLimit(ctx, cnf, conn, r.ID, nil, cnf.ProductRolePrivileges[r.Mode], 1) {
+func (r ProductRole) hasPrivileges(ctx context.Context, cnf *Config, conn *sql.DB) (bool, error) {
+	// Because we have zombie product dtaps, we should have already revoked all managed grants,
+	// and made attempts to transfer ownership. So if there is any grant left, no matter what it
+	// is, we should not drop the role. Either it is an unmanaged grant that sysadmins added,
+	// or it is ownership on an object that grupr did not yet figure out who to transfer it to.
+	for _, err := range QueryGrantsToRoleFilteredLimit(ctx, cnf, conn, r.ID, nil, nil, 1) {
 		if err != nil {
 			return true, err
 		}
@@ -71,10 +75,10 @@ func (r ProductRole) hasUnmanagedPrivileges(ctx context.Context, cnf *Config, co
 }
 
 func (r ProductRole) Drop(ctx context.Context, cnf *Config, conn *sql.DB) error {
-	if has, err := r.hasUnmanagedPrivileges(ctx, cnf, conn); err != nil {
+	if has, err := r.hasPrivileges(ctx, cnf, conn); err != nil {
 		return err
 	} else if has {
-		log.Printf("role %v has privileges not managed by Grupr, skipping dropping\n", r)
+		log.Printf("role %v still has privileges, skipping dropping\n", r)
 		return nil
 	}
 	return runSQL(ctx, cnf, conn, `DROP ROLE IF EXISTS IDENTIFIER(?)`, r.String())

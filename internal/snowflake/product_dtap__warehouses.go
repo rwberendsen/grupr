@@ -15,9 +15,9 @@ In product_dtap__objects.go, we have ProductDTAP methods that deal with (privile
 func (pd *ProductDTAP) addWarehouse(m Mode, id semantics.Ident) {
 	switch m {
 	case ModeRead:
-		pd.ReadWarehouses[id] = [2]bool{}
+		pd.ReadWarehouses[id] = [3]bool{}
 	case ModeWrite:
-		pd.WriteWarehouses[id] = [2]bool{}
+		pd.WriteWarehouses[id] = [3]bool{}
 	}
 }
 
@@ -49,16 +49,7 @@ func (pd *ProductDTAP) setWarehouseGrants(ctx context.Context, cnf *Config, conn
 		if _, ok := productRoles[pr]; !ok && cnf.DryRun {
 			continue
 		}
-		for g, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, pr.ID, map[GrantTemplate]struct{}{
-			GrantTemplate{
-				PrivilegeComplete: PrivilegeComplete{Privilege: PrvUsage},
-				GrantedOn:         ObjTpWarehouse,
-			}: {},
-			GrantTemplate{
-				PrivilegeComplete: PrivilegeComplete{Privilege: PrvOperate},
-				GrantedOn:         ObjTpWarehouse,
-			}: {},
-		}, nil) {
+		for g, err := range QueryGrantsToRoleFiltered(ctx, cnf, conn, pr.ID, cnf.ComputePrivileges, nil) {
 			if err != nil {
 				return err
 			}
@@ -87,6 +78,9 @@ func (pd *ProductDTAP) getToDoWarehouseGrants() iter.Seq[Grant] {
 				prvs := []PrivilegeComplete{}
 				if !hasFlagPrivilegeWarehouse(flags, PrvUsage) {
 					prvs = append(prvs, PrivilegeComplete{Privilege: PrvUsage})
+				}
+				if !hasFlagPrivilegeWarehouse(flags, PrvMonitor) {
+					prvs = append(prvs, PrivilegeComplete{Privilege: PrvMonitor})
 				}
 				if !hasFlagPrivilegeWarehouse(flags, PrvOperate) {
 					prvs = append(prvs, PrivilegeComplete{Privilege: PrvOperate})

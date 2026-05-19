@@ -83,7 +83,7 @@ func newGrantToRole(privilege string, createObjType string, grantedOn string, na
 	grantedToDatabase semantics.Ident, grantedToName semantics.Ident, grantOption bool, grantedBy semantics.Ident) (Grant, error) {
 	g := Grant{
 		Privileges:                []PrivilegeComplete{ParsePrivilegeComplete(privilege, createObjType)},
-		GrantedOn:                 ParseObjType(grantedOn),
+		GrantedOn:                 ParseObjTypeFromRecord(grantedOn),
 		GrantedRoleIsGruprManaged: grantedRoleIsGruprManaged,
 		GrantedTo:                 grantedTo,
 		GrantedToDatabase:         grantedToDatabase,
@@ -91,19 +91,8 @@ func newGrantToRole(privilege string, createObjType string, grantedOn string, na
 		GrantOption:               grantOption,
 		GrantedBy:                 grantedBy,
 	}
-	fpr := map[ObjType]int{
-		ObjTpAccount:      1,
-		ObjTpDatabase:     1,
-		ObjTpDatabaseRole: 2,
-		ObjTpRole:         1,
-		ObjTpSchema:       2,
-		ObjTpTable:        3,
-		ObjTpView:         3,
-		ObjTpWarehouse:    1,
-	}
 	r := csv.NewReader(strings.NewReader(name)) // handles quoted fields as they appear in name
 	r.Comma = '.'
-	r.FieldsPerRecord = fpr[g.GrantedOn]
 	rec, err := r.Read()
 	if err != nil {
 		return g, err
@@ -122,12 +111,15 @@ func newGrantToRole(privilege string, createObjType string, grantedOn string, na
 	case ObjTpSchema:
 		g.Database = semantics.Ident(rec[0])
 		g.Schema = semantics.Ident(rec[1])
-	case ObjTpTable, ObjTpView:
+	case ObjTpTable, ObjTpView, ObjTpMaterializedView:
 		g.Database = semantics.Ident(rec[0])
 		g.Schema = semantics.Ident(rec[1])
 		g.Object = semantics.Ident(rec[2])
 	case ObjTpWarehouse:
 		g.Object = semantics.Ident(rec[0])
+	case ObjTpOther:
+		// We don't know anything about how to interpret 'name',
+		// We'll just leave blanks in g.Database, g.Schema, g.Object, etc.
 	default:
 		return g, fmt.Errorf("unsupported granted_on object type for grant")
 	}

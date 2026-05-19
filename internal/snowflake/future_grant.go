@@ -76,7 +76,7 @@ func newFutureGrant(privilege string, createObjType string, grantedOn string, na
 	grantedToDatabase semantics.Ident, grantedToName semantics.Ident, grantOption bool) (FutureGrant, error) {
 	g := FutureGrant{
 		Privileges:        []PrivilegeComplete{ParsePrivilegeComplete(privilege, createObjType)},
-		GrantedOn:         ParseObjType(grantedOn),
+		GrantedOn:         ParseObjTypeFromRecord(grantedOn),
 		GrantedTo:         grantedTo,
 		GrantedToDatabase: grantedToDatabase,
 		GrantedToName:     grantedToName,
@@ -101,17 +101,6 @@ func newFutureGrant(privilege string, createObjType string, grantedOn string, na
 		g.Schema = semantics.Ident(rec[1])
 	default:
 		return g, fmt.Errorf("parsing name in future grant failed")
-	}
-	switch g.GrantedOn {
-	case ObjTpSchema:
-		g.Database = semantics.Ident(rec[0])
-		g.Schema = semantics.Ident(rec[1])
-	case ObjTpTable, ObjTpView:
-		g.Database = semantics.Ident(rec[0])
-		g.Schema = semantics.Ident(rec[1])
-		g.Object = semantics.Ident(rec[2])
-	default:
-		return g, fmt.Errorf("unsupported granted_on object type for future grant")
 	}
 	return g, nil
 }
