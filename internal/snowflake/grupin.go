@@ -278,12 +278,14 @@ func (g *Grupin) setDBRoleGrants(ctx context.Context, semCnf *semantics.Config, 
 			// - Read database roles of interfaces that pd consumes
 			if grantedDBRole.ProductID == pd.ProductID {
 				if grantedDBRole.InterfaceID != "" {
+					// A product is not allowed to consume its own interface
 					pd.revokeGrantFromProductRole(grant)
 					continue
 				}
 				// grantedDBRole.InterfaceID == ""
 				if dbObjs, ok := pd.Interface.aggAccountObjects.DBs[grant.Database]; ok {
 					dbObjs.isReadDBRoleGrantedToProductRole[pr.Mode.getIdx()] = true
+					pd.Interface.aggAccountObjects.DBs[grant.Database] = dbObjs // value semantics
 				} else if pd.Interface.ObjectMatchers.DisjointFromDB(grant.Database) {
 					pd.revokeGrantFromProductRole(grant)
 				}
