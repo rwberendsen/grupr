@@ -32,7 +32,7 @@ func ParsePrivilege(p string) Privilege {
 		"OWNERSHIP":            PrvOwnership,
 		"REFERENCES":           PrvReferences,
 		"SELECT":               PrvSelect,
-		"SELECT ERROR TABLE":   PrvSelect,
+		"SELECT ERROR TABLE":   PrvSelectErrorTable,
 		"TRUNCATE":             PrvTruncate,
 		"UPDATE":               PrvUpdate,
 		"USAGE":                PrvUsage,

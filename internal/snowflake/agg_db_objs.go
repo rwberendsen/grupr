@@ -313,6 +313,7 @@ func (o AggDBObjs) setGrants(ctx context.Context, semCnf *semantics.Config, cnf 
 				switch g.Privileges[0].Privilege {
 				case PrvMonitor:
 					o.isMonitorGranted = true
+					continue
 				case PrvUsage:
 					// PrvUsage comes out of the box, we do not grant it, so no need to mark it as present
 					continue
