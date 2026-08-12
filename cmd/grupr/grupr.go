@@ -14,6 +14,8 @@ import (
 
 func main() {
 	// oldFlag := flag.String("o", "", "old YAML, if any") // TODO: grupinDiff needs work
+	actionFlag := flag.String("action", "ma", "action to perform")
+	pIDFlag := flag.String("pid", "", "product ID to perform action on")
 	flag.Parse()
 	if len(flag.Args()) < 1 || len(flag.Args()) > 2 {
 		log.Fatalf("usage: grupr path_to_yaml [path_to_snowflake_yaml]")
@@ -101,15 +103,27 @@ func main() {
 	log.Println("Created snowflake.Grupin object")
 
 	// Use it now to manage access; this will also query Snowflake for which objects exist
-	if err := snowflakeNewGrupin.ManageAccess(ctx, semCnf, snowCnf, conn); err != nil {
-		log.Fatalf("ManageAccess: %v", err)
-	}
-	log.Println("Managed access")
+	switch action := *actionFlag; action {
+	case "ma":
+		// Manage access, the default action
+		if err := snowflakeNewGrupin.ManageAccess(ctx, semCnf, snowCnf, conn); err != nil {
+			log.Fatalf("ManageAccess: %v", err)
+		}
+		log.Println("Managed access")
 
-	// And, after managing access, which may have resulted in numerous refreshes of which objects exist,
-	// let's store the latest object counts
-	if err := snowflake.StoreObjCountsRows(ctx, snowCnf, conn, snowflakeNewGrupin.GetObjCountsRows()); err != nil {
-		log.Fatalf("StoreObjectCounts: %v", err)
+		// And, after managing access, which may have resulted in numerous refreshes of which objects exist,
+		// let's store the latest object counts
+		if err := snowflake.StoreObjCountsRows(ctx, snowCnf, conn, snowflakeNewGrupin.GetObjCountsRows()); err != nil {
+			log.Fatalf("StoreObjectCounts: %v", err)
+		}
+	case "mae":
+		// Manage access exclusively, require a product id in this case
+		if !snowflakeNewGrupin.hasProductID(*pIDFlag) {
+			log.Fatalf("mae action requires an existing product id")
+		}
+		log.Fatalf("Managing access exclusively is not yet immplemented")
+	default:
+		log.Fatalf("invalid action")
 	}
 
 	// TODO: also think about how to guard against an error scenario in which someone triggers an old grupr run in CI/CD, e.g., we could store a UUID, or even a git hash
