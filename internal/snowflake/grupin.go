@@ -108,7 +108,7 @@ func (g *Grupin) setWarehouses(semCnf *semantics.Config, warehouses []WarehouseD
 			if _, ok := seenPIDs[pID]; ok {
 				return fmt.Errorf("warehouse '%v', shared_between: duplicate product id '%v'", id, pID)
 			}
-			if !g.hasProductID(pID) {
+			if !g.HasProductID(pID) {
 				return fmt.Errorf("warehouse '%v', shared_between: unknown product id '%v'", id, pID)
 			}
 			seenPIDs[pID] = struct{}{}
@@ -125,7 +125,7 @@ func (g *Grupin) setWarehouses(semCnf *semantics.Config, warehouses []WarehouseD
 	return nil
 }
 
-func (g *Grupin) hasProductID(pID string) bool {
+func (g *Grupin) HasProductID(pID string) bool {
 	for pdID := range g.ProductDTAPs {
 		if pdID.ProductID == pID {
 			return true

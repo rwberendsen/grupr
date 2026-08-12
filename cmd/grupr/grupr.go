@@ -118,7 +118,7 @@ func main() {
 		}
 	case "mae":
 		// Manage access exclusively, require a product id in this case
-		if !snowflakeNewGrupin.hasProductID(*pIDFlag) {
+		if !snowflakeNewGrupin.HasProductID(*pIDFlag) {
 			log.Fatalf("mae action requires an existing product id")
 		}
 		log.Fatalf("Managing access exclusively is not yet immplemented")
