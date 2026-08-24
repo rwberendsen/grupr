@@ -256,6 +256,18 @@ func (g *Grupin) ManageAccess(ctx context.Context, semCnf *semantics.Config, cnf
 	return nil
 }
 
+func (g *Grupin) ManageAccessExlusively(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, 
+	pID string) error {
+	if !g.HasProductID(pID) {
+		return fmt.Errorf("unknown product id")
+	}
+	for pd := range g.getProductDTAPs(pID) {
+		if err := pd.manageAccessExclusively(ctx, semCnf, cnf, conn); err != nil {
+			return err
+		}
+	}
+}
+
 func (g *Grupin) setDBRoleGrants(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, pd *ProductDTAP) error {
 	// Loop over all granted grupr-managed database roles, and:
 	// - store which ones we already have been granted.

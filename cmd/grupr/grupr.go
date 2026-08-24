@@ -103,25 +103,28 @@ func main() {
 	log.Println("Created snowflake.Grupin object")
 
 	// Use it now to manage access; this will also query Snowflake for which objects exist
+	if err := snowflakeNewGrupin.ManageAccess(ctx, semCnf, snowCnf, conn); err != nil {
+		log.Fatalf("ManageAccess: %v", err)
+	}
+	log.Println("Managed access")
+
+	// And, after managing access, which may have resulted in numerous refreshes of which objects exist,
+	// let's store the latest object counts
+	if err := snowflake.StoreObjCountsRows(ctx, snowCnf, conn, snowflakeNewGrupin.GetObjCountsRows()); err != nil {
+		log.Fatalf("StoreObjectCounts: %v", err)
+	}
+
+	// Let's check for additional actions for specific products or interfaces
 	switch action := *actionFlag; action {
 	case "ma":
 		// Manage access, the default action
-		if err := snowflakeNewGrupin.ManageAccess(ctx, semCnf, snowCnf, conn); err != nil {
-			log.Fatalf("ManageAccess: %v", err)
-		}
-		log.Println("Managed access")
-
-		// And, after managing access, which may have resulted in numerous refreshes of which objects exist,
-		// let's store the latest object counts
-		if err := snowflake.StoreObjCountsRows(ctx, snowCnf, conn, snowflakeNewGrupin.GetObjCountsRows()); err != nil {
-			log.Fatalf("StoreObjectCounts: %v", err)
-		}
+		// Because for now we already do this for all products anyway, we do nothing here
 	case "mae":
 		// Manage access exclusively, require a product id in this case
-		if !snowflakeNewGrupin.HasProductID(*pIDFlag) {
-			log.Fatalf("mae action requires an existing product id")
+		if err := snowflakeNewGrupin.ManageAccessExclusively(ctx, semCnf, snowCnf, conn, *pIDFlag); err != nil {
+			log.Fatalf("ManageAccess: %v", err)
 		}
-		log.Fatalf("Managing access exclusively is not yet immplemented")
+		log.Printf("Managed access exclusively for product '%s'", *pIDFlag)
 	default:
 		log.Fatalf("invalid action")
 	}
