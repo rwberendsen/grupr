@@ -34,17 +34,8 @@ func (g FutureGrant) buildSQLGrant(revoke bool) string {
 		preposition = `FROM`
 	}
 
-	// TODO: use ObjType.FQN, just like in Grant.buildSQLGrant
 	var granteeClause string
-	switch g.GrantedTo {
-	case ObjTpRole:
-		granteeClause = fmt.Sprintf(`%s ROLE IDENTIFIER($$%s$$)`, preposition, g.GrantedToName)
-	case ObjTpDatabaseRole:
-		granteeClause = fmt.Sprintf(`%s DATABASE ROLE IDENTIFIER($$%s.%s$$)`, preposition, g.GrantedToDatabase, g.GrantedToName)
-	default:
-		panic("Not implemented")
-	}
-
+	granteeClause := fmt.Sprintf(`%s %s IDENTIFIER($$%s$$)`, preposition, g.GrantedTo, g.GrantedTo.FQN(g.GrantedToDatabase, semantics.Ident{}, g.GrantedToName))
 	privilegeClause := strings.Join(util.FmtSliceElements[PrivilegeComplete](g.Privileges...), `, `)
 
 	onClause := `ON FUTURE `
@@ -56,17 +47,8 @@ func (g FutureGrant) buildSQLGrant(revoke bool) string {
 			panic("Not implemented")
 		}
 		inClause += fmt.Sprintf(`%v %s`, g.GrantedIn, g.Database)
-	case ObjTpTable, ObjTpView:
-		switch g.GrantedIn {
-		case ObjTpDatabase:
-			inClause += fmt.Sprintf(`%v IDENTIFIER($$%s$$)`, g.GrantedIn, g.Database)
-		case ObjTpSchema:
-			inClause += fmt.Sprintf(`%v IDENTIFIER($$%s.%s$$)`, g.GrantedIn, g.Database, g.Schema)
-		default:
-			panic("Not implemented")
-		}
-	default:
-		panic("Not implemented")
+	case ObjTpHybridTable, ObjTpMaterializedView, ObjTpTable, ObjTpView:
+		inClause += fmt.Sprintf(`%v IDENTIFIER($$%s$$)`, g.GrantedIn, g.GrantedIn.FQN(g.Database, g.Schema, semantics.Ident{}))
 	}
 
 	onClause += fmt.Sprintf(`%vS`, g.GrantedOn)
