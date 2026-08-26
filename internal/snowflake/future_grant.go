@@ -34,6 +34,7 @@ func (g FutureGrant) buildSQLGrant(revoke bool) string {
 		preposition = `FROM`
 	}
 
+	// TODO: use ObjType.FQN, just like in Grant.buildSQLGrant
 	var granteeClause string
 	switch g.GrantedTo {
 	case ObjTpRole:

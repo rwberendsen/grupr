@@ -36,24 +36,12 @@ func (g Grant) buildSQLGrant(revoke bool) string {
 		verb = `REVOKE`
 		preposition = `FROM`
 	}
-	var granteeClause string
-	switch g.GrantedTo {
-	case ObjTpRole:
-		granteeClause = fmt.Sprintf(`ROLE IDENTIFIER($$%s$$)`, g.GrantedToName)
-	case ObjTpDatabaseRole:
-		granteeClause = fmt.Sprintf(`DATABASE ROLE IDENTIFIER($$%s.%s$$)`, g.GrantedToDatabase, g.GrantedToName)
-	case ObjTpUser:
-		granteeClause = fmt.Sprintf(`USER IDENTIFIER($$%s$$)`, g.GrantedToName)
-	default:
-		panic("Not implemented")
-	}
+	granteeClause := fmt.Sprintf(`%s IDENTIFIER($$%s$$)`, g.GrantedTo, g.GrantedTo.FQN(g.GrantedToDatabase, semantics.Ident{}, g.GrantedToName))
 
 	// GRANT ROLE ... / GRANT DATABASE ROLE ...
 	switch g.GrantedOn {
-	case ObjTpRole:
-		return fmt.Sprintf(`%s ROLE IDENTIFIER($$%s$$) %s %s`, verb, g.GrantedRole, preposition, granteeClause)
-	case ObjTpDatabaseRole:
-		return fmt.Sprintf(`%s DATABASE ROLE IDENTIFIER($$%s.%s$$) %s %s`, verb, g.Database, g.GrantedRole, preposition, granteeClause)
+	case ObjTpRole, ObjTpDatabaseRole:
+		return fmt.Sprintf(`%s %s IDENTIFIER($$%s$$) %s %s`, verb, g.GrantedOn, g.GrantedOn.FQN(g.Database, semantics.Ident{}, g.GrantedRole), preposition, granteeClause)
 	}
 
 	// GRANT <privileges> ... TO ROLE
@@ -63,19 +51,7 @@ func (g Grant) buildSQLGrant(revoke bool) string {
 		modifierClause = ` COPY CURRENT GRANTS`
 	}
 
-	var objectClause string
-	switch g.GrantedOn {
-	case ObjTpDatabase:
-		objectClause = fmt.Sprintf(`%v IDENTIFIER($$%s$$)`, g.GrantedOn, g.Database)
-	case ObjTpSchema:
-		objectClause = fmt.Sprintf(`%v IDENTIFIER($$%s.%s$$)`, g.GrantedOn, g.Database, g.Schema)
-	case ObjTpTable, ObjTpView:
-		objectClause = fmt.Sprintf(`%v IDENTIFIER($$%s.%s.%s$$)`, g.GrantedOn, g.Database, g.Schema, g.Object)
-	case ObjTpWarehouse:
-		objectClause = fmt.Sprintf(`%v IDENTIFIER($$%s$$)`, g.GrantedOn, g.Object)
-	default:
-		panic("Not implemented")
-	}
+	objectClause := fmt.Sprintf(`%v IDENTIFIER($$%s$$)`, g.GrantedOn, g.GrantedOn.FQN(g.Database, g.Schema, g.Object))
 	return fmt.Sprintf(`%s %s ON %s %s %s%s`, verb, privilegeClause, objectClause, preposition, granteeClause, modifierClause)
 }
 
@@ -137,6 +113,38 @@ func newGrantOfRole(role semantics.Ident, granteeName semantics.Ident, grantedBy
 		GrantedBy:                 grantedBy,
 	}
 }
+
+func newExternalGrantOnObject(grantedTo string, granteeName string, grantedOn ObjType, db semantics.Ident, schema semantics.Ident, obj semantics.Ident) (Grant, error) {
+	g := Grant{
+		Privileges:                []PrivilegeComplete{PrivilegeComplete{Privilege: PrvAll}},
+		Database:                  db,
+		Schema:                    schema,
+		Object:                    obj,
+		GrantedOn:                 grantedOn,
+		GrantedRoleIsGruprManaged: grantedRoleIsGruprManaged,
+		GrantedTo:                 ParseObjTypeFromRecord(grantedTo),
+	}
+	r := csv.NewReader(strings.NewReader(granteeName)) // handles quoted fields as they appear in name
+	r.Comma = '.'
+	rec, err := r.Read()
+	if err != nil {
+		return g, err
+	}
+	if _, err = r.Read(); err != io.EOF {
+		return g, err
+	} // more than one record
+	switch g.GrantedTo {
+	case ObjTpUser, ObjTpRole:
+		g.GrantedToName = semantics.Ident(rec[0])
+	case ObjTpDatabaseRole:
+		g.Database = semantics.Ident(rec[0])
+		g.GrantedToName = semantics.Ident(rec[1])
+	default:
+		return g, fmt.Errorf("unsupported granted_to object type for grant")
+	}
+	return g, nil
+}
+
 
 func QueryGrantsToRoleFiltered(ctx context.Context, cnf *Config, conn *sql.DB, role semantics.Ident,
 	match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}) iter.Seq2[Grant, error] {
@@ -288,6 +296,51 @@ WHERE "granted_to" = '%v'`, role, objTp))
 				return
 			}
 			if !yield(newGrantOfRole(role, granteeName, grantedBy), nil) {
+				return
+			}
+		}
+		if err = rows.Err(); err != nil {
+			yield(Grant{}, err)
+			return
+		}
+	}
+}
+
+func queryExternalGrantsOnObject(ctx context.Context, semCnf *semantics.Config, conn *sql.DB, objTp ObjType,
+	db semantics.Ident, schema semantics.Ident, obj semantics.Ident) iter.Seq2[Grant, error] {
+	/*
+	On a given object, query if there are any users (which are never managed by urupr) or (database) roles
+	that do not start with semCnf.Prefix (and are thus assumed not to be managed by grupr either); that
+	have privileges on the object. Return a single Grant object for each of them, with the ALL
+	privilege. This Grant object can later be used to revoke all privileges on the object from this
+	user or role.
+	*/
+	return func(yield func(Grant, error) bool) {
+		rows, err := conn.QueryContext(ctx, fmt.Sprintf(`SHOW GRANTS ON IDENTIFIER($$%s$$) ->>
+SELECT
+    "granted_to" AS granted_to
+  , "grantee_name" AS grantee_name
+FROM $1
+WHERE
+     granted_to = 'USER'
+  OR STARTSWITH(grantee_name, '%s')
+GROUP BY
+    granted_to
+  , grantee_name`, objTp.FQN(db, schema, obj), semCnf.Prefix))
+  		if err != nil {
+			yield(Grant{}, err)
+			return
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var grantedTo string
+			var granteeName string
+			if err = rows.Scan(&grantedTo, &granteeName); err != nil {
+				yield(Grant{}, err)
+				return
+			}
+			grantedToObjTp = ParseObjTypeFromRecord(grantedTo)
+			if !yield(newExternalGrantOnObject(grantedTo, granteeName, objTp, db, schema, obj), nil) {
 				return
 			}
 		}

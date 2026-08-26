@@ -72,3 +72,47 @@ func ParseObjTypeFromRecord(s string) ObjType {
 	// SHOW OBJECTS and SHOW GRANTS
 	return ParseObjType(strings.ReplaceAll(s, "_", " "))
 }
+
+func (ot ObjType) FQN(db semantics.Ident, schema semantics.Ident, obj semantics.Ident) fqn string {
+	switch objTp {
+	case ObjTpDatabase:
+		if str(db) == "" {
+			panic("db: empty string")
+		}
+		fqn = fmt.Sprintf("%s", db)
+	case ObjTpDatabaseRole:
+		if str(db) == "" {
+			panic("db: empty string")
+		}
+		if str(obj) == "" {
+			panic("obj: empty string")
+		}
+		fqn = fmt.Sprintf("%s.%s", db, obj)
+	case ObjTpRole, ObjTpUser, ObjTpWarehouse:
+		if str(obj) == "" {
+			panic("obj: empty string")
+		}
+		fqn = fmt.Sprintf("%s", obj)
+	case ObjTpSchema:
+		if str(db) == "" {
+			panic("db: empty string")
+		}
+		if str(schema) == "" {
+			panic("schema: empty string")
+		}
+		fqn = fmt.Sprintf("%s.%s", db, schema)
+	case ObjTpHybridTable, ObjTpMaterializedView, ObjTpTable, ObjTpView:
+		if str(db) == "" {
+			panic("db: empty string")
+		}
+		if str(schema) == "" {
+			panic("schema: empty string")
+		}
+		if str(obj) == "" {
+			panic("obj: empty string")
+		}
+		fqn = fmt.Sprintf("%s.%s.%s", db, schema, obj)
+	default:
+		panic(fmt.Sprintf("'%v': unsupported ObjType", objTp))
+	}
+}
