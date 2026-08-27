@@ -352,11 +352,11 @@ GROUP BY
 }
 
 func DoGrants(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[Grant]) error {
-	return doGrants(ctx, cnf, conn, grants, false)
+	return doGrants(ctx, cnf, conn, util.SeqAddNillError(grants), false)
 }
 
 func DoGrantsSkipErrors(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[Grant]) error {
-	return doGrantsSkipErrors(ctx, cnf, conn, grants, false)
+	return doGrantsSkipErrors(ctx, cnf, conn, util.SeqAddNilError(grants), false)
 }
 
 func DoGrantsIndividually(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[Grant]) error {
@@ -369,18 +369,25 @@ func DoGrantsIndividually(ctx context.Context, cnf *Config, conn *sql.DB, grants
 }
 
 func DoRevokes(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[Grant]) error {
-	return doGrants(ctx, cnf, conn, grants, true)
+	return doGrants(ctx, cnf, conn, util.SeqAddNilError(grants), true)
 }
 
 func DoRevokesSkipErrors(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[Grant]) error {
-	return doGrantsSkipErrors(ctx, cnf, conn, grants, true)
+	return doGrantsSkipErrors(ctx, cnf, conn, util.SeqAddNilError(grants), true)
 }
 
-func doGrants(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[Grant], revoke bool) error {
+func DoRevokesExitOnInputErrors(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq2[Grant, error]) error {
+	return doGrants(ctx, cnf, conn, util.SeqAddNilError(grants), true)
+}
+
+func doGrants(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq2[Grant, error], revoke bool) error {
 	// Runs grant statements in batches
 	buf := make([]string, cnf.StmtBatchSize)
 	i := 0
-	for g := range grants {
+	for g, inputErr := range grants {
+		if inputErr != nil {
+			return inputErr
+		}
 		if i == cnf.StmtBatchSize {
 			if err := runMultipleSQL(ctx, cnf, conn, strings.Join(buf, ";"), i); err != nil {
 				return err
@@ -398,8 +405,11 @@ func doGrants(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[Gr
 	return nil
 }
 
-func doGrantsSkipErrors(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[Grant], revoke bool) error {
-	for g := range grants {
+func doGrantsSkipErrors(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq2[Grant, error], revoke bool) error {
+	for g, inputErr := range grants {
+		if inputErr != nil {
+			return inputErr
+		}
 		if err := runSQL(ctx, cnf, conn, g.buildSQLGrant(revoke)); err != nil && err != ErrObjectNotExistOrAuthorized {
 			return err
 		}
