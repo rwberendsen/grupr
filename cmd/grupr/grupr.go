@@ -12,10 +12,20 @@ import (
 	"github.com/rwberendsen/grupr/internal/snowflake"
 )
 
-func main() {
-	// oldFlag := flag.String("o", "", "old YAML, if any") // TODO: grupinDiff needs work
+type stringSlice
+
+var dtapsFlag stringMap
+var interfacesFlag stringMap
+
+func init() {
 	actionFlag := flag.String("action", "ma", "action to perform")
 	pIDFlag := flag.String("pid", "", "product ID to perform action on")
+	flag.Var(interfacesFlag, "interfaces", "perform action on these interfaces only")
+	flag.Var(dtapsFlag, "dtaps", "perform action on these dtaps only")
+}
+
+func main() {
+	// oldFlag := flag.String("o", "", "old YAML, if any") // TODO: grupinDiff needs work
 	flag.Parse()
 	if len(flag.Args()) < 1 || len(flag.Args()) > 2 {
 		log.Fatalf("usage: grupr path_to_yaml [path_to_snowflake_yaml]")
@@ -52,6 +62,9 @@ func main() {
 		log.Fatalf("get new grupin: %v", err)
 	}
 	log.Println("Deserialized YAML")
+
+	// Validate command line flags against semantic grupin
+	newGrupin.ValidateAction(*pIDFlag, dtapsFlag, interfacesFlag, j
 
 	/* TODO: consider implementing GrupinDiff
 	if *oldFlag != "" {
