@@ -257,13 +257,24 @@ func (g *Grupin) ManageAccess(ctx context.Context, semCnf *semantics.Config, cnf
 }
 
 func (g *Grupin) ManageAccessExlusively(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, 
-	pID string) error {
-	if !g.HasProductID(pID) {
-		return fmt.Errorf("unknown product id")
-	}
+	pID string, dtaps map[string]bool, interfaces map[string]bool) error {
 	for pd := range g.getProductDTAPs(pID) {
-		if err := pd.manageAccessExclusively(ctx, semCnf, cnf, conn); err != nil {
-			return err
+		// No dtaps specified means: just do all DTAPs; otherwise, pd.DTAP has to be in the specified sub-set
+		if len(dtaps) == 0 || dtaps[pd.DTAP] {
+			// No interfaces specified means: do the produdct-level one; Otherwise, do each interface if it was specified
+			if len(interfaces) == 0 {
+				if err := pd.Interface.manageAccessExclusively(ctx, semCnf, cnf, conn); err != nil {
+					return err
+				}
+			} else {
+				for iid, i := range pd.Interfaces {
+					if interfaces[iid] {
+						if err := i.manageAccessExclusively(ctx, semCnf, cnf, conn); err != nil {
+							return err
+						}
+					}
+				}
+			}
 		}
 	}
 }

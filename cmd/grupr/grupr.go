@@ -64,7 +64,15 @@ func main() {
 	log.Println("Deserialized YAML")
 
 	// Validate command line flags against semantic grupin
-	newGrupin.ValidateAction(*pIDFlag, dtapsFlag, interfacesFlag, j
+	isDestructiveAction := map[string]bool{
+		"mae": true,
+	}
+	isProductSpecificAction := map[string]bool {
+		"mae": true,
+	}
+	if isProductSpecificAction[*actionFlag] {
+		newGrupin.ValidateAction(*pIDFlag, dtapsFlag, interfacesFlag, isDestructiveAction[*actionFlag])
+	}
 
 	/* TODO: consider implementing GrupinDiff
 	if *oldFlag != "" {
@@ -134,7 +142,7 @@ func main() {
 		// Because for now we already do this for all products anyway, we do nothing here
 	case "mae":
 		// Manage access exclusively, require a product id in this case
-		if err := snowflakeNewGrupin.ManageAccessExclusively(ctx, semCnf, snowCnf, conn, *pIDFlag); err != nil {
+		if err := snowflakeNewGrupin.ManageAccessExclusively(ctx, semCnf, snowCnf, conn, *pIDFlag, dtapsFlag, interfacesFlag); err != nil {
 			log.Fatalf("ManageAccess: %v", err)
 		}
 		log.Printf("Managed access exclusively for product '%s'", *pIDFlag)

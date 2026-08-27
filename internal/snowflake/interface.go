@@ -215,3 +215,8 @@ func (i *Interface) pushObjectCounts(yield func(ObjCountsRow) bool, pdID semanti
 	}
 	return true
 }
+
+func (i *Interface) manageAccessExclusively(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB) error {
+	i.aggAccountObjects {
+	}
+}
