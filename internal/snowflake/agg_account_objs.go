@@ -39,5 +39,9 @@ func (o AggAccountObjs) GetObject(db semantics.Ident, schema semantics.Ident, ob
 }
 
 func (o AggAccountObjs) getExternalGrants(ctx context.Context, cnf *semantics.Config, conn *sql.DB) iter.Seq2[Grant, error] {
-	// WIP...
+	return func (yield func(Grant, error) bool) {
+		for db, dbObjs := range o.DBs {
+			// WIP
+		}
+	}
 }

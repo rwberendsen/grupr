@@ -11,8 +11,8 @@ import (
 )
 
 func runSQL(ctx context.Context, cnf *Config, conn *sql.DB, sql string, params ...any) error {
+	printSQL(sql, params...)
 	if cnf.DryRun {
-		printSQL(sql, params...)
 		return nil
 	}
 	if _, err := conn.ExecContext(ctx, sql, params...); err != nil {
@@ -25,8 +25,8 @@ func runSQL(ctx context.Context, cnf *Config, conn *sql.DB, sql string, params .
 }
 
 func runMultipleSQL(ctx context.Context, cnf *Config, conn *sql.DB, sql string, n int) error {
+	printMultipleSQL(sql)
 	if cnf.DryRun {
-		printMultipleSQL(sql)
 		return nil
 	}
 	ctx, _ = gosnowflake.WithMultiStatement(ctx, n)

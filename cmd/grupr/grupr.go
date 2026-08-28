@@ -12,16 +12,14 @@ import (
 	"github.com/rwberendsen/grupr/internal/snowflake"
 )
 
-type stringSlice
-
-var dtapsFlag stringMap
-var interfacesFlag stringMap
+var dtaps stringMap
+var interfaces stringMap
 
 func init() {
 	actionFlag := flag.String("action", "ma", "action to perform")
-	pIDFlag := flag.String("pid", "", "product ID to perform action on")
-	flag.Var(interfacesFlag, "interfaces", "perform action on these interfaces only")
-	flag.Var(dtapsFlag, "dtaps", "perform action on these dtaps only")
+	pIDFlag := flag.String("product", "", "product ID to perform action on")
+	flag.Var(interfaces, "interfaces", "perform action on these interfaces only")
+	flag.Var(dtaps, "dtaps", "perform action on these dtaps only")
 }
 
 func main() {
@@ -35,6 +33,30 @@ func main() {
 	if len(flag.Args()) == 2 {
 		snowflakeYamlPath = flag.Arg(1)
 	}
+	action := *actionFlag
+	product := *pIDFlag
+
+	// Validate internal consistency between supplied flags
+	isAction := map[string]bool{
+		"ma": true,
+		"mae": true,
+	}
+	isProductSpecificAction := map[string]bool{
+		"mae": true,
+	}
+	isDestructiveAction := map[string]bool{
+		"mae": true,
+	}
+	if !isAction[action] {
+		log.Fatalf("unknown action")
+	}
+	if (product == "") == isProductSpecificAction[action] {
+		log.Fatalf("specify a product if and only if you are doing a product specific action")
+	}
+	if (product == "") && (len(dtaps) > 0 || len(interfaces) > 0 {
+		log.Fatalf("dtaps or interfaces specified, but no product")
+	}
+
 
 	// TODO: while deserializing into Grupin, also gunzip, and
 	// calculate hash based on gzipped bytes. (using something like, io.TeeReader)
@@ -64,14 +86,8 @@ func main() {
 	log.Println("Deserialized YAML")
 
 	// Validate command line flags against semantic grupin
-	isDestructiveAction := map[string]bool{
-		"mae": true,
-	}
-	isProductSpecificAction := map[string]bool {
-		"mae": true,
-	}
-	if isProductSpecificAction[*actionFlag] {
-		newGrupin.ValidateAction(*pIDFlag, dtapsFlag, interfacesFlag, isDestructiveAction[*actionFlag])
+	if isProductSpecificAction[action] {
+		newGrupin.ValidateAction(product, dtaps, interfaces, isDestructiveAction[action])
 	}
 
 	/* TODO: consider implementing GrupinDiff
@@ -136,18 +152,13 @@ func main() {
 	}
 
 	// Let's check for additional actions for specific products or interfaces
-	switch action := *actionFlag; action {
-	case "ma":
-		// Manage access, the default action
-		// Because for now we already do this for all products anyway, we do nothing here
+	switch action {
 	case "mae":
 		// Manage access exclusively, require a product id in this case
-		if err := snowflakeNewGrupin.ManageAccessExclusively(ctx, semCnf, snowCnf, conn, *pIDFlag, dtapsFlag, interfacesFlag); err != nil {
+		if err := snowflakeNewGrupin.ManageAccessExclusively(ctx, semCnf, snowCnf, conn, product, dtaps, interfaces); err != nil {
 			log.Fatalf("ManageAccess: %v", err)
 		}
-		log.Printf("Managed access exclusively for product '%s'", *pIDFlag)
-	default:
-		log.Fatalf("invalid action")
+		log.Printf("Managed access exclusively for product '%s'", product)
 	}
 
 	// TODO: also think about how to guard against an error scenario in which someone triggers an old grupr run in CI/CD, e.g., we could store a UUID, or even a git hash
