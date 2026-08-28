@@ -7,7 +7,7 @@ import (
 
 type stringMap map[string]bool
 
-func (s stringMap) String() {
+func (s stringMap) String() string {
 	return fmt.Sprint(s)
 }
 

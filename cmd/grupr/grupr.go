@@ -12,12 +12,12 @@ import (
 	"github.com/rwberendsen/grupr/internal/snowflake"
 )
 
+var actionFlag = flag.String("action", "ma", "action to perform")
+var productFlag = flag.String("product", "", "product ID to perform action on")
 var dtaps stringMap
 var interfaces stringMap
 
 func init() {
-	actionFlag := flag.String("action", "ma", "action to perform")
-	pIDFlag := flag.String("product", "", "product ID to perform action on")
 	flag.Var(interfaces, "interfaces", "perform action on these interfaces only")
 	flag.Var(dtaps, "dtaps", "perform action on these dtaps only")
 }
@@ -34,7 +34,7 @@ func main() {
 		snowflakeYamlPath = flag.Arg(1)
 	}
 	action := *actionFlag
-	product := *pIDFlag
+	product := *productFlag
 
 	// Validate internal consistency between supplied flags
 	isAction := map[string]bool{

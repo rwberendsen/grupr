@@ -256,7 +256,7 @@ func (g *Grupin) ManageAccess(ctx context.Context, semCnf *semantics.Config, cnf
 	return nil
 }
 
-func (g *Grupin) ManageAccessExlusively(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB,
+func (g *Grupin) ManageAccessExclusively(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB,
 	pID string, dtaps map[string]bool, interfaces map[string]bool) error {
 	for pd := range g.getProductDTAPs(pID) {
 		// No dtaps specified means: just do all DTAPs; otherwise, pd.DTAP has to be in the specified sub-set
