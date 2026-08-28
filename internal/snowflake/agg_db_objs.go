@@ -476,3 +476,16 @@ func (o AggDBObjs) pushToDoRevokes(yield func(Grant) bool) bool {
 	}
 	return true
 }
+
+func (o AggDBObjs) pushExternalGrants(ctx context.Context, semCnf *semantics.Config, conn *sql.DB, db semantics.Ident, yield func(Grant, error) bool) {
+	if o.MatchAllObjects {
+		for g, err := range QueryExternalGrantsOnDB(ctx, semCnf, conn, db) {
+			if !yield(g, err) {
+				return
+			}
+		}
+	}
+	for schema, schemaObjs := range o.Schemas {
+		schemaObjs.pushExternalGrants(ctx, semCnf, conn, db, schema, yield)
+	}
+}

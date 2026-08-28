@@ -3,7 +3,6 @@ package snowflake
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"iter"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
@@ -38,10 +37,10 @@ func (o AggAccountObjs) GetObject(db semantics.Ident, schema semantics.Ident, ob
 	return
 }
 
-func (o AggAccountObjs) getExternalGrants(ctx context.Context, cnf *semantics.Config, conn *sql.DB) iter.Seq2[Grant, error] {
-	return func (yield func(Grant, error) bool) {
+func (o AggAccountObjs) getExternalGrants(ctx context.Context, semCnf *semantics.Config, conn *sql.DB) iter.Seq2[Grant, error] {
+	return func(yield func(Grant, error) bool) {
 		for db, dbObjs := range o.DBs {
-			// WIP
+			dbObjs.pushExternalGrants(ctx, semCnf, conn, db, yield)
 		}
 	}
 }

@@ -3,7 +3,6 @@ package semantics
 import (
 	"fmt"
 	"os"
-	"slices"
 
 	"github.com/rwberendsen/grupr/internal/syntax"
 )
@@ -144,7 +143,7 @@ func (g Grupin) ValidateAction(product string, dtaps map[string]bool, interfaces
 		}
 	}
 	for i := range interfaces {
-		if _, ok: g.Products[product].Interfaces[i]; !ok {
+		if _, ok := g.Products[product].Interfaces[i]; !ok {
 			return fmt.Errorf("'%s': unknown interface", i)
 		}
 	}
@@ -152,9 +151,6 @@ func (g Grupin) ValidateAction(product string, dtaps map[string]bool, interfaces
 	// are not allowed to overlap with any of the other interfaces. Otherwise, those other interfaces
 	// would be impacted as well.
 	if isDestructive {
-		otherInterfaces := map[string]bool{}
-		for i := range g.Products[product].Interfaces {
-		}
 		for i := range interfaces {
 			for j := range g.Products[product].Interfaces {
 				if !interfaces[j] {

@@ -1,6 +1,9 @@
 package snowflake
 
 import (
+	"context"
+	"database/sql"
+
 	"github.com/rwberendsen/grupr/internal/semantics"
 )
 
@@ -86,4 +89,13 @@ func (o AggObjAttr) pushToDoGrants(yield func(Grant) bool, dbRole DatabaseRole, 
 		}
 	}
 	return true
+}
+
+func (o AggObjAttr) pushExternalGrants(ctx context.Context, semCnf *semantics.Config, conn *sql.DB, db semantics.Ident,
+	schema semantics.Ident, obj semantics.Ident, yield func(Grant, error) bool) {
+	for g, err := range QueryExternalGrantsOnObject(ctx, semCnf, conn, o.ObjectType, db, schema, obj) {
+		if !yield(g, err) {
+			return
+		}
+	}
 }

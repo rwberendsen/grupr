@@ -34,8 +34,7 @@ func (g FutureGrant) buildSQLGrant(revoke bool) string {
 		preposition = `FROM`
 	}
 
-	var granteeClause string
-	granteeClause := fmt.Sprintf(`%s %s IDENTIFIER($$%s$$)`, preposition, g.GrantedTo, g.GrantedTo.FQN(g.GrantedToDatabase, semantics.Ident{}, g.GrantedToName))
+	granteeClause := fmt.Sprintf(`%s %s IDENTIFIER($$%s$$)`, preposition, g.GrantedTo, g.GrantedTo.FQN(g.GrantedToDatabase, semantics.Ident(""), g.GrantedToName))
 	privilegeClause := strings.Join(util.FmtSliceElements[PrivilegeComplete](g.Privileges...), `, `)
 
 	onClause := `ON FUTURE `
@@ -48,7 +47,7 @@ func (g FutureGrant) buildSQLGrant(revoke bool) string {
 		}
 		inClause += fmt.Sprintf(`%v %s`, g.GrantedIn, g.Database)
 	case ObjTpHybridTable, ObjTpMaterializedView, ObjTpTable, ObjTpView:
-		inClause += fmt.Sprintf(`%v IDENTIFIER($$%s$$)`, g.GrantedIn, g.GrantedIn.FQN(g.Database, g.Schema, semantics.Ident{}))
+		inClause += fmt.Sprintf(`%v IDENTIFIER($$%s$$)`, g.GrantedIn, g.GrantedIn.FQN(g.Database, g.Schema, semantics.Ident("")))
 	}
 
 	onClause += fmt.Sprintf(`%vS`, g.GrantedOn)

@@ -38,7 +38,7 @@ func main() {
 
 	// Validate internal consistency between supplied flags
 	isAction := map[string]bool{
-		"ma": true,
+		"ma":  true,
 		"mae": true,
 	}
 	isProductSpecificAction := map[string]bool{
@@ -53,10 +53,9 @@ func main() {
 	if (product == "") == isProductSpecificAction[action] {
 		log.Fatalf("specify a product if and only if you are doing a product specific action")
 	}
-	if (product == "") && (len(dtaps) > 0 || len(interfaces) > 0 {
+	if (product == "") && (len(dtaps) > 0 || len(interfaces) > 0) {
 		log.Fatalf("dtaps or interfaces specified, but no product")
 	}
-
 
 	// TODO: while deserializing into Grupin, also gunzip, and
 	// calculate hash based on gzipped bytes. (using something like, io.TeeReader)

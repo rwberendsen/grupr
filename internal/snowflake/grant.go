@@ -36,12 +36,12 @@ func (g Grant) buildSQLGrant(revoke bool) string {
 		verb = `REVOKE`
 		preposition = `FROM`
 	}
-	granteeClause := fmt.Sprintf(`%s IDENTIFIER($$%s$$)`, g.GrantedTo, g.GrantedTo.FQN(g.GrantedToDatabase, semantics.Ident{}, g.GrantedToName))
+	granteeClause := fmt.Sprintf(`%s IDENTIFIER($$%s$$)`, g.GrantedTo, g.GrantedTo.FQN(g.GrantedToDatabase, semantics.Ident(""), g.GrantedToName))
 
 	// GRANT ROLE ... / GRANT DATABASE ROLE ...
 	switch g.GrantedOn {
 	case ObjTpRole, ObjTpDatabaseRole:
-		return fmt.Sprintf(`%s %s IDENTIFIER($$%s$$) %s %s`, verb, g.GrantedOn, g.GrantedOn.FQN(g.Database, semantics.Ident{}, g.GrantedRole), preposition, granteeClause)
+		return fmt.Sprintf(`%s %s IDENTIFIER($$%s$$) %s %s`, verb, g.GrantedOn, g.GrantedOn.FQN(g.Database, semantics.Ident(""), g.GrantedRole), preposition, granteeClause)
 	}
 
 	// GRANT <privileges> ... TO ROLE
@@ -121,7 +121,6 @@ func newExternalGrantOnObject(grantedTo string, granteeName string, grantedOn Ob
 		Schema:                    schema,
 		Object:                    obj,
 		GrantedOn:                 grantedOn,
-		GrantedRoleIsGruprManaged: grantedRoleIsGruprManaged,
 		GrantedTo:                 ParseObjTypeFromRecord(grantedTo),
 	}
 	r := csv.NewReader(strings.NewReader(granteeName)) // handles quoted fields as they appear in name
@@ -144,7 +143,6 @@ func newExternalGrantOnObject(grantedTo string, granteeName string, grantedOn Ob
 	}
 	return g, nil
 }
-
 
 func QueryGrantsToRoleFiltered(ctx context.Context, cnf *Config, conn *sql.DB, role semantics.Ident,
 	match map[GrantTemplate]struct{}, notMatch map[GrantTemplate]struct{}) iter.Seq2[Grant, error] {
@@ -306,14 +304,22 @@ WHERE "granted_to" = '%v'`, role, objTp))
 	}
 }
 
-func queryExternalGrantsOnObject(ctx context.Context, semCnf *semantics.Config, conn *sql.DB, objTp ObjType,
+func QueryExternalGrantsOnDB(ctx context.Context, semCnf *semantics.Config, conn *sql.DB, db semantics.Ident) iter.Seq2[Grant, error] {
+	return QueryExternalGrantsOnObject(ctx, semCnf, conn, ObjTpDatabase, db, semantics.Ident(""), semantics.Ident(""))
+}
+
+func QueryExternalGrantsOnSchema(ctx context.Context, semCnf *semantics.Config, conn *sql.DB, db semantics.Ident, schema semantics.Ident) iter.Seq2[Grant, error] {
+	return QueryExternalGrantsOnObject(ctx, semCnf, conn, ObjTpSchema, db, schema, semantics.Ident(""))
+}
+
+func QueryExternalGrantsOnObject(ctx context.Context, semCnf *semantics.Config, conn *sql.DB, objTp ObjType,
 	db semantics.Ident, schema semantics.Ident, obj semantics.Ident) iter.Seq2[Grant, error] {
 	/*
-	On a given object, query if there are any users (which are never managed by urupr) or (database) roles
-	that do not start with semCnf.Prefix (and are thus assumed not to be managed by grupr either); that
-	have privileges on the object. Return a single Grant object for each of them, with the ALL
-	privilege. This Grant object can later be used to revoke all privileges on the object from this
-	user or role.
+		On a given object, query if there are any users (which are never managed by urupr) or (database) roles
+		that do not start with semCnf.Prefix (and are thus assumed not to be managed by grupr either); that
+		have privileges on the object. Return a single Grant object for each of them, with the ALL
+		privilege. This Grant object can later be used to revoke all privileges on the object from this
+		user or role.
 	*/
 	return func(yield func(Grant, error) bool) {
 		rows, err := conn.QueryContext(ctx, fmt.Sprintf(`SHOW GRANTS ON IDENTIFIER($$%s$$) ->>
@@ -327,7 +333,7 @@ WHERE
 GROUP BY
     granted_to
   , grantee_name`, objTp.FQN(db, schema, obj), semCnf.Prefix))
-  		if err != nil {
+		if err != nil {
 			yield(Grant{}, err)
 			return
 		}
@@ -339,9 +345,13 @@ GROUP BY
 				yield(Grant{}, err)
 				return
 			}
-			grantedToObjTp = ParseObjTypeFromRecord(grantedTo)
-			if !yield(newExternalGrantOnObject(grantedTo, granteeName, objTp, db, schema, obj), nil) {
+			if g, err := newExternalGrantOnObject(grantedTo, granteeName, objTp, db, schema, obj); err != nil {
+				yield(Grant{}, err)
 				return
+			} else {
+				if !yield(g, nil) {
+					return
+				}
 			}
 		}
 		if err = rows.Err(); err != nil {
@@ -352,7 +362,7 @@ GROUP BY
 }
 
 func DoGrants(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[Grant]) error {
-	return doGrants(ctx, cnf, conn, util.SeqAddNillError(grants), false)
+	return doGrants(ctx, cnf, conn, util.SeqAddNilError(grants), false)
 }
 
 func DoGrantsSkipErrors(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq[Grant]) error {
@@ -377,7 +387,7 @@ func DoRevokesSkipErrors(ctx context.Context, cnf *Config, conn *sql.DB, grants 
 }
 
 func DoRevokesExitOnInputErrors(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq2[Grant, error]) error {
-	return doGrants(ctx, cnf, conn, util.SeqAddNilError(grants), true)
+	return doGrants(ctx, cnf, conn, grants, true)
 }
 
 func doGrants(ctx context.Context, cnf *Config, conn *sql.DB, grants iter.Seq2[Grant, error], revoke bool) error {

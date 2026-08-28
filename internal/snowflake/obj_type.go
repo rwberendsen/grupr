@@ -1,7 +1,10 @@
 package snowflake
 
 import (
+	"fmt"
 	"strings"
+
+	"github.com/rwberendsen/grupr/internal/semantics"
 )
 
 type ObjType int
@@ -73,46 +76,47 @@ func ParseObjTypeFromRecord(s string) ObjType {
 	return ParseObjType(strings.ReplaceAll(s, "_", " "))
 }
 
-func (ot ObjType) FQN(db semantics.Ident, schema semantics.Ident, obj semantics.Ident) fqn string {
-	switch objTp {
+func (ot ObjType) FQN(db semantics.Ident, schema semantics.Ident, obj semantics.Ident) (fqn string) {
+	switch ot {
 	case ObjTpDatabase:
-		if str(db) == "" {
+		if string(db) == "" {
 			panic("db: empty string")
 		}
 		fqn = fmt.Sprintf("%s", db)
 	case ObjTpDatabaseRole:
-		if str(db) == "" {
+		if string(db) == "" {
 			panic("db: empty string")
 		}
-		if str(obj) == "" {
+		if string(obj) == "" {
 			panic("obj: empty string")
 		}
 		fqn = fmt.Sprintf("%s.%s", db, obj)
 	case ObjTpRole, ObjTpUser, ObjTpWarehouse:
-		if str(obj) == "" {
+		if string(obj) == "" {
 			panic("obj: empty string")
 		}
 		fqn = fmt.Sprintf("%s", obj)
 	case ObjTpSchema:
-		if str(db) == "" {
+		if string(db) == "" {
 			panic("db: empty string")
 		}
-		if str(schema) == "" {
+		if string(schema) == "" {
 			panic("schema: empty string")
 		}
 		fqn = fmt.Sprintf("%s.%s", db, schema)
 	case ObjTpHybridTable, ObjTpMaterializedView, ObjTpTable, ObjTpView:
-		if str(db) == "" {
+		if string(db) == "" {
 			panic("db: empty string")
 		}
-		if str(schema) == "" {
+		if string(schema) == "" {
 			panic("schema: empty string")
 		}
-		if str(obj) == "" {
+		if string(obj) == "" {
 			panic("obj: empty string")
 		}
 		fqn = fmt.Sprintf("%s.%s.%s", db, schema, obj)
 	default:
-		panic(fmt.Sprintf("'%v': unsupported ObjType", objTp))
+		panic(fmt.Sprintf("'%v': unsupported ObjType", ot))
 	}
+	return
 }
