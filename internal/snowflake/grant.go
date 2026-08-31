@@ -116,12 +116,12 @@ func newGrantOfRole(role semantics.Ident, grantedTo ObjType, granteeName semanti
 
 func newExternalGrantOnObject(grantedTo string, granteeName string, grantedOn ObjType, db semantics.Ident, schema semantics.Ident, obj semantics.Ident) (Grant, error) {
 	g := Grant{
-		Privileges:                []PrivilegeComplete{PrivilegeComplete{Privilege: PrvAll}},
-		Database:                  db,
-		Schema:                    schema,
-		Object:                    obj,
-		GrantedOn:                 grantedOn,
-		GrantedTo:                 ParseObjTypeFromRecord(grantedTo),
+		Privileges: []PrivilegeComplete{PrivilegeComplete{Privilege: PrvAll}},
+		Database:   db,
+		Schema:     schema,
+		Object:     obj,
+		GrantedOn:  grantedOn,
+		GrantedTo:  ParseObjTypeFromRecord(grantedTo),
 	}
 	r := csv.NewReader(strings.NewReader(granteeName)) // handles quoted fields as they appear in name
 	r.Comma = '.'

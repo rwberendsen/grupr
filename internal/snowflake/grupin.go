@@ -259,7 +259,7 @@ func (g *Grupin) ManageAccess(ctx context.Context, semCnf *semantics.Config, cnf
 func (g *Grupin) ManageAccessExclusively(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB,
 	pID string, dtaps map[string]bool, interfaces map[string]bool) error {
 	for pd := range g.getProductDTAPs(pID) {
-		pd.ManageAccessExclusively(ctx, semCnf, cnf, conn, dtaps, interfaces) 
+		pd.ManageAccessExclusively(ctx, semCnf, cnf, conn, dtaps, interfaces)
 	}
 	return nil
 }
