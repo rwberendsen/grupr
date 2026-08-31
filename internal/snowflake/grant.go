@@ -357,10 +357,10 @@ SELECT
 FROM $1
 WHERE
      granted_to = 'USER'
-  OR STARTSWITH(grantee_name, '%s')
+  OR NOT STARTSWITH(grantee_name, '%s')
 GROUP BY
     granted_to
-  , grantee_name`, objTp, objTp.FQN(db, schema, obj), semCnf.Prefix))
+  , grantee_name`, objTp, objTp.FQN(db, schema, obj), string(semCnf.Prefix)))
 		if err != nil {
 			yield(Grant{}, err)
 			return
