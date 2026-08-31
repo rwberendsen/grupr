@@ -102,13 +102,13 @@ func newGrantToRole(privilege string, createObjType string, grantedOn string, na
 	return g, nil
 }
 
-func newGrantOfRole(role semantics.Ident, granteeName semantics.Ident, grantedBy semantics.Ident) Grant {
+func newGrantOfRole(role semantics.Ident, grantedTo ObjType, granteeName semantics.Ident, grantedBy semantics.Ident) Grant {
 	return Grant{
 		Privileges:                []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage}},
 		GrantedOn:                 ObjTpRole,
 		GrantedRole:               role,
 		GrantedRoleIsGruprManaged: util.NewTrue(), // only used for product dtap roles at this point
-		GrantedTo:                 ObjTpUser,
+		GrantedTo:                 grantedTo,
 		GrantedToName:             granteeName,
 		GrantedBy:                 grantedBy,
 	}
@@ -269,7 +269,35 @@ func QueryGrantsOfRoleToUsers(ctx context.Context, conn *sql.DB, role semantics.
 }
 
 func QueryGrantsOfRoleToRoles(ctx context.Context, conn *sql.DB, role semantics.Ident) iter.Seq2[Grant, error] {
-	return queryGrantsOfRole(ctx, conn, role, ObjTpRole)
+	return func(yield func(Grant, error) bool) {
+		rows, err := conn.QueryContext(ctx, fmt.Sprintf(`SHOW GRANTS OF ROLE IDENTIFIER($$%v$$) ->>
+SELECT
+    "grantee_name" AS grantee_name
+  , "granted_by" AS granted_by
+FROM $1
+WHERE "granted_to" = '%v'
+AND grantee_name != 'SYSADMIN'`, role, ObjTpRole))
+		if err != nil {
+			yield(Grant{}, err)
+			return
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var granteeName semantics.Ident
+			var grantedBy semantics.Ident
+			if err = rows.Scan(&granteeName, &grantedBy); err != nil {
+				yield(Grant{}, err)
+				return
+			}
+			if !yield(newGrantOfRole(role, ObjTpRole, granteeName, grantedBy), nil) {
+				return
+			}
+		}
+		if err = rows.Err(); err != nil {
+			yield(Grant{}, err)
+			return
+		}
+	}
 }
 
 func queryGrantsOfRole(ctx context.Context, conn *sql.DB, role semantics.Ident, objTp ObjType) iter.Seq2[Grant, error] {
@@ -293,7 +321,7 @@ WHERE "granted_to" = '%v'`, role, objTp))
 				yield(Grant{}, err)
 				return
 			}
-			if !yield(newGrantOfRole(role, granteeName, grantedBy), nil) {
+			if !yield(newGrantOfRole(role, objTp, granteeName, grantedBy), nil) {
 				return
 			}
 		}
@@ -322,7 +350,7 @@ func QueryExternalGrantsOnObject(ctx context.Context, semCnf *semantics.Config, 
 		user or role.
 	*/
 	return func(yield func(Grant, error) bool) {
-		rows, err := conn.QueryContext(ctx, fmt.Sprintf(`SHOW GRANTS ON IDENTIFIER($$%s$$) ->>
+		rows, err := conn.QueryContext(ctx, fmt.Sprintf(`SHOW GRANTS ON %s IDENTIFIER($$%s$$) ->>
 SELECT
     "granted_to" AS granted_to
   , "grantee_name" AS grantee_name
@@ -332,7 +360,7 @@ WHERE
   OR STARTSWITH(grantee_name, '%s')
 GROUP BY
     granted_to
-  , grantee_name`, objTp.FQN(db, schema, obj), semCnf.Prefix))
+  , grantee_name`, objTp, objTp.FQN(db, schema, obj), semCnf.Prefix))
 		if err != nil {
 			yield(Grant{}, err)
 			return

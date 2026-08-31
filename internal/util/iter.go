@@ -23,3 +23,18 @@ func SeqAddNilError[T any](seq iter.Seq[T]) iter.Seq2[T, error] {
 		}
 	}
 }
+
+// Adapted from: https://go.dev/blog/range-functions
+// Filter returns a sequence that contains the elements
+// of s for which f returns true.
+func Filter[V any](f func(V) bool, s iter.Seq[V]) iter.Seq[V] {
+    return func(yield func(V) bool) {
+        for v := range s {
+            if f(v) {
+                if !yield(v) {
+                    return
+                }
+            }
+        }
+    }
+}

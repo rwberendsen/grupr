@@ -221,15 +221,18 @@ func (o AggSchemaObjs) pushToDoGrants(yield func(Grant) bool, dbRole DatabaseRol
 }
 
 func (o AggSchemaObjs) pushExternalGrants(ctx context.Context, semCnf *semantics.Config, conn *sql.DB, db semantics.Ident,
-	schema semantics.Ident, yield func(Grant, error) bool) {
+	schema semantics.Ident, yield func(Grant, error) bool) bool {
 	if o.MatchAllObjects {
 		for g, err := range QueryExternalGrantsOnSchema(ctx, semCnf, conn, db, schema) {
 			if !yield(g, err) {
-				return
+				return false
 			}
 		}
 	}
 	for obj, objAttr := range o.Objects {
-		objAttr.pushExternalGrants(ctx, semCnf, conn, db, schema, obj, yield)
+		if !objAttr.pushExternalGrants(ctx, semCnf, conn, db, schema, obj, yield) {
+			return false
+		}
 	}
+	return true
 }

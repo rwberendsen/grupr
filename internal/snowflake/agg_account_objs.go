@@ -40,7 +40,9 @@ func (o AggAccountObjs) GetObject(db semantics.Ident, schema semantics.Ident, ob
 func (o AggAccountObjs) getExternalGrants(ctx context.Context, semCnf *semantics.Config, conn *sql.DB) iter.Seq2[Grant, error] {
 	return func(yield func(Grant, error) bool) {
 		for db, dbObjs := range o.DBs {
-			dbObjs.pushExternalGrants(ctx, semCnf, conn, db, yield)
+			if !dbObjs.pushExternalGrants(ctx, semCnf, conn, db, yield) {
+				return
+			}
 		}
 	}
 }

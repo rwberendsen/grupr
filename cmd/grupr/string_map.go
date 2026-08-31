@@ -8,7 +8,7 @@ import (
 type stringMap map[string]bool
 
 func (s stringMap) String() string {
-	return fmt.Sprint(s)
+	return fmt.Sprint(map[string]bool(s))
 }
 
 func (s stringMap) Set(value string) error {

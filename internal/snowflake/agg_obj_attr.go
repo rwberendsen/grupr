@@ -92,10 +92,11 @@ func (o AggObjAttr) pushToDoGrants(yield func(Grant) bool, dbRole DatabaseRole, 
 }
 
 func (o AggObjAttr) pushExternalGrants(ctx context.Context, semCnf *semantics.Config, conn *sql.DB, db semantics.Ident,
-	schema semantics.Ident, obj semantics.Ident, yield func(Grant, error) bool) {
+	schema semantics.Ident, obj semantics.Ident, yield func(Grant, error) bool) bool {
 	for g, err := range QueryExternalGrantsOnObject(ctx, semCnf, conn, o.ObjectType, db, schema, obj) {
 		if !yield(g, err) {
-			return
+			return false
 		}
 	}
+	return true
 }
