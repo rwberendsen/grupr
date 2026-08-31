@@ -339,3 +339,29 @@ func (pd *ProductDTAP) dropProductRolesIfZombie(ctx context.Context, cnf *Config
 	}
 	return pd.WriteRole.Drop(ctx, cnf, conn)
 }
+
+func (pd *ProductDTAP) ManageAccessExclusively(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB,
+	dtaps map[string]bool, interfaces map[string]bool) error {
+	// No dtaps specified means: just do all DTAPs; otherwise, pd.DTAP has to be in the specified sub-set
+	if len(dtaps) == 0 || dtaps[pd.DTAP] {
+		// No interfaces specified means: do the produdct-level one; Otherwise, do each interface if it was specified
+		if len(interfaces) == 0 {
+			if err := pd.Interface.manageAccessExclusively(ctx, semCnf, cnf, conn); err != nil {
+				return err
+			}
+		} else {
+			for iid, i := range pd.Interfaces {
+				if interfaces[iid] {
+					if err := i.manageAccessExclusively(ctx, semCnf, cnf, conn); err != nil {
+						return err
+					}
+				}
+			}
+		}
+	}
+	// Also revoke product read- and write-roles from any other roles.
+	if err := DoRevokesExitOnInputErrors(ctx, cnf, conn, QueryGrantsOfRoleToRoles(ctx, conn, pd.WriteRole.ID)); err != nil {
+		return err
+	}
+	return DoRevokesExitOnInputErrors(ctx, cnf, conn, QueryGrantsOfRoleToRoles(ctx, conn, pd.ReadRole.ID))
+}

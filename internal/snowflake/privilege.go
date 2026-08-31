@@ -4,6 +4,7 @@ type Privilege int
 
 const (
 	PrvOther Privilege = iota // zero type is PrvOther
+	PrvAll
 	PrvApplyBudget
 	PrvCreate
 	PrvDelete
@@ -22,6 +23,7 @@ const (
 
 func ParsePrivilege(p string) Privilege {
 	return map[string]Privilege{
+		"ALL":                PrvAll,
 		"APPLYBUDGET":        PrvApplyBudget,
 		"CREATE":             PrvCreate,
 		"DELETE":             PrvDelete,
@@ -42,6 +44,7 @@ func ParsePrivilege(p string) Privilege {
 func (p Privilege) String() string {
 	return map[Privilege]string{
 		PrvOther:            "OTHER",
+		PrvAll:              "ALL",
 		PrvApplyBudget:      "APPLYBUDGET",
 		PrvCreate:           "CREATE",
 		PrvDelete:           "DELETE",

@@ -108,7 +108,7 @@ func (g *Grupin) setWarehouses(semCnf *semantics.Config, warehouses []WarehouseD
 			if _, ok := seenPIDs[pID]; ok {
 				return fmt.Errorf("warehouse '%v', shared_between: duplicate product id '%v'", id, pID)
 			}
-			if !g.hasProductID(pID) {
+			if !g.HasProductID(pID) {
 				return fmt.Errorf("warehouse '%v', shared_between: unknown product id '%v'", id, pID)
 			}
 			seenPIDs[pID] = struct{}{}
@@ -125,7 +125,7 @@ func (g *Grupin) setWarehouses(semCnf *semantics.Config, warehouses []WarehouseD
 	return nil
 }
 
-func (g *Grupin) hasProductID(pID string) bool {
+func (g *Grupin) HasProductID(pID string) bool {
 	for pdID := range g.ProductDTAPs {
 		if pdID.ProductID == pID {
 			return true
@@ -252,6 +252,16 @@ func (g *Grupin) ManageAccess(ctx context.Context, semCnf *semantics.Config, cnf
 	// objects.
 	if err := g.dropDatabaseRoles(ctx, cnf, conn); err != nil {
 		return err
+	}
+	return nil
+}
+
+func (g *Grupin) ManageAccessExclusively(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB,
+	pID string, dtaps map[string]bool, interfaces map[string]bool) error {
+	for pd := range g.getProductDTAPs(pID) {
+		if err := pd.ManageAccessExclusively(ctx, semCnf, cnf, conn, dtaps, interfaces); err != nil {
+			return err
+		}
 	}
 	return nil
 }

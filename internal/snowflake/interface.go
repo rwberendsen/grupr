@@ -215,3 +215,9 @@ func (i *Interface) pushObjectCounts(yield func(ObjCountsRow) bool, pdID semanti
 	}
 	return true
 }
+
+func (i *Interface) manageAccessExclusively(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB) error {
+	// So here we just get all the 'ALL (PRIVILEGES) grants that we need to revoke from an iterator defined on
+	// aggAccountObjects, and we throw it at a DoRevokes function.
+	return DoRevokesExitOnInputErrors(ctx, cnf, conn, i.aggAccountObjects.getExternalGrants(ctx, semCnf, conn))
+}

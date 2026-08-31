@@ -133,6 +133,38 @@ func NewGrupinFromPath(cnf *Config, path string) (Grupin, error) {
 	return NewGrupin(cnf, s)
 }
 
+func (g Grupin) ValidateAction(product string, dtaps map[string]bool, interfaces map[string]bool, isDestructive bool) error {
+	if _, ok := g.Products[product]; !ok {
+		return fmt.Errorf("'%s': unknown product", product)
+	}
+	for dtap := range dtaps {
+		if !g.Products[product].DTAPs.HasDTAP(dtap) {
+			return fmt.Errorf("'%s': unknown dtap", dtap)
+		}
+	}
+	for i := range interfaces {
+		if _, ok := g.Products[product].Interfaces[i]; !ok {
+			return fmt.Errorf("'%s': unknown interface", i)
+		}
+	}
+	// If the action is destructive, and one or more interfaces are specified, then these interfaces
+	// are not allowed to overlap with any of the other interfaces. Otherwise, those other interfaces
+	// would be impacted as well.
+	if isDestructive {
+		for i := range interfaces {
+			for j := range g.Products[product].Interfaces {
+				if !interfaces[j] {
+					if !g.Products[product].Interfaces[i].ObjectMatchers.disjoint(
+						g.Products[product].Interfaces[j].ObjectMatchers) {
+						return fmt.Errorf("interface '%s' has overlap with interface '%s' not specified in destructive action for product '%s'", i, j, product)
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func (g Grupin) validateUsers(svcs map[string]ServiceAccount, teams map[string]Team) error {
 	seen := map[Ident]struct{}{}
 	for _, svc := range svcs {

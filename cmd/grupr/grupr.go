@@ -12,6 +12,16 @@ import (
 	"github.com/rwberendsen/grupr/internal/snowflake"
 )
 
+var actionFlag = flag.String("action", "ma", "action to perform")
+var productFlag = flag.String("product", "", "product ID to perform action on")
+var dtaps stringMap
+var interfaces stringMap
+
+func init() {
+	flag.Var(interfaces, "interfaces", "perform action on these interfaces only")
+	flag.Var(dtaps, "dtaps", "perform action on these dtaps only")
+}
+
 func main() {
 	// oldFlag := flag.String("o", "", "old YAML, if any") // TODO: grupinDiff needs work
 	flag.Parse()
@@ -22,6 +32,29 @@ func main() {
 	var snowflakeYamlPath string
 	if len(flag.Args()) == 2 {
 		snowflakeYamlPath = flag.Arg(1)
+	}
+	action := *actionFlag
+	product := *productFlag
+
+	// Validate internal consistency between supplied flags
+	isAction := map[string]bool{
+		"ma":  true,
+		"mae": true,
+	}
+	isProductSpecificAction := map[string]bool{
+		"mae": true,
+	}
+	isDestructiveAction := map[string]bool{
+		"mae": true,
+	}
+	if !isAction[action] {
+		log.Fatalf("unknown action")
+	}
+	if (product == "") == isProductSpecificAction[action] {
+		log.Fatalf("specify a product if and only if you are doing a product specific action")
+	}
+	if (product == "") && (len(dtaps) > 0 || len(interfaces) > 0) {
+		log.Fatalf("dtaps or interfaces specified, but no product")
 	}
 
 	// TODO: while deserializing into Grupin, also gunzip, and
@@ -50,6 +83,11 @@ func main() {
 		log.Fatalf("get new grupin: %v", err)
 	}
 	log.Println("Deserialized YAML")
+
+	// Validate command line flags against semantic grupin
+	if isProductSpecificAction[action] {
+		newGrupin.ValidateAction(product, dtaps, interfaces, isDestructiveAction[action])
+	}
 
 	/* TODO: consider implementing GrupinDiff
 	if *oldFlag != "" {
@@ -84,6 +122,25 @@ func main() {
 		log.Fatalf("get snowflake config: %v", err)
 	}
 
+	// If it's a dry run, print a clear message that it is a dry run
+	if snowCnf.DryRun {
+		log.Print(`
+
+================================================================================
+||                                                                            ||
+||   ########  ########  ##    ##    ########  ##     ##  ##    ##  ####      ||
+||   ##     ## ##     ##  ##  ##     ##     ## ##     ##  ###   ##  ####      ||
+||   ##     ## ##     ##   ####      ##     ## ##     ##  ####  ##  ####      ||
+||   ##     ## ########     ##       ########  ##     ##  ## ## ##   ##       ||
+||   ##     ## ##   ##      ##       ##   ##   ##     ##  ##  ####            ||
+||   ##     ## ##    ##     ##       ##    ##  ##     ##  ##   ###  ####      ||
+||   ########  ##     ##    ##       ##     ##  #######   ##    ##  ####      ||
+||                                                                            ||
+================================================================================
+
+`)
+	}
+
 	conn, err := snowflake.GetDB(ctx, snowCnf)
 	if err != nil {
 		log.Fatalf("error creating db connection: %v", err)
@@ -110,6 +167,16 @@ func main() {
 	// let's store the latest object counts
 	if err := snowflake.StoreObjCountsRows(ctx, snowCnf, conn, snowflakeNewGrupin.GetObjCountsRows()); err != nil {
 		log.Fatalf("StoreObjectCounts: %v", err)
+	}
+
+	// Let's check for additional actions for specific products or interfaces
+	switch action {
+	case "mae":
+		// Manage access exclusively, require a product id in this case
+		if err := snowflakeNewGrupin.ManageAccessExclusively(ctx, semCnf, snowCnf, conn, product, dtaps, interfaces); err != nil {
+			log.Fatalf("ManageAccess: %v", err)
+		}
+		log.Printf("Managed access exclusively for product '%s'", product)
 	}
 
 	// TODO: also think about how to guard against an error scenario in which someone triggers an old grupr run in CI/CD, e.g., we could store a UUID, or even a git hash
