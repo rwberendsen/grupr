@@ -3,6 +3,7 @@ package snowflake
 import (
 	"context"
 	"database/sql"
+	"fmt"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
 )
@@ -99,4 +100,8 @@ func (o AggObjAttr) pushExternalGrants(ctx context.Context, semCnf *semantics.Co
 		}
 	}
 	return true
+}
+
+func (o AggObjAttr) purge(ctx context.Context, cnf *Config, conn *sql.DB, db, schema, obj semantics.Ident) error {
+	return runSQL(ctx, cnf, conn, fmt.Sprintf(`DROP %s IF EXISTS IDENTIFIER($$%s$$)`, o.ObjectType, o.ObjectType.FQN(db, schema, obj)))
 }

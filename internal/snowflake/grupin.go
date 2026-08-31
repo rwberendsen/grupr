@@ -266,6 +266,16 @@ func (g *Grupin) ManageAccessExclusively(ctx context.Context, semCnf *semantics.
 	return nil
 }
 
+func (g *Grupin) Purge(ctx context.Context, cnf *Config, conn *sql.DB, pID string, dtaps map[string]bool,
+	interfaces map[string]bool) error {
+	for pd := range g.getProductDTAPs(pID) {
+		if err := pd.Purge(ctx, cnf, conn, dtaps, interfaces); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (g *Grupin) setDBRoleGrants(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, pd *ProductDTAP) error {
 	// Loop over all granted grupr-managed database roles, and:
 	// - store which ones we already have been granted.
