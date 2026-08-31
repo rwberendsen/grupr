@@ -14,8 +14,8 @@ import (
 
 var actionFlag = flag.String("action", "ma", "action to perform")
 var productFlag = flag.String("product", "", "product ID to perform action on")
-var dtaps stringMap
-var interfaces stringMap
+var dtaps stringMap = stringMap{}
+var interfaces stringMap = stringMap{}
 
 func init() {
 	flag.Var(interfaces, "interfaces", "perform action on these interfaces only")
