@@ -492,3 +492,15 @@ func (o AggDBObjs) pushExternalGrants(ctx context.Context, semCnf *semantics.Con
 	}
 	return true
 }
+
+func (o AggDBObjs) purge(ctx context.Context, cnf *Config, conn *sql.DB, db semantics.Ident) error {
+	if o.MatchAllObjects {
+		return runSQL(ctx, cnf, conn, fmt.Sprintf(`DROP DATABASE IF EXISTS IDENTIFIER($$%s$$)`, db))
+	}
+	for schema, schemaObjs := range o.Schemas {
+		if err := schemaObjs.purge(ctx, cnf, conn, db, schema); err != nil {
+			return err
+		}
+	}
+	return nil
+}

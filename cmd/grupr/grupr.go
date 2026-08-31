@@ -14,8 +14,8 @@ import (
 
 var actionFlag = flag.String("action", "ma", "action to perform")
 var productFlag = flag.String("product", "", "product ID to perform action on")
-var dtaps stringMap
-var interfaces stringMap
+var dtaps stringMap = stringMap{}
+var interfaces stringMap = stringMap{}
 
 func init() {
 	flag.Var(interfaces, "interfaces", "perform action on these interfaces only")
@@ -38,14 +38,17 @@ func main() {
 
 	// Validate internal consistency between supplied flags
 	isAction := map[string]bool{
-		"ma":  true,
-		"mae": true,
+		"ma":    true,
+		"mae":   true,
+		"purge": true,
 	}
 	isProductSpecificAction := map[string]bool{
-		"mae": true,
+		"mae":   true,
+		"purge": true,
 	}
 	isDestructiveAction := map[string]bool{
-		"mae": true,
+		"mae":   true,
+		"purge": true,
 	}
 	if !isAction[action] {
 		log.Fatalf("unknown action")
@@ -174,9 +177,15 @@ func main() {
 	case "mae":
 		// Manage access exclusively, require a product id in this case
 		if err := snowflakeNewGrupin.ManageAccessExclusively(ctx, semCnf, snowCnf, conn, product, dtaps, interfaces); err != nil {
-			log.Fatalf("ManageAccess: %v", err)
+			log.Fatalf("mae: %v", err)
 		}
 		log.Printf("Managed access exclusively for product '%s'", product)
+	case "purge":
+		// Purge (DROP) objects
+		if err := snowflakeNewGrupin.Purge(ctx, snowCnf, conn, product, dtaps, interfaces); err != nil {
+			log.Fatalf("purge: %v", err)
+		}
+		log.Printf("Purge completed")
 	}
 
 	// TODO: also think about how to guard against an error scenario in which someone triggers an old grupr run in CI/CD, e.g., we could store a UUID, or even a git hash

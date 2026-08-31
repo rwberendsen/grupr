@@ -46,3 +46,12 @@ func (o AggAccountObjs) getExternalGrants(ctx context.Context, semCnf *semantics
 		}
 	}
 }
+
+func (o AggAccountObjs) purge(ctx context.Context, cnf *Config, conn *sql.DB) error {
+	for db, dbObjs := range o.DBs {
+		if err := dbObjs.purge(ctx, cnf, conn, db); err != nil {
+			return err
+		}
+	}
+	return nil
+}
