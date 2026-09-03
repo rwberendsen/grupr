@@ -17,6 +17,7 @@ type Config struct {
 	Account                   string
 	Database                  semantics.Ident
 	Schema                    semantics.Ident
+	Stage                     semantics.Ident
 	UseSQLOpen                bool
 	RSAKeyPath                string
 	MaxOpenConns              int
@@ -110,6 +111,14 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_SCHEMA: Invalid schema name")
 		} else {
 			cnf.Schema = schema
+		}
+	}
+
+	if stage, ok := os.LookupEnv("GRUPR_SNOWFLAKE_STAGE"); ok {
+		if stage, err := semantics.NewIdentStripQuotesIfAny(stage, semCnf.ValidQuotedExpr, semCnf.ValidUnquotedExpr); err != nil {
+			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_STAGE: Invalid stage name")
+		} else {
+			cnf.Stage = stage
 		}
 	}
 

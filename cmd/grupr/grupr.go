@@ -38,11 +38,13 @@ func main() {
 
 	// Validate internal consistency between supplied flags
 	isAction := map[string]bool{
+		"archive": true
 		"ma":    true,
 		"mae":   true,
 		"purge": true,
 	}
 	isProductSpecificAction := map[string]bool{
+		"archive": true
 		"mae":   true,
 		"purge": true,
 	}
@@ -174,8 +176,14 @@ func main() {
 
 	// Let's check for additional actions for specific products or interfaces
 	switch action {
+	case "archive":
+		// Archive (specified interfaces of) (dtaps of) product ID
+		if err := snowflakeNewGrupin.Archive(ctx, snowCnf, conn, product, dtaps, interfaces); err != nil {
+			log.Fatalf("archive: %v", err)
+		}
+		log.Printf("Archive action for product '%v' successful", product)
 	case "mae":
-		// Manage access exclusively, require a product id in this case
+		// Manage access exclusively, require a product ID in this case
 		if err := snowflakeNewGrupin.ManageAccessExclusively(ctx, semCnf, snowCnf, conn, product, dtaps, interfaces); err != nil {
 			log.Fatalf("mae: %v", err)
 		}

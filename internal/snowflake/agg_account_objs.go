@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"iter"
+	"net/url"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
 )
@@ -45,6 +46,29 @@ func (o AggAccountObjs) getExternalGrants(ctx context.Context, semCnf *semantics
 			}
 		}
 	}
+}
+
+func (o AggAccountObjs) archive(ctx context.Context, cnf *Config, conn *sql.DB, runID string, product string, dtap string, interfaceID string) error {
+	path := fmt.Sprintf("products/%s/run-ids/%s/dtaps/%s/", product, runID, dtap)
+	if interfaceID != "" {
+		path += fmt.Sprintf("interfaces/%s/", interfaceID)
+	}
+	for db, dbObjs := ramge o.DBs {
+		for schema, schemaObjs := range dbObjs.Schemas {
+			for obj, objAttr := range schemaObjs.Objects {
+				path += fmt.Sprintf("dbs/%s/schemas/%s/objects/%s/data/", db, schema, obj)
+				if err := runSQL(ctx, cnf, conn, fmt.Sprintf(`COPY INTO @%s.%s.%s/%s
+FROM (SELECT * FROM IDENTIFIER($$%s$$))
+INCLUDE_QUERY_ID = TRUE
+DETAILED_OUTPUT = TRUE
+HEADER = TRUE
+`, cnf.Database, cnf.Schema, cnf.Stage, url.PathEscape(path), objAttr.ObjectType.FQN(db, schema, obj)); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func (o AggAccountObjs) purge(ctx context.Context, cnf *Config, conn *sql.DB) error {

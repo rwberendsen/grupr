@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"iter"
+	"rand"
+	"strings"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
 	"github.com/rwberendsen/grupr/internal/syntax"
@@ -263,6 +265,23 @@ func (g *Grupin) ManageAccessExclusively(ctx context.Context, semCnf *semantics.
 			return err
 		}
 	}
+	return nil
+}
+
+func (g *Grupin) Archive(ctx context.Context, cnf *Config, conn *sql.DB, pID string, dtaps map[string]bool,
+	interfaces map[string]bool) error {
+	if cnf.Stage == semantics.Ident("") {
+		return fmt.Errorf("no stage name configured")
+	}
+	// a run ID that sort nicely lexicographically, and that would be more than unique enough as well
+	runID := fmt.Sprintf("%s__%v", time.Now().Format(time.RFC3339), rand.Intn(1000000))
+	runID = strings.ReplaceAll(runID, ":", "") // RFC3399 has : characters in the time components, but these would be URL encoded in S3 prefixes (ugly)
+	for pd := range g.getProductDTAPs(pID) {
+		if err := pd.Archive(ctx, cnf, conn, runID, dtaps, interfaces); err != nil {
+			return err
+		}
+	}
+	// TODO: write manifest file to indicate complete run was a success
 	return nil
 }
 
