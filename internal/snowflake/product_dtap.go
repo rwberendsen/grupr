@@ -366,7 +366,7 @@ func (pd *ProductDTAP) ManageAccessExclusively(ctx context.Context, semCnf *sema
 	return DoRevokesExitOnInputErrors(ctx, cnf, conn, QueryGrantsOfRoleToRoles(ctx, conn, pd.ReadRole.ID))
 }
 
-func (pd *ProductDTAP) Archive(ctx context.Context, cnf *Config, conn *sql.DB, dtaps map[string]bool,
+func (pd *ProductDTAP) Archive(ctx context.Context, cnf *Config, conn *sql.DB, path string, dtaps map[string]bool,
 	interfaces map[string]bool) error {
 	// No dtaps specified means: just do all DTAPs; otherwise, pd.DTAP has to be in the specified sub-set
 	if len(dtaps) == 0 || dtaps[pd.DTAP] {
@@ -382,13 +382,13 @@ func (pd *ProductDTAP) Archive(ctx context.Context, cnf *Config, conn *sql.DB, d
 
 		// No interfaces specified means: do the produdct-level one; Otherwise, do each interface if it was specified
 		if len(interfaces) == 0 {
-			if err := pd.Interface.aggAccountObjects.archive(ctx, cnf, conn); err != nil {
+			if err := pd.Interface.aggAccountObjects.archive(ctx, cnf, conn, path, pd.IsProd, pd.DTAP, ""); err != nil {
 				return err
 			}
 		} else {
 			for iid, i := range pd.Interfaces {
 				if interfaces[iid] {
-					if err := i.aggAccountObjects.archive(ctx, cnf, conn); err != nil {
+					if err := i.aggAccountObjects.archive(ctx, cnf, conn, path, pd.IsProd, pd.DTAP, iid); err != nil {
 						return err
 					}
 				}

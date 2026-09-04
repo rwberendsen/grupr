@@ -48,21 +48,22 @@ func (o AggAccountObjs) getExternalGrants(ctx context.Context, semCnf *semantics
 	}
 }
 
-func (o AggAccountObjs) archive(ctx context.Context, cnf *Config, conn *sql.DB, runID string, product string, dtap string, interfaceID string) error {
-	path := fmt.Sprintf("products/%s/run-ids/%s/dtaps/%s/", product, runID, dtap)
+func (o AggAccountObjs) archive(ctx context.Context, cnf *Config, conn *sql.DB, path, isProd bool, dtap string, interfaceID string) error {
+	prodOrNot := map[bool]string{true: "prod", false: "non-prod"}
+	path += fmt.Sprintf("%s/dtaps/%s/", prodOrNot, dtap)
 	if interfaceID != "" {
 		path += fmt.Sprintf("interfaces/%s/", interfaceID)
 	}
-	for db, dbObjs := ramge o.DBs {
+	for db, dbObjs := range o.DBs {
 		for schema, schemaObjs := range dbObjs.Schemas {
 			for obj, objAttr := range schemaObjs.Objects {
-				path += fmt.Sprintf("dbs/%s/schemas/%s/objects/%s/data/", db, schema, obj)
+				path += fmt.Sprintf("dbs/%s/schemas/%s/objects/%s/", db, schema, obj)
 				if err := runSQL(ctx, cnf, conn, fmt.Sprintf(`COPY INTO @%s.%s.%s/%s
 FROM (SELECT * FROM IDENTIFIER($$%s$$))
 INCLUDE_QUERY_ID = TRUE
 DETAILED_OUTPUT = TRUE
 HEADER = TRUE
-`, cnf.Database, cnf.Schema, cnf.Stage, url.PathEscape(path), objAttr.ObjectType.FQN(db, schema, obj)); err != nil {
+`, cnf.Database, cnf.Schema, cnf.ExternalWriteStage, url.PathEscape(path), objAttr.ObjectType.FQN(db, schema, obj))); err != nil {
 					return err
 				}
 			}

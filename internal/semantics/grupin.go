@@ -133,19 +133,30 @@ func NewGrupinFromPath(cnf *Config, path string) (Grupin, error) {
 	return NewGrupin(cnf, s)
 }
 
-func (g Grupin) ValidateAction(product string, dtaps map[string]bool, interfaces map[string]bool, isDestructive bool) error {
+func (g Grupin) ValidateAction(product string, dtaps map[string]bool, interfaces map[string]bool, isDestructive bool) (ActionScope, error) {
+	actionScope := ActionScope{
+		Product: product,
+		DTAPs:   ActionDTAPs{},
+	}
 	if _, ok := g.Products[product]; !ok {
-		return fmt.Errorf("'%s': unknown product", product)
+		return actionScope, fmt.Errorf("'%s': unknown product", product)
 	}
 	for dtap := range dtaps {
-		if !g.Products[product].DTAPs.HasDTAP(dtap) {
-			return fmt.Errorf("'%s': unknown dtap", dtap)
+		dtapSpec := g.Products[product].DTAPs
+		if !dtapSpec.HasDTAP(dtap) {
+			return actionScope, fmt.Errorf("'%s': unknown dtap", dtap)
+		}
+		if dtapSpec.IsProd(dtap) {
+			actionScope.DTAPs.Prod = dtap
+		} else {
+			actionScope.DTAPs.NonProd = append(actionScope.DTAPs.NonProd, dtap)
 		}
 	}
 	for i := range interfaces {
 		if _, ok := g.Products[product].Interfaces[i]; !ok {
-			return fmt.Errorf("'%s': unknown interface", i)
+			return actionScope, fmt.Errorf("'%s': unknown interface", i)
 		}
+		actionScope.Interfaces = append(actionScope.Interfaces, i)
 	}
 	// If the action is destructive, and one or more interfaces are specified, then these interfaces
 	// are not allowed to overlap with any of the other interfaces. Otherwise, those other interfaces
@@ -156,13 +167,15 @@ func (g Grupin) ValidateAction(product string, dtaps map[string]bool, interfaces
 				if !interfaces[j] {
 					if !g.Products[product].Interfaces[i].ObjectMatchers.disjoint(
 						g.Products[product].Interfaces[j].ObjectMatchers) {
-						return fmt.Errorf("interface '%s' has overlap with interface '%s' not specified in destructive action for product '%s'", i, j, product)
+						return actionScope, fmt.Errorf(
+							"interface '%s' has overlap with interface '%s' not specified in destructive action for product '%s'",
+							i, j, product)
 					}
 				}
 			}
 		}
 	}
-	return nil
+	return actionScope, nil
 }
 
 func (g Grupin) validateUsers(svcs map[string]ServiceAccount, teams map[string]Team) error {

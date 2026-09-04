@@ -17,7 +17,7 @@ type Config struct {
 	Account                   string
 	Database                  semantics.Ident
 	Schema                    semantics.Ident
-	Stage                     semantics.Ident
+	ExternalWriteStage        semantics.Ident
 	UseSQLOpen                bool
 	RSAKeyPath                string
 	MaxOpenConns              int
@@ -114,11 +114,11 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 		}
 	}
 
-	if stage, ok := os.LookupEnv("GRUPR_SNOWFLAKE_STAGE"); ok {
-		if stage, err := semantics.NewIdentStripQuotesIfAny(stage, semCnf.ValidQuotedExpr, semCnf.ValidUnquotedExpr); err != nil {
+	if externalWriteStage, ok := os.LookupEnv("GRUPR_SNOWFLAKE_STAGE"); ok {
+		if externalWriteStage, err := semantics.NewIdentStripQuotesIfAny(stage, semCnf.ValidQuotedExpr, semCnf.ValidUnquotedExpr); err != nil {
 			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_STAGE: Invalid stage name")
 		} else {
-			cnf.Stage = stage
+			cnf.ExternalWriteStage = externalWriteStage
 		}
 	}
 
