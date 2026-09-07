@@ -141,23 +141,32 @@ func (g Grupin) ValidateAction(product string, dtaps map[string]bool, interfaces
 	if _, ok := g.Products[product]; !ok {
 		return actionScope, fmt.Errorf("'%s': unknown product", product)
 	}
-	for dtap := range dtaps {
-		dtapSpec := g.Products[product].DTAPs
-		if !dtapSpec.HasDTAP(dtap) {
-			return actionScope, fmt.Errorf("'%s': unknown dtap", dtap)
+
+	// If no dtaps are specified, by default, we'll do all dtaps
+	dtapSpec := g.Products[product].DTAPs
+	if len(dtaps) == 0 {
+		for dtap, IsProd := range dtapSpec.All() {
+			actionScope.AddDTAP(dtap, IsProd)
 		}
-		if dtapSpec.IsProd(dtap) {
-			actionScope.DTAPs.Prod = dtap
-		} else {
-			actionScope.DTAPs.NonProd = append(actionScope.DTAPs.NonProd, dtap)
+	} else {
+		// we'll do only the specified DTAPs
+		for dtap := range dtaps {
+			dtapSpec := g.Products[product].DTAPs
+			if !dtapSpec.HasDTAP(dtap) {
+				return actionScope, fmt.Errorf("'%s': unknown dtap", dtap)
+			}
+			actionScope.AddDTAP(dtap, dtapSpec.IsProd(dtap))
 		}
 	}
+
+	// If no interfaces are specified, we'll do the empty interface (product-level interface)
 	for i := range interfaces {
 		if _, ok := g.Products[product].Interfaces[i]; !ok {
 			return actionScope, fmt.Errorf("'%s': unknown interface", i)
 		}
-		actionScope.Interfaces = append(actionScope.Interfaces, i)
+		actionScope.AddInterface(i)
 	}
+
 	// If the action is destructive, and one or more interfaces are specified, then these interfaces
 	// are not allowed to overlap with any of the other interfaces. Otherwise, those other interfaces
 	// would be impacted as well.

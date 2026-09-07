@@ -5,8 +5,10 @@ import (
 	"database/sql"
 	"fmt"
 	"iter"
-	"rand"
+	"math/rand"
+	"net/url"
 	"strings"
+	"time"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
 	"github.com/rwberendsen/grupr/internal/syntax"
@@ -259,29 +261,33 @@ func (g *Grupin) ManageAccess(ctx context.Context, semCnf *semantics.Config, cnf
 }
 
 func (g *Grupin) ManageAccessExclusively(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB,
-	pID string, dtaps map[string]bool, interfaces map[string]bool) error {
-	for pd := range g.getProductDTAPs(pID) {
-		if err := pd.ManageAccessExclusively(ctx, semCnf, cnf, conn, dtaps, interfaces); err != nil {
+	actionScope semantics.ActionScope) error {
+	for dtap := range actionScope.AllDTAPsProdFirst() {
+		pdID := semantics.ProductDTAPID{ProductID: actionScope.Product, DTAP: dtap}
+		if err := g.ProductDTAPs[pdID].ManageAccessExclusively(ctx, semCnf, cnf, conn, actionScope.Interfaces); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (g *Grupin) Archive(ctx context.Context, cnf *Config, conn *sql.DB, actionScope ActionScope, pID string, dtaps map[string]bool,
-	interfaces map[string]bool) error {
+func (g *Grupin) Archive(ctx context.Context, cnf *Config, conn *sql.DB, actionScope semantics.ActionScope) error {
 	if cnf.ExternalWriteStage == semantics.Ident("") {
 		return fmt.Errorf("no stage name configured")
 	}
 	// a run ID that sort nicely lexicographically, and that would be more than unique enough as well
 	runID := fmt.Sprintf("%s__%v", time.Now().Format(time.RFC3339), rand.Intn(1000000))
 	runID = strings.ReplaceAll(runID, ":", "") // RFC3399 has : characters in the time components, but we URL-encode object keys
-	path := fmt.Sprintf("products/%s/runs/%s/", pID, runID)
-	for pd := range g.getProductDTAPs(pID) {
-		if err := pd.Archive(ctx, cnf, conn, path, dtaps, interfaces); err != nil {
+	path := fmt.Sprintf("products/%s/runs/%s/", actionScope.Product, runID)
+
+	// go ahead and archive
+	for dtap := range actionScope.AllDTAPsProdFirst() {
+		pdID := semantics.ProductDTAPID{ProductID: actionScope.Product, DTAP: dtap}
+		if err := g.ProductDTAPs[pdID].Archive(ctx, cnf, conn, path, actionScope.Interfaces); err != nil {
 			return err
 		}
 	}
+
 	// If all went well, write a single manifest file to indicate so
 	// For now, include some basic information here, perhaps the products, dtaps, and interfaces that one
 	// should expect to find.
@@ -297,10 +303,10 @@ SINGLE_FILE = TRUE
 	return nil
 }
 
-func (g *Grupin) Purge(ctx context.Context, cnf *Config, conn *sql.DB, pID string, dtaps map[string]bool,
-	interfaces map[string]bool) error {
-	for pd := range g.getProductDTAPs(pID) {
-		if err := pd.Purge(ctx, cnf, conn, dtaps, interfaces); err != nil {
+func (g *Grupin) Purge(ctx context.Context, cnf *Config, conn *sql.DB, actionScope semantics.ActionScope) error {
+	for dtap := range actionScope.AllDTAPsProdFirst() {
+		pdID := semantics.ProductDTAPID{ProductID: actionScope.Product, DTAP: dtap}
+		if err := g.ProductDTAPs[pdID].Purge(ctx, cnf, conn, actionScope.Interfaces); err != nil {
 			return err
 		}
 	}

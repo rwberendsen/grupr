@@ -1,6 +1,6 @@
 module github.com/rwberendsen/grupr
 
-go 1.23
+go 1.26
 
 require (
 	github.com/snowflakedb/gosnowflake v1.12.0

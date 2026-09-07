@@ -114,9 +114,9 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 		}
 	}
 
-	if externalWriteStage, ok := os.LookupEnv("GRUPR_SNOWFLAKE_STAGE"); ok {
-		if externalWriteStage, err := semantics.NewIdentStripQuotesIfAny(stage, semCnf.ValidQuotedExpr, semCnf.ValidUnquotedExpr); err != nil {
-			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_STAGE: Invalid stage name")
+	if externalWriteStage, ok := os.LookupEnv("GRUPR_SNOWFLAKE_EXTERNAL_WRITE_STAGE"); ok {
+		if externalWriteStage, err := semantics.NewIdentStripQuotesIfAny(externalWriteStage, semCnf.ValidQuotedExpr, semCnf.ValidUnquotedExpr); err != nil {
+			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_EXTERNAL_WRITE_STAGE: Invalid stage name")
 		} else {
 			cnf.ExternalWriteStage = externalWriteStage
 		}

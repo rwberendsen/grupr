@@ -3,6 +3,7 @@ package snowflake
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"iter"
 	"net/url"
 
@@ -48,7 +49,7 @@ func (o AggAccountObjs) getExternalGrants(ctx context.Context, semCnf *semantics
 	}
 }
 
-func (o AggAccountObjs) archive(ctx context.Context, cnf *Config, conn *sql.DB, path, isProd bool, dtap string, interfaceID string) error {
+func (o AggAccountObjs) archive(ctx context.Context, cnf *Config, conn *sql.DB, path string, isProd bool, dtap string, interfaceID string) error {
 	prodOrNot := map[bool]string{true: "prod", false: "non-prod"}
 	path += fmt.Sprintf("%s/dtaps/%s/", prodOrNot, dtap)
 	if interfaceID != "" {
