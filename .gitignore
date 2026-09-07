@@ -19,3 +19,9 @@
 
 # Go workspace file
 go.work
+
+cmd/grupr/grupr
+cmd/grupr/grupr__linux_amd64
+cmd/grupr/grupr__linux_arm64
+cmd/grupr/grupr__darwin_amd64
+cmd/grupr/grupr__darwin_arm64

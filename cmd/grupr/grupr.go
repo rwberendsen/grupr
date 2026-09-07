@@ -38,13 +38,15 @@ func main() {
 
 	// Validate internal consistency between supplied flags
 	isAction := map[string]bool{
-		"ma":    true,
-		"mae":   true,
-		"purge": true,
+		"archive": true,
+		"ma":      true,
+		"mae":     true,
+		"purge":   true,
 	}
 	isProductSpecificAction := map[string]bool{
-		"mae":   true,
-		"purge": true,
+		"archive": true,
+		"mae":     true,
+		"purge":   true,
 	}
 	isDestructiveAction := map[string]bool{
 		"mae":   true,
@@ -88,8 +90,13 @@ func main() {
 	log.Println("Deserialized YAML")
 
 	// Validate command line flags against semantic grupin
+	var actionScope semantics.ActionScope
 	if isProductSpecificAction[action] {
-		newGrupin.ValidateAction(product, dtaps, interfaces, isDestructiveAction[action])
+		var err error
+		actionScope, err = newGrupin.ValidateAction(product, dtaps, interfaces, isDestructiveAction[action])
+		if err != nil {
+			log.Fatalf("invalid action: %v", err)
+		}
 	}
 
 	/* TODO: consider implementing GrupinDiff
@@ -174,15 +181,21 @@ func main() {
 
 	// Let's check for additional actions for specific products or interfaces
 	switch action {
+	case "archive":
+		// Archive (specified interfaces of) (dtaps of) product ID
+		if err := snowflakeNewGrupin.Archive(ctx, snowCnf, conn, actionScope); err != nil {
+			log.Fatalf("archive: %v", err)
+		}
+		log.Printf("Archive action for product '%v' successful", product)
 	case "mae":
-		// Manage access exclusively, require a product id in this case
-		if err := snowflakeNewGrupin.ManageAccessExclusively(ctx, semCnf, snowCnf, conn, product, dtaps, interfaces); err != nil {
+		// Manage access exclusively, require a product ID in this case
+		if err := snowflakeNewGrupin.ManageAccessExclusively(ctx, semCnf, snowCnf, conn, actionScope); err != nil {
 			log.Fatalf("mae: %v", err)
 		}
 		log.Printf("Managed access exclusively for product '%s'", product)
 	case "purge":
 		// Purge (DROP) objects
-		if err := snowflakeNewGrupin.Purge(ctx, snowCnf, conn, product, dtaps, interfaces); err != nil {
+		if err := snowflakeNewGrupin.Purge(ctx, snowCnf, conn, actionScope); err != nil {
 			log.Fatalf("purge: %v", err)
 		}
 		log.Printf("Purge completed")

@@ -133,20 +133,40 @@ func NewGrupinFromPath(cnf *Config, path string) (Grupin, error) {
 	return NewGrupin(cnf, s)
 }
 
-func (g Grupin) ValidateAction(product string, dtaps map[string]bool, interfaces map[string]bool, isDestructive bool) error {
-	if _, ok := g.Products[product]; !ok {
-		return fmt.Errorf("'%s': unknown product", product)
+func (g Grupin) ValidateAction(product string, dtaps map[string]bool, interfaces map[string]bool, isDestructive bool) (ActionScope, error) {
+	actionScope := ActionScope{
+		Product: product,
+		DTAPs:   ActionDTAPs{},
 	}
-	for dtap := range dtaps {
-		if !g.Products[product].DTAPs.HasDTAP(dtap) {
-			return fmt.Errorf("'%s': unknown dtap", dtap)
+	if _, ok := g.Products[product]; !ok {
+		return actionScope, fmt.Errorf("'%s': unknown product", product)
+	}
+
+	// If no dtaps are specified, by default, we'll do all dtaps
+	dtapSpec := g.Products[product].DTAPs
+	if len(dtaps) == 0 {
+		for dtap, IsProd := range dtapSpec.All() {
+			actionScope.AddDTAP(dtap, IsProd)
+		}
+	} else {
+		// we'll do only the specified DTAPs
+		for dtap := range dtaps {
+			dtapSpec := g.Products[product].DTAPs
+			if !dtapSpec.HasDTAP(dtap) {
+				return actionScope, fmt.Errorf("'%s': unknown dtap", dtap)
+			}
+			actionScope.AddDTAP(dtap, dtapSpec.IsProd(dtap))
 		}
 	}
+
+	// If no interfaces are specified, we'll do the empty interface (product-level interface)
 	for i := range interfaces {
 		if _, ok := g.Products[product].Interfaces[i]; !ok {
-			return fmt.Errorf("'%s': unknown interface", i)
+			return actionScope, fmt.Errorf("'%s': unknown interface", i)
 		}
+		actionScope.AddInterface(i)
 	}
+
 	// If the action is destructive, and one or more interfaces are specified, then these interfaces
 	// are not allowed to overlap with any of the other interfaces. Otherwise, those other interfaces
 	// would be impacted as well.
@@ -156,13 +176,15 @@ func (g Grupin) ValidateAction(product string, dtaps map[string]bool, interfaces
 				if !interfaces[j] {
 					if !g.Products[product].Interfaces[i].ObjectMatchers.disjoint(
 						g.Products[product].Interfaces[j].ObjectMatchers) {
-						return fmt.Errorf("interface '%s' has overlap with interface '%s' not specified in destructive action for product '%s'", i, j, product)
+						return actionScope, fmt.Errorf(
+							"interface '%s' has overlap with interface '%s' not specified in destructive action for product '%s'",
+							i, j, product)
 					}
 				}
 			}
 		}
 	}
-	return nil
+	return actionScope, nil
 }
 
 func (g Grupin) validateUsers(svcs map[string]ServiceAccount, teams map[string]Team) error {

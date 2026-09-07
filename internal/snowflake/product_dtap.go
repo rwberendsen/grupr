@@ -340,21 +340,17 @@ func (pd *ProductDTAP) dropProductRolesIfZombie(ctx context.Context, cnf *Config
 	return pd.WriteRole.Drop(ctx, cnf, conn)
 }
 
-func (pd *ProductDTAP) ManageAccessExclusively(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB,
-	dtaps map[string]bool, interfaces map[string]bool) error {
-	// No dtaps specified means: just do all DTAPs; otherwise, pd.DTAP has to be in the specified sub-set
-	if len(dtaps) == 0 || dtaps[pd.DTAP] {
-		// No interfaces specified means: do the produdct-level one; Otherwise, do each interface if it was specified
-		if len(interfaces) == 0 {
-			if err := pd.Interface.manageAccessExclusively(ctx, semCnf, cnf, conn); err != nil {
-				return err
-			}
-		} else {
-			for iid, i := range pd.Interfaces {
-				if interfaces[iid] {
-					if err := i.manageAccessExclusively(ctx, semCnf, cnf, conn); err != nil {
-						return err
-					}
+func (pd *ProductDTAP) ManageAccessExclusively(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, interfaces map[string]bool) error {
+	// No interfaces specified means: do the produdct-level one; Otherwise, do each interface if it was specified
+	if len(interfaces) == 0 {
+		if err := pd.Interface.manageAccessExclusively(ctx, semCnf, cnf, conn); err != nil {
+			return err
+		}
+	} else {
+		for iid, i := range pd.Interfaces {
+			if interfaces[iid] {
+				if err := i.manageAccessExclusively(ctx, semCnf, cnf, conn); err != nil {
+					return err
 				}
 			}
 		}
@@ -366,43 +362,74 @@ func (pd *ProductDTAP) ManageAccessExclusively(ctx context.Context, semCnf *sema
 	return DoRevokesExitOnInputErrors(ctx, cnf, conn, QueryGrantsOfRoleToRoles(ctx, conn, pd.ReadRole.ID))
 }
 
-func (pd *ProductDTAP) Purge(ctx context.Context, cnf *Config, conn *sql.DB, dtaps map[string]bool,
-	interfaces map[string]bool) error {
-	// No dtaps specified means: just do all DTAPs; otherwise, pd.DTAP has to be in the specified sub-set
-	if len(dtaps) == 0 || dtaps[pd.DTAP] {
+func (pd *ProductDTAP) Archive(ctx context.Context, cnf *Config, conn *sql.DB, path string, interfaces map[string]bool) error {
+	// Grant grupr product read role and assume it
+	if err := runSQL(ctx, cnf, conn, `GRANT ROLE IDENTIFIER(?) TO ROLE IDENTIFIER(?)`,
+		pd.ReadRole.String(), cnf.Role.String()); err != nil {
+		return err
+	}
+	if err := runSQL(ctx, cnf, conn, `USE ROLE IDENTIFIER(?)`, pd.ReadRole.String()); err != nil {
+		return err
+	}
 
-		// Grant grupr product write role and assume it
-		if err := runSQL(ctx, cnf, conn, `GRANT ROLE IDENTIFIER(?) TO ROLE IDENTIFIER(?)`,
-			pd.WriteRole.String(), cnf.Role.String()); err != nil {
+	// No interfaces specified means: do the produdct-level one; Otherwise, do each interface if it was specified
+	if len(interfaces) == 0 {
+		if err := pd.Interface.aggAccountObjects.archive(ctx, cnf, conn, path, pd.IsProd, pd.DTAP, ""); err != nil {
 			return err
 		}
-		if err := runSQL(ctx, cnf, conn, `USE ROLE IDENTIFIER(?)`, pd.WriteRole.String()); err != nil {
-			return err
-		}
-
-		// No interfaces specified means: do the produdct-level one; Otherwise, do each interface if it was specified
-		if len(interfaces) == 0 {
-			if err := pd.Interface.aggAccountObjects.purge(ctx, cnf, conn); err != nil {
-				return err
-			}
-		} else {
-			for iid, i := range pd.Interfaces {
-				if interfaces[iid] {
-					if err := i.aggAccountObjects.purge(ctx, cnf, conn); err != nil {
-						return err
-					}
+	} else {
+		for iid, i := range pd.Interfaces {
+			if interfaces[iid] {
+				if err := i.aggAccountObjects.archive(ctx, cnf, conn, path, pd.IsProd, pd.DTAP, iid); err != nil {
+					return err
 				}
 			}
 		}
+	}
 
-		// Assume default role again, and revoke product write role from grupr
-		if err := runSQL(ctx, cnf, conn, `USE ROLE IDENTIFIER(?)`, cnf.Role.String()); err != nil {
+	// Assume default role again, and revoke product read role from grupr
+	if err := runSQL(ctx, cnf, conn, `USE ROLE IDENTIFIER(?)`, cnf.Role.String()); err != nil {
+		return err
+	}
+	if err := runSQL(ctx, cnf, conn, `REVOKE ROLE IDENTIFIER(?) FROM ROLE IDENTIFIER(?)`,
+		pd.ReadRole.String(), cnf.Role.String()); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (pd *ProductDTAP) Purge(ctx context.Context, cnf *Config, conn *sql.DB, interfaces map[string]bool) error {
+	// Grant grupr product write role and assume it
+	if err := runSQL(ctx, cnf, conn, `GRANT ROLE IDENTIFIER(?) TO ROLE IDENTIFIER(?)`,
+		pd.WriteRole.String(), cnf.Role.String()); err != nil {
+		return err
+	}
+	if err := runSQL(ctx, cnf, conn, `USE ROLE IDENTIFIER(?)`, pd.WriteRole.String()); err != nil {
+		return err
+	}
+
+	// No interfaces specified means: do the produdct-level one; Otherwise, do each interface if it was specified
+	if len(interfaces) == 0 {
+		if err := pd.Interface.aggAccountObjects.purge(ctx, cnf, conn); err != nil {
 			return err
 		}
-		if err := runSQL(ctx, cnf, conn, `REVOKE ROLE IDENTIFIER(?) FROM ROLE IDENTIFIER(?)`,
-			pd.WriteRole.String(), cnf.Role.String()); err != nil {
-			return err
+	} else {
+		for iid, i := range pd.Interfaces {
+			if interfaces[iid] {
+				if err := i.aggAccountObjects.purge(ctx, cnf, conn); err != nil {
+					return err
+				}
+			}
 		}
+	}
+
+	// Assume default role again, and revoke product write role from grupr
+	if err := runSQL(ctx, cnf, conn, `USE ROLE IDENTIFIER(?)`, cnf.Role.String()); err != nil {
+		return err
+	}
+	if err := runSQL(ctx, cnf, conn, `REVOKE ROLE IDENTIFIER(?) FROM ROLE IDENTIFIER(?)`,
+		pd.WriteRole.String(), cnf.Role.String()); err != nil {
+		return err
 	}
 	return nil
 }
