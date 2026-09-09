@@ -1,2 +1,3 @@
-- Usage on DB already granted to DB role upon creation, do not duplicate
-- To make sure write roles can only use one warehouse, do not grant read role to write role, instead, grant DB roles consumed interfaces directly; and grant usage on db's and schema's own product separately.
+- bump snowflake driver and other deps
+- use warehouse with archive action
+- print better usage using flags

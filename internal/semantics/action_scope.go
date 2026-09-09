@@ -13,7 +13,7 @@ type ActionDTAPs struct {
 type ActionScope struct {
 	Product    string          `json:"product,"`
 	DTAPs      ActionDTAPs     `json:"dtaps,"`
-	Interfaces map[string]bool `json:",omitempty"`
+	Interfaces map[string]bool `json:"interfaces,omitempty"`
 }
 
 func NewActionScope(product string) ActionScope {
