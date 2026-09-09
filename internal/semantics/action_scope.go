@@ -6,12 +6,12 @@ import (
 )
 
 type ActionDTAPs struct {
-	Prod    string          `json:",omitempty"`
+	Prod    string          `json:"prod,omitempty"`
 	NonProd map[string]bool `json:"non_prod,omitempty"`
 }
 
 type ActionScope struct {
-	Product    string
+	Product    string          `json:"product,"`
 	DTAPs      ActionDTAPs     `json:"dtaps,"`
 	Interfaces map[string]bool `json:",omitempty"`
 }

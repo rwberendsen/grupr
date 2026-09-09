@@ -362,7 +362,7 @@ func (pd *ProductDTAP) ManageAccessExclusively(ctx context.Context, semCnf *sema
 	return DoRevokesExitOnInputErrors(ctx, cnf, conn, QueryGrantsOfRoleToRoles(ctx, conn, pd.ReadRole.ID))
 }
 
-func (pd *ProductDTAP) Archive(ctx context.Context, cnf *Config, conn *sql.DB, path string, interfaces map[string]bool) error {
+func (pd *ProductDTAP) Archive(ctx context.Context, cnf *Config, conn *sql.DB, path []string, interfaces map[string]bool) error {
 	// Grant grupr role the product read role, so that grupr can both use the external stage, and have
 	// read access to the objects to be archived
 	if err := runSQL(ctx, cnf, conn, `GRANT ROLE IDENTIFIER(?) TO ROLE IDENTIFIER(?)`,
@@ -371,16 +371,16 @@ func (pd *ProductDTAP) Archive(ctx context.Context, cnf *Config, conn *sql.DB, p
 	}
 
 	prodOrNot := map[bool]string{true: "prod", false: "non-prod"}
-	path += fmt.Sprintf("%s/dtaps/%s/", prodOrNot[pd.IsProd], pd.DTAP)
+	pathProductDTAP := append(path, prodOrNot[pd.IsProd], "dtaps", pd.DTAP)
 	// No interfaces specified means: do the produdct-level one; Otherwise, do each interface if it was specified
 	if len(interfaces) == 0 {
-		if err := pd.Interface.aggAccountObjects.archive(ctx, cnf, conn, path, ""); err != nil {
+		if err := pd.Interface.aggAccountObjects.archive(ctx, cnf, conn, pathProductDTAP, ""); err != nil {
 			return err
 		}
 	} else {
 		for iid, i := range pd.Interfaces {
 			if interfaces[iid] {
-				if err := i.aggAccountObjects.archive(ctx, cnf, conn, path, iid); err != nil {
+				if err := i.aggAccountObjects.archive(ctx, cnf, conn, pathProductDTAP, iid); err != nil {
 					return err
 				}
 			}

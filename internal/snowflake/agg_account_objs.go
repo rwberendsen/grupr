@@ -49,21 +49,28 @@ func (o AggAccountObjs) getExternalGrants(ctx context.Context, semCnf *semantics
 	}
 }
 
-func (o AggAccountObjs) archive(ctx context.Context, cnf *Config, conn *sql.DB, path string, interfaceID string) error {
+func (o AggAccountObjs) archive(ctx context.Context, cnf *Config, conn *sql.DB, path []string, interfaceID string) error {
+	pathInterface := append(path)
 	if interfaceID != "" {
-		path += fmt.Sprintf("interfaces/%s/", interfaceID)
+		pathInterface = append(pathInterface, "interfaces", interfaceID)
 	}
 	for db, dbObjs := range o.DBs {
 		for schema, schemaObjs := range dbObjs.Schemas {
 			for obj, objAttr := range schemaObjs.Objects {
-				pathSuffix := fmt.Sprintf("dbs/%s/schemas/%s/objects/%s/", db, schema, obj)
-				if err := runSQL(ctx, cnf, conn, fmt.Sprintf(`COPY INTO @%s.%s.%s/%s
+				pathObj := append(pathInterface, "dbs", string(db), "schemas", string(schema), "objects", string(obj))
+				for i := range pathObj {
+					pathObj[i] = url.PathEscape(pathObj[i])
+				}
+				if pathStr, err := url.JoinPath("", pathObj...); err != nil {
+					return fmt.Errorf("archive: %w", err)
+				} else {
+					if err := runSQL(ctx, cnf, conn, fmt.Sprintf(`COPY INTO @%s.%s.%s/%s
 FROM (SELECT * FROM IDENTIFIER($$%s$$))
 INCLUDE_QUERY_ID = TRUE
 DETAILED_OUTPUT = TRUE
-HEADER = TRUE
-`, cnf.Database, cnf.Schema, cnf.ExternalWriteStage, url.PathEscape(path+pathSuffix), objAttr.ObjectType.FQN(db, schema, obj))); err != nil {
-					return err
+HEADER = TRUE`, cnf.Database, cnf.Schema, cnf.ExternalWriteStage, pathStr, objAttr.ObjectType.FQN(db, schema, obj))); err != nil {
+						return err
+					}
 				}
 			}
 		}
