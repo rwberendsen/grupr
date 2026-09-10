@@ -370,6 +370,24 @@ func (pd *ProductDTAP) Archive(ctx context.Context, cnf *Config, conn *sql.DB, p
 		return err
 	}
 
+	// Use one of the warehouses of that have been granted to the product read role for the archiving job; potentially,
+	// it is a big job, and this way costs can be attributed to the data product, rather than to governance overhead.
+	var readWarehouse *semantics.Ident
+	for w, privileges := range pd.ReadWarehouses {
+		if hasFlagPrivilegeWarehouse(privileges, PrvUsage) &&
+			hasFlagPrivilegeWarehouse(privileges, PrvMonitor) &&
+			hasFlagPrivilegeWarehouse(privileges, PrvOperate) {
+			*readWarehouse = w
+			break
+		}
+	}
+	if readWarehouse == nil {
+		return fmt.Errorf("product '%s': no warehouse was granted to the read role", pd.ProductID)
+	}
+	if err := runSQL(ctx, cnf, conn, `USE WAREHOUSE IDENTIFIER($$%s$$)`, *readWarehouse); err != nil {
+		return fmt.Errorf("use warehouse '%s': %w", *readWarehouse, err)
+	}
+
 	prodOrNot := map[bool]string{true: "prod", false: "non-prod"}
 	pathProductDTAP := append(path, prodOrNot[pd.IsProd], "dtaps", pd.DTAP)
 	// No interfaces specified means: do the produdct-level one; Otherwise, do each interface if it was specified
@@ -385,6 +403,11 @@ func (pd *ProductDTAP) Archive(ctx context.Context, cnf *Config, conn *sql.DB, p
 				}
 			}
 		}
+	}
+
+	// Use default warehouse again
+	if err := runSQL(ctx, cnf, conn, `USE WAREHOUSE IDENTIFIER($$%s$$)`, cnf.Warehouse); err != nil {
+		return fmt.Errorf("use warehouse '%s': %w", cnf.Warehouse, err)
 	}
 
 	// Revoke product read role from grupr role
@@ -404,6 +427,23 @@ func (pd *ProductDTAP) Purge(ctx context.Context, cnf *Config, conn *sql.DB, int
 	if err := runSQL(ctx, cnf, conn, `USE ROLE IDENTIFIER(?)`, pd.WriteRole.String()); err != nil {
 		return err
 	}
+	// Use one of the warehouses of that have been granted to the product write role for the purging job,
+	// for proper cost attribution, even if costs may be small.
+	var writeWarehouse *semantics.Ident
+	for w, privileges := range pd.WriteWarehouses {
+		if hasFlagPrivilegeWarehouse(privileges, PrvUsage) &&
+			hasFlagPrivilegeWarehouse(privileges, PrvMonitor) &&
+			hasFlagPrivilegeWarehouse(privileges, PrvOperate) {
+			*writeWarehouse = w
+			break
+		}
+	}
+	if writeWarehouse == nil {
+		return fmt.Errorf("product '%s': no warehouse was granted to the write role", pd.ProductID)
+	}
+	if err := runSQL(ctx, cnf, conn, `USE WAREHOUSE IDENTIFIER($$%s$$)`, *writeWarehouse); err != nil {
+		return fmt.Errorf("use warehouse '%s': %w", *writeWarehouse, err)
+	}
 
 	// No interfaces specified means: do the produdct-level one; Otherwise, do each interface if it was specified
 	if len(interfaces) == 0 {
@@ -420,10 +460,15 @@ func (pd *ProductDTAP) Purge(ctx context.Context, cnf *Config, conn *sql.DB, int
 		}
 	}
 
-	// Assume default role again, and revoke product write role from grupr user
+	// Assume default role again
 	if err := runSQL(ctx, cnf, conn, `USE ROLE IDENTIFIER(?)`, cnf.Role.String()); err != nil {
 		return err
 	}
+	// Use default warehouse again
+	if err := runSQL(ctx, cnf, conn, `USE WAREHOUSE IDENTIFIER($$%s$$)`, cnf.Warehouse); err != nil {
+		return fmt.Errorf("use warehouse '%s': %w", cnf.Warehouse, err)
+	}
+	// Revoke product write role from grupr user
 	if err := runSQL(ctx, cnf, conn, `REVOKE ROLE IDENTIFIER(?) FROM USER IDENTIFIER(?)`,
 		pd.WriteRole.String(), cnf.User.String()); err != nil {
 		return err

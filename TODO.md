@@ -1,3 +1,0 @@
-- bump snowflake driver and other deps
-- use warehouse with archive action
-- print better usage using flags
