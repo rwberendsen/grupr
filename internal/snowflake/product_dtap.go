@@ -377,7 +377,7 @@ func (pd *ProductDTAP) Archive(ctx context.Context, cnf *Config, conn *sql.DB, p
 		if hasFlagPrivilegeWarehouse(privileges, PrvUsage) &&
 			hasFlagPrivilegeWarehouse(privileges, PrvMonitor) &&
 			hasFlagPrivilegeWarehouse(privileges, PrvOperate) {
-			*readWarehouse = w
+			readWarehouse = &w
 			break
 		}
 	}
@@ -434,7 +434,7 @@ func (pd *ProductDTAP) Purge(ctx context.Context, cnf *Config, conn *sql.DB, int
 		if hasFlagPrivilegeWarehouse(privileges, PrvUsage) &&
 			hasFlagPrivilegeWarehouse(privileges, PrvMonitor) &&
 			hasFlagPrivilegeWarehouse(privileges, PrvOperate) {
-			*writeWarehouse = w
+			writeWarehouse = &w
 			break
 		}
 	}
