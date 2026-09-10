@@ -382,7 +382,7 @@ func (pd *ProductDTAP) Archive(ctx context.Context, cnf *Config, conn *sql.DB, p
 		}
 	}
 	if readWarehouse == nil {
-		return fmt.Errorf("product '%s': no warehouse was granted to the read role", pd.ProductID)
+		return fmt.Errorf("product '%s', dtap '%s': no warehouse was granted to the read role", pd.ProductID, pd.DTAP)
 	}
 	if err := runSQL(ctx, cnf, conn, `USE WAREHOUSE IDENTIFIER($$%s$$)`, *readWarehouse); err != nil {
 		return fmt.Errorf("use warehouse '%s': %w", *readWarehouse, err)
@@ -439,7 +439,7 @@ func (pd *ProductDTAP) Purge(ctx context.Context, cnf *Config, conn *sql.DB, int
 		}
 	}
 	if writeWarehouse == nil {
-		return fmt.Errorf("product '%s': no warehouse was granted to the write role", pd.ProductID)
+		return fmt.Errorf("product '%s', dtap '%s': no warehouse was granted to the write role", pd.ProductID, pd.DTAP)
 	}
 	if err := runSQL(ctx, cnf, conn, `USE WAREHOUSE IDENTIFIER($$%s$$)`, *writeWarehouse); err != nil {
 		return fmt.Errorf("use warehouse '%s': %w", *writeWarehouse, err)
