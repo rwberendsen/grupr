@@ -363,29 +363,32 @@ func (pd *ProductDTAP) ManageAccessExclusively(ctx context.Context, semCnf *sema
 }
 
 func (pd *ProductDTAP) Archive(ctx context.Context, cnf *Config, conn *sql.DB, path []string, interfaces map[string]bool) error {
-	// Grant grupr role the product read role, so that grupr can both use the external stage, and have
+	// Grant grupr role the product write role, so that grupr can both use the external stage, and have
 	// read access to the objects to be archived
+	// Note that we use the write role, even though we'll only be needing read access to the objects.
+	// This is because when using grupr, it is a common practice to always use write roles for service accounts.
+	// And the grupr user is a service account by any definition.
 	if err := runSQL(ctx, cnf, conn, `GRANT ROLE IDENTIFIER(?) TO ROLE IDENTIFIER(?)`,
-		pd.ReadRole.String(), cnf.Role.String()); err != nil {
+		pd.WriteRole.String(), cnf.Role.String()); err != nil {
 		return err
 	}
 
-	// Use one of the warehouses of that have been granted to the product read role for the archiving job; potentially,
+	// Use one of the warehouses of that have been granted to the product write role for the archiving job; potentially,
 	// it is a big job, and this way costs can be attributed to the data product, rather than to governance overhead.
-	var readWarehouse *semantics.Ident
-	for w, privileges := range pd.ReadWarehouses {
+	var writeWarehouse *semantics.Ident
+	for w, privileges := range pd.WriteWarehouses {
 		if hasFlagPrivilegeWarehouse(privileges, PrvUsage) &&
 			hasFlagPrivilegeWarehouse(privileges, PrvMonitor) &&
 			hasFlagPrivilegeWarehouse(privileges, PrvOperate) {
-			readWarehouse = &w
+			writeWarehouse = &w
 			break
 		}
 	}
-	if readWarehouse == nil {
-		return fmt.Errorf("product '%s', dtap '%s': no warehouse was granted to the read role", pd.ProductID, pd.DTAP)
+	if writeWarehouse == nil {
+		return fmt.Errorf("product '%s', dtap '%s': no warehouse was granted to the write role", pd.ProductID, pd.DTAP)
 	}
-	if err := runSQL(ctx, cnf, conn, `USE WAREHOUSE IDENTIFIER($$%s$$)`, *readWarehouse); err != nil {
-		return fmt.Errorf("use warehouse '%s': %w", *readWarehouse, err)
+	if err := runSQL(ctx, cnf, conn, `USE WAREHOUSE IDENTIFIER($$%s$$)`, *writeWarehouse); err != nil {
+		return fmt.Errorf("use warehouse '%s': %w", *writeWarehouse, err)
 	}
 
 	prodOrNot := map[bool]string{true: "prod", false: "non-prod"}
@@ -410,9 +413,9 @@ func (pd *ProductDTAP) Archive(ctx context.Context, cnf *Config, conn *sql.DB, p
 		return fmt.Errorf("use warehouse '%s': %w", cnf.Warehouse, err)
 	}
 
-	// Revoke product read role from grupr role
+	// Revoke product write role from grupr role
 	if err := runSQL(ctx, cnf, conn, `REVOKE ROLE IDENTIFIER(?) FROM ROLE IDENTIFIER(?)`,
-		pd.ReadRole.String(), cnf.Role.String()); err != nil {
+		pd.WriteRole.String(), cnf.Role.String()); err != nil {
 		return err
 	}
 	return nil
