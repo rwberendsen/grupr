@@ -146,7 +146,7 @@ func (g Grupin) ValidateAction(product string, dtaps map[string]bool, interfaces
 	dtapSpec := g.Products[product].DTAPs
 	if len(dtaps) == 0 {
 		for dtap, IsProd := range dtapSpec.All() {
-			actionScope.AddDTAP(dtap, IsProd)
+			actionScope = actionScope.AddDTAP(dtap, IsProd)
 		}
 	} else {
 		// we'll do only the specified DTAPs
@@ -155,7 +155,7 @@ func (g Grupin) ValidateAction(product string, dtaps map[string]bool, interfaces
 			if !dtapSpec.HasDTAP(dtap) {
 				return actionScope, fmt.Errorf("'%s': unknown dtap", dtap)
 			}
-			actionScope.AddDTAP(dtap, dtapSpec.IsProd(dtap))
+			actionScope = actionScope.AddDTAP(dtap, dtapSpec.IsProd(dtap))
 		}
 	}
 
@@ -164,7 +164,7 @@ func (g Grupin) ValidateAction(product string, dtaps map[string]bool, interfaces
 		if _, ok := g.Products[product].Interfaces[i]; !ok {
 			return actionScope, fmt.Errorf("'%s': unknown interface", i)
 		}
-		actionScope.AddInterface(i)
+		actionScope = actionScope.AddInterface(i)
 	}
 
 	// If the action is destructive, and one or more interfaces are specified, then these interfaces

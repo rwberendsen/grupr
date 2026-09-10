@@ -17,6 +17,7 @@ type Config struct {
 	Account                   string
 	Database                  semantics.Ident
 	Schema                    semantics.Ident
+	Warehouse                 semantics.Ident
 	ExternalWriteStage        semantics.Ident
 	UseSQLOpen                bool
 	RSAKeyPath                string
@@ -111,6 +112,16 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_SCHEMA: Invalid schema name")
 		} else {
 			cnf.Schema = schema
+		}
+	}
+
+	if warehouse, ok := os.LookupEnv("GRUPR_SNOWFLAKE_WAREHOUSE"); !ok {
+		return nil, fmt.Errorf("Could not find environment variable GRUPR_SNOWFLAKE_WAREHOUSE")
+	} else {
+		if warehouse, err := semantics.NewIdentStripQuotesIfAny(warehouse, semCnf.ValidQuotedExpr, semCnf.ValidUnquotedExpr); err != nil {
+			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_WAREHOUSE: Invalid warehouse name")
+		} else {
+			cnf.Warehouse = warehouse
 		}
 	}
 

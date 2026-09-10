@@ -12,6 +12,7 @@ import (
 
 	"github.com/rwberendsen/grupr/internal/semantics"
 	"github.com/rwberendsen/grupr/internal/syntax"
+	"github.com/rwberendsen/grupr/internal/util"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -207,7 +208,50 @@ func (g *Grupin) dropZombieProductDTAPs(ctx context.Context, cnf *Config, conn *
 	return nil
 }
 
+func (_ *Grupin) revokeGruprManagedRolesFromGrupr(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB) error {
+	// Some actions, like archive, and purge, result in grupr managed roles being granted to the grupr user (purge action),
+	// or to the grupr role (as with the archive action, for example). In normal circumstances, after completion of
+	// the action, the roles are revoked again. However, if an error occurred, such grants may have remained, and
+	// we should revoke them.
+	if err := DoRevokesExitOnInputErrors(ctx, cnf, conn, QueryGrantsToUserFiltered(ctx, cnf, conn, cnf.User, map[GrantTemplate]struct{}{
+		GrantTemplate{
+			PrivilegeComplete:         PrivilegeComplete{Privilege: PrvUsage},
+			GrantedOn:                 ObjTpRole,
+			GrantedRoleIsGruprManaged: util.NewTrue(),
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete:         PrivilegeComplete{Privilege: PrvUsage},
+			GrantedOn:                 ObjTpDatabaseRole,
+			GrantedRoleIsGruprManaged: util.NewTrue(),
+		}: {},
+	}, nil)); err != nil {
+		return err
+	}
+	return DoRevokesExitOnInputErrors(ctx, cnf, conn, QueryGrantsToRoleFiltered(ctx, cnf, conn, cnf.Role, map[GrantTemplate]struct{}{
+		GrantTemplate{
+			PrivilegeComplete:         PrivilegeComplete{Privilege: PrvUsage},
+			GrantedOn:                 ObjTpRole,
+			GrantedRoleIsGruprManaged: util.NewTrue(),
+		}: {},
+		GrantTemplate{
+			PrivilegeComplete:         PrivilegeComplete{Privilege: PrvUsage},
+			GrantedOn:                 ObjTpDatabaseRole,
+			GrantedRoleIsGruprManaged: util.NewTrue(),
+		}: {},
+	}, nil))
+}
+
 func (g *Grupin) ManageAccess(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB) error {
+	// Before we do anything, clean up some potential mess.  Some actions, like
+	// archive, and purge, result in grupr managed roles being granted to the
+	// grupr user (purge action), or to the grupr role (as with the archive
+	// action, for example). In normal circumstances, after completion of the
+	// action, the roles are revoked again. However, if an error occurred, such
+	// grants may have remained, and we should revoke them.
+	if err := g.revokeGruprManagedRolesFromGrupr(ctx, semCnf, cnf, conn); err != nil {
+		return err
+	}
+
 	// Find the product roles that are there, so we don't attempt to re-create them unnecessarilly
 	if err := g.setProductRoles(ctx, semCnf, cnf, conn); err != nil {
 		return err
@@ -278,7 +322,7 @@ func (g *Grupin) Archive(ctx context.Context, cnf *Config, conn *sql.DB, actionS
 	// a run ID that sort nicely lexicographically, and that would be more than unique enough as well
 	runID := fmt.Sprintf("%s__%v", time.Now().Format(time.RFC3339), rand.Intn(1000000))
 	runID = strings.ReplaceAll(runID, ":", "") // RFC3399 has : characters in the time components, but we URL-encode object keys
-	path := fmt.Sprintf("products/%s/runs/%s/", actionScope.Product, runID)
+	path := []string{"products", actionScope.Product, "runs", runID}
 
 	// go ahead and archive
 	for dtap := range actionScope.AllDTAPsProdFirst() {
@@ -291,14 +335,20 @@ func (g *Grupin) Archive(ctx context.Context, cnf *Config, conn *sql.DB, actionS
 	// If all went well, write a single manifest file to indicate so
 	// For now, include some basic information here, perhaps the products, dtaps, and interfaces that one
 	// should expect to find.
-	path += "manifest_"
-	if err := runSQL(ctx, cnf, conn, fmt.Sprintf(`COPY INTO @%s.%s.%s/%s
+	path = append(path, "manifest.json")
+	for i := range path {
+		path[i] = url.PathEscape(path[i])
+	}
+	if pathStr, err := url.JoinPath("", path...); err != nil {
+		return fmt.Errorf("archive: %w", err)
+	} else {
+		if err := runSQL(ctx, cnf, conn, fmt.Sprintf(`COPY INTO @%s.%s.%s/%s
 FROM (SELECT PARSE_JSON(?) AS manifest)
-FILE_FORMAT (TYPE = JSON)
-INCLUDE_QUERY_ID = TRUE
-SINGLE_FILE = TRUE
-`, cnf.Database, cnf.Schema, cnf.ExternalWriteStage, url.PathEscape(path)), actionScope.String()); err != nil {
-		return err
+FILE_FORMAT = (TYPE = JSON COMPRESSION = NONE)
+OVERWRITE = TRUE
+SINGLE = TRUE`, cnf.Database, cnf.Schema, cnf.ExternalWriteStage, pathStr), actionScope.String()); err != nil {
+			return err
+		}
 	}
 	return nil
 }

@@ -2,7 +2,6 @@ package util
 
 import (
 	"fmt"
-	"strings"
 )
 
 func FmtSliceElements[T any](in ...T) []string {
@@ -11,8 +10,4 @@ func FmtSliceElements[T any](in ...T) []string {
 		out[i] = fmt.Sprintf("%v", v)
 	}
 	return out
-}
-
-func EscapeQuotes(s string) string {
-	return strings.ReplaceAll(s, `"`, `\"`)
 }
