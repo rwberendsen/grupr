@@ -387,7 +387,7 @@ func (pd *ProductDTAP) Archive(ctx context.Context, cnf *Config, conn *sql.DB, p
 	if writeWarehouse == nil {
 		return fmt.Errorf("product '%s', dtap '%s': no warehouse was granted to the write role", pd.ProductID, pd.DTAP)
 	}
-	if err := runSQL(ctx, cnf, conn, `USE WAREHOUSE IDENTIFIER($$%s$$)`, *writeWarehouse); err != nil {
+	if err := runSQL(ctx, cnf, conn, fmt.Sprintf(`USE WAREHOUSE IDENTIFIER($$%s$$)`, *writeWarehouse)); err != nil {
 		return fmt.Errorf("use warehouse '%s': %w", *writeWarehouse, err)
 	}
 
@@ -409,7 +409,7 @@ func (pd *ProductDTAP) Archive(ctx context.Context, cnf *Config, conn *sql.DB, p
 	}
 
 	// Use default warehouse again
-	if err := runSQL(ctx, cnf, conn, `USE WAREHOUSE IDENTIFIER($$%s$$)`, cnf.Warehouse); err != nil {
+	if err := runSQL(ctx, cnf, conn, fmt.Sprintf(`USE WAREHOUSE IDENTIFIER($$%s$$)`, cnf.Warehouse)); err != nil {
 		return fmt.Errorf("use warehouse '%s': %w", cnf.Warehouse, err)
 	}
 
@@ -444,7 +444,7 @@ func (pd *ProductDTAP) Purge(ctx context.Context, cnf *Config, conn *sql.DB, int
 	if writeWarehouse == nil {
 		return fmt.Errorf("product '%s', dtap '%s': no warehouse was granted to the write role", pd.ProductID, pd.DTAP)
 	}
-	if err := runSQL(ctx, cnf, conn, `USE WAREHOUSE IDENTIFIER($$%s$$)`, *writeWarehouse); err != nil {
+	if err := runSQL(ctx, cnf, conn, fmt.Sprintf(`USE WAREHOUSE IDENTIFIER($$%s$$)`, *writeWarehouse)); err != nil {
 		return fmt.Errorf("use warehouse '%s': %w", *writeWarehouse, err)
 	}
 
@@ -468,7 +468,7 @@ func (pd *ProductDTAP) Purge(ctx context.Context, cnf *Config, conn *sql.DB, int
 		return err
 	}
 	// Use default warehouse again
-	if err := runSQL(ctx, cnf, conn, `USE WAREHOUSE IDENTIFIER($$%s$$)`, cnf.Warehouse); err != nil {
+	if err := runSQL(ctx, cnf, conn, fmt.Sprintf(`USE WAREHOUSE IDENTIFIER($$%s$$)`, cnf.Warehouse)); err != nil {
 		return fmt.Errorf("use warehouse '%s': %w", cnf.Warehouse, err)
 	}
 	// Revoke product write role from grupr user
