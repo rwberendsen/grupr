@@ -362,7 +362,8 @@ func (pd *ProductDTAP) ManageAccessExclusively(ctx context.Context, semCnf *sema
 	return DoRevokesExitOnInputErrors(ctx, cnf, conn, QueryGrantsOfRoleToRoles(ctx, conn, pd.ReadRole.ID))
 }
 
-func (pd *ProductDTAP) Archive(ctx context.Context, cnf *Config, conn *sql.DB, path []string, interfaces map[string]bool) error {
+func (pd *ProductDTAP) Archive(ctx context.Context, cnf *Config, conn *sql.DB, path []string, interfaces map[string]bool) ([]string, error) {
+	failedQueries := []string{}
 	// Grant grupr role the product write role, so that grupr can both use the external stage, and have
 	// read access to the objects to be archived
 	// Note that we use the write role, even though we'll only be needing read access to the objects.
@@ -370,7 +371,7 @@ func (pd *ProductDTAP) Archive(ctx context.Context, cnf *Config, conn *sql.DB, p
 	// And the grupr user is a service account by any definition.
 	if err := runSQL(ctx, cnf, conn, `GRANT ROLE IDENTIFIER(?) TO ROLE IDENTIFIER(?)`,
 		pd.WriteRole.String(), cnf.Role.String()); err != nil {
-		return err
+		return failedQueries, err
 	}
 
 	// Use one of the warehouses of that have been granted to the product write role for the archiving job; potentially,
@@ -385,24 +386,28 @@ func (pd *ProductDTAP) Archive(ctx context.Context, cnf *Config, conn *sql.DB, p
 		}
 	}
 	if writeWarehouse == nil {
-		return fmt.Errorf("product '%s', dtap '%s': no warehouse was granted to the write role", pd.ProductID, pd.DTAP)
+		return failedQueries, fmt.Errorf("product '%s', dtap '%s': no warehouse was granted to the write role", pd.ProductID, pd.DTAP)
 	}
 	if err := runSQL(ctx, cnf, conn, fmt.Sprintf(`USE WAREHOUSE IDENTIFIER($$%s$$)`, *writeWarehouse)); err != nil {
-		return fmt.Errorf("use warehouse '%s': %w", *writeWarehouse, err)
+		return failedQueries, fmt.Errorf("use warehouse '%s': %w", *writeWarehouse, err)
 	}
 
 	prodOrNot := map[bool]string{true: "prod", false: "non-prod"}
 	pathProductDTAP := append(path, prodOrNot[pd.IsProd], "dtaps", pd.DTAP)
 	// No interfaces specified means: do the produdct-level one; Otherwise, do each interface if it was specified
 	if len(interfaces) == 0 {
-		if err := pd.Interface.aggAccountObjects.archive(ctx, cnf, conn, pathProductDTAP, ""); err != nil {
-			return err
+		if fq, err := pd.Interface.aggAccountObjects.archive(ctx, cnf, conn, pathProductDTAP, ""); err != nil {
+			return failedQueries, err
+		} else {
+			failedQueries = slices.Concat(failedQueries, fq)
 		}
 	} else {
 		for iid, i := range pd.Interfaces {
 			if interfaces[iid] {
-				if err := i.aggAccountObjects.archive(ctx, cnf, conn, pathProductDTAP, iid); err != nil {
-					return err
+				if fq, err := i.aggAccountObjects.archive(ctx, cnf, conn, pathProductDTAP, iid); err != nil {
+					return failedQueries, err
+				} else {
+					failedQueries = slices.Concat(failedQueries, fq)
 				}
 			}
 		}
@@ -410,15 +415,16 @@ func (pd *ProductDTAP) Archive(ctx context.Context, cnf *Config, conn *sql.DB, p
 
 	// Use default warehouse again
 	if err := runSQL(ctx, cnf, conn, fmt.Sprintf(`USE WAREHOUSE IDENTIFIER($$%s$$)`, cnf.Warehouse)); err != nil {
-		return fmt.Errorf("use warehouse '%s': %w", cnf.Warehouse, err)
+		return failedQueries, fmt.Errorf("use warehouse '%s': %w", cnf.Warehouse, err)
 	}
 
 	// Revoke product write role from grupr role
 	if err := runSQL(ctx, cnf, conn, `REVOKE ROLE IDENTIFIER(?) FROM ROLE IDENTIFIER(?)`,
 		pd.WriteRole.String(), cnf.Role.String()); err != nil {
-		return err
+		return failedQueries, err
 	}
-	return nil
+
+	return failedQueries, nil
 }
 
 func (pd *ProductDTAP) Purge(ctx context.Context, cnf *Config, conn *sql.DB, interfaces map[string]bool) error {

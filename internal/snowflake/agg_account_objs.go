@@ -3,11 +3,14 @@ package snowflake
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"iter"
+	"log"
 	"net/url"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
+	"github.com/snowflakedb/gosnowflake"
 )
 
 // AccountObjs aggregated to (product, dtap, interface) level, with fields to store granted privileges on them
@@ -49,7 +52,8 @@ func (o AggAccountObjs) getExternalGrants(ctx context.Context, semCnf *semantics
 	}
 }
 
-func (o AggAccountObjs) archive(ctx context.Context, cnf *Config, conn *sql.DB, path []string, interfaceID string) error {
+func (o AggAccountObjs) archive(ctx context.Context, cnf *Config, conn *sql.DB, path []string, interfaceID string) ([]string, error) {
+	failedQueries := []string{}
 	pathInterface := append(path)
 	if interfaceID != "" {
 		pathInterface = append(pathInterface, "interfaces", interfaceID)
@@ -62,20 +66,42 @@ func (o AggAccountObjs) archive(ctx context.Context, cnf *Config, conn *sql.DB, 
 					pathObj[i] = url.PathEscape(pathObj[i])
 				}
 				if pathStr, err := url.JoinPath("", pathObj...); err != nil {
-					return fmt.Errorf("archive: %w", err)
+					return failedQueries, fmt.Errorf("archive: %w", err)
 				} else {
-					if err := runSQL(ctx, cnf, conn, fmt.Sprintf(`COPY INTO @%s.%s.%s/%s
+					sql := fmt.Sprintf(`COPY INTO @%s.%s.%s/%s
 FROM (SELECT * FROM IDENTIFIER($$%s$$))
 INCLUDE_QUERY_ID = TRUE
 DETAILED_OUTPUT = TRUE
-HEADER = TRUE`, cnf.Database, cnf.Schema, cnf.ExternalWriteStage, pathStr, objAttr.ObjectType.FQN(db, schema, obj))); err != nil {
-						return err
+HEADER = TRUE`, cnf.Database, cnf.Schema, cnf.ExternalWriteStage, pathStr, objAttr.ObjectType.FQN(db, schema, obj))
+					if err := runSQL(ctx, cnf, conn, sql); err != nil {
+						if sfErr, ok := errors.AsType[*gosnowflake.SnowflakeError](err); ok {
+							log.Printf("SnowflakeError:\n")
+							log.Printf("Number:   %d\n", sfErr.Number)
+							log.Printf("SQLState: %d\n", sfErr.SQLState)
+							log.Printf("QueryID:  %d\n", sfErr.QueryID)
+							log.Printf("Message:   %d\n", sfErr.Message)
+							// For some particular error numbers we want to skip this object,
+							// continue archiving the other objects, and notify the user
+							// at the end about the failed queries, where some customization of
+							// our generic COPY INTO @location statement would be required.
+							if sfErr.Number == 100171 {
+								// Some columns contained data types not directly compatible with Parquet,
+								// i.e., we've observed Snowflake reporting this error number when
+								// complaining about TIMESTAMP_TZ or TIMESTAMP_LTZ columns that it would
+								// not convert to any Parquet data type
+								failedQueries = append(failedQueries, sql)
+							} else {
+								return failedQueries, err
+							}
+						} else {
+							return failedQueries, err
+						}
 					}
 				}
 			}
 		}
 	}
-	return nil
+	return failedQueries, nil
 }
 
 func (o AggAccountObjs) purge(ctx context.Context, cnf *Config, conn *sql.DB) error {

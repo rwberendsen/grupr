@@ -5,8 +5,10 @@ import (
 	"database/sql"
 	"fmt"
 	"iter"
+	"log"
 	"math/rand"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -319,6 +321,7 @@ func (g *Grupin) Archive(ctx context.Context, cnf *Config, conn *sql.DB, actionS
 	if cnf.ExternalWriteStage == semantics.Ident("") {
 		return fmt.Errorf("no stage name configured")
 	}
+	failedQueries := []string{}
 	// a run ID that sort nicely lexicographically, and that would be more than unique enough as well
 	runID := fmt.Sprintf("%s__%v", time.Now().Format(time.RFC3339), rand.Intn(1000000))
 	runID = strings.ReplaceAll(runID, ":", "") // RFC3399 has : characters in the time components, but we URL-encode object keys
@@ -327,12 +330,14 @@ func (g *Grupin) Archive(ctx context.Context, cnf *Config, conn *sql.DB, actionS
 	// go ahead and archive
 	for dtap := range actionScope.AllDTAPsProdFirst() {
 		pdID := semantics.ProductDTAPID{ProductID: actionScope.Product, DTAP: dtap}
-		if err := g.ProductDTAPs[pdID].Archive(ctx, cnf, conn, path, actionScope.Interfaces); err != nil {
+		if fqs, err := g.ProductDTAPs[pdID].Archive(ctx, cnf, conn, path, actionScope.Interfaces); err != nil {
 			return err
+		} else {
+			slices.Concat(failedQueries, fqs)
 		}
 	}
 
-	// If all went well, write a single manifest file to indicate so
+	// If all went well (apart from some failed queries, possibly), write a single manifest file to indicate so
 	// For now, include some basic information here, perhaps the products, dtaps, and interfaces that one
 	// should expect to find.
 	path = append(path, "manifest.json")
@@ -350,6 +355,17 @@ SINGLE = TRUE`, cnf.Database, cnf.Schema, cnf.ExternalWriteStage, pathStr), acti
 			return err
 		}
 	}
+
+	// If there were failed queries, print them, and exit with an error, to highlight to the caller
+	// that some action is required to complete the archival action
+	if len(failedQueries) > 0 {
+		log.Println("Some queries failed, and require customization. They will be printed immediately below")
+		for fq := range failedQueries {
+			fmt.Print(fq)
+		}
+		return fmt.Errorf("Some queries failed, and require customization. They have been printed above")
+	}
+
 	return nil
 }
 
