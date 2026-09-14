@@ -3,6 +3,7 @@ package snowflake
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"iter"
 	"log"
@@ -333,39 +334,51 @@ func (g *Grupin) Archive(ctx context.Context, cnf *Config, conn *sql.DB, actionS
 		if fqs, err := g.ProductDTAPs[pdID].Archive(ctx, cnf, conn, path, actionScope.Interfaces); err != nil {
 			return err
 		} else {
-			slices.Concat(failedQueries, fqs)
+			failedQueries = slices.Concat(failedQueries, fqs)
 		}
 	}
 
 	// If all went well (apart from some failed queries, possibly), write a single manifest file to indicate so
 	// For now, include some basic information here, perhaps the products, dtaps, and interfaces that one
 	// should expect to find.
-	path = append(path, "manifest.json")
 	for i := range path {
 		path[i] = url.PathEscape(path[i])
 	}
-	if pathStr, err := url.JoinPath("", path...); err != nil {
+	var pathStr string
+	var err error
+	if pathStr, err = url.JoinPath("", path...); err != nil {
 		return fmt.Errorf("archive: %w", err)
-	} else {
-		if err := runSQL(ctx, cnf, conn, fmt.Sprintf(`COPY INTO @%s.%s.%s/%s
+	}
+	if err := runSQL(ctx, cnf, conn, fmt.Sprintf(`COPY INTO @%s.%s.%s/%s/manifest.json
 FROM (SELECT PARSE_JSON(?) AS manifest)
 FILE_FORMAT = (TYPE = JSON COMPRESSION = NONE)
 OVERWRITE = TRUE
 SINGLE = TRUE`, cnf.Database, cnf.Schema, cnf.ExternalWriteStage, pathStr), actionScope.String()); err != nil {
-			return err
-		}
+		return err
 	}
 
 	// If there were failed queries, print them, and exit with an error, to highlight to the caller
 	// that some action is required to complete the archival action
+	//
+	// But first, save a copy of the failed queries in a file called errors.json using the external stage
 	if len(failedQueries) > 0 {
+		if fqJSON, err := json.Marshal(failedQueries); err != nil {
+			return err
+		} else {
+			if err := runSQL(ctx, cnf, conn, fmt.Sprintf(`COPY INTO @%s.%s.%s/%s/errors.json
+FROM (SELECT PARSE_JSON(?) AS errors)
+FILE_FORMAT = (TYPE = JSON COMPRESSION = NONE)
+OVERWRITE = TRUE
+SINGLE = TRUE`, cnf.Database, cnf.Schema, cnf.ExternalWriteStage, pathStr), string(fqJSON)); err != nil {
+				return err
+			}
+		}
 		log.Println("Some queries failed, and require customization. They will be printed immediately below")
-		for fq := range failedQueries {
-			fmt.Print(fq)
+		for _, fq := range failedQueries {
+			fmt.Println(fq)
 		}
 		return fmt.Errorf("Some queries failed, and require customization. They have been printed above")
 	}
-
 	return nil
 }
 

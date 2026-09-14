@@ -77,9 +77,9 @@ HEADER = TRUE`, cnf.Database, cnf.Schema, cnf.ExternalWriteStage, pathStr, objAt
 						if sfErr, ok := errors.AsType[*gosnowflake.SnowflakeError](err); ok {
 							log.Printf("SnowflakeError:\n")
 							log.Printf("Number:   %d\n", sfErr.Number)
-							log.Printf("SQLState: %d\n", sfErr.SQLState)
-							log.Printf("QueryID:  %d\n", sfErr.QueryID)
-							log.Printf("Message:   %d\n", sfErr.Message)
+							log.Printf("SQLState: %s\n", sfErr.SQLState)
+							log.Printf("QueryID:  %s\n", sfErr.QueryID)
+							log.Printf("Message:  %s\n", sfErr.Message)
 							// For some particular error numbers we want to skip this object,
 							// continue archiving the other objects, and notify the user
 							// at the end about the failed queries, where some customization of
