@@ -3,6 +3,7 @@ package snowflake
 import (
 	"context"
 	"database/sql"
+	"iter"
 	"maps"
 	"slices"
 	"strings"
@@ -214,6 +215,95 @@ func (i *Interface) pushObjectCounts(yield func(ObjCountsRow) bool, pdID semanti
 		}
 	}
 	return true
+}
+
+func (i *Interface) getCurrentOwners(productID string, dtap string, semCnf *semantics.Config, cnf *Config,
+	userManagedOwners func(semantics.ProductDTAPID) map[semantics.Ident]struct{}) (map[semantics.Ident]struct{}, error) {
+	userManagedOwnersOfObjects := map[semantics.Ident]struct{}{}
+	for db, dbObjs := range i.aggAccountObjects.DBs {
+		for _, schemaObjs := range dbObjs.Schemas {
+			for _, aggObjAttr := range schemaObjs.Objects {
+				// Ignore system defined roles
+				if slices.Contains(cnf.SystemDefinedRoles, aggObjAttr.Owner) {
+					continue
+				}
+				// Deal with grupr managed roles that are the current owner
+				if strings.HasPrefix(string(aggObjAttr.Owner), string(semCnf.Prefix)) {
+					r, err := newProductRoleFromIdent(semCnf, aggObjAttr.Owner)
+					if err != nil {
+						// In this case, it would have to be a database role, or else other roles
+						// exist sharing the grupr prefix, which would be a good reason to crash
+						if _, err = newDatabaseRoleFromIdent(semCnf, db, aggObjAttr.Owner); err != nil {
+							return userManagedOwnersOfObjects, err
+						}
+						// Okay, so it was a database role that owned the object. Not something sysadmins
+						// should have done. Not something grupr would do. But we'll just not add any
+						// previous user managed owning roles. Ownership of the object will be sorted out
+						// for this object cause it was matched by this product: the write role will
+						// claim ownership of it.
+					}
+
+					// Now, we deal with a special case
+					if r.Mode == ModeWrite && (r.ProductID != productID || r.DTAP != dtap) {
+						// So, another write role owned this object before, we need to check what user managed roles
+						// have been granted this other write role; they would lose ownership of the object if we
+						// would claim it; so we need to grant our write role to those user managed roles, if any
+						//
+						// We do this as a service. It is a normal thing that can happen when people rename a product
+						// in the YAML, i.e., change it's product id. Or when an object matching expression moves
+						// from one product to another.
+						for curOwner := range userManagedOwners(semantics.ProductDTAPID{ProductID: r.ProductID, DTAP: r.DTAP}) {
+							userManagedOwnersOfObjects[curOwner] = struct{}{}
+						}
+					}
+
+					// Else, this really is not a role we'd want to grant our product write role to.
+					continue
+				}
+
+				// It's a user managed role, we add it
+				userManagedOwnersOfObjects[aggObjAttr.Owner] = struct{}{}
+			}
+		}
+	}
+	return userManagedOwnersOfObjects, nil
+}
+
+func (i *Interface) getToDoOwnershipGrants(role semantics.Ident) iter.Seq[Grant] {
+	return func(yield func(Grant) bool) {
+		for db, dbObjs := range i.aggAccountObjects.DBs {
+			for schema, schemaObjs := range dbObjs.Schemas {
+				for obj, objAttr := range schemaObjs.Objects {
+					if role != objAttr.Owner { // if you are the owner already, no need to grant again
+						ot := objAttr.ObjectType
+						if ot == ObjTpHybridTable {
+							// In snowflake GRANT <privileges> ..., HYBRID TABLE is not a recongnized object type
+							ot = ObjTpTable
+						}
+						if !yield(Grant{
+							Privileges:    []PrivilegeComplete{PrivilegeComplete{Privilege: PrvOwnership}},
+							GrantedOn:     objAttr.ObjectType,
+							Database:      db,
+							Schema:        schema,
+							Object:        obj,
+							GrantedTo:     ObjTpRole,
+							GrantedToName: role,
+						}) {
+							return
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+func (i *Interface) grantOwnershipTo(ctx context.Context, cnf *Config, conn *sql.DB, role semantics.Ident) error {
+	// Grant ownership of objects to role (copy current grants, to cause minimal disturbance)
+	// We don't do ownership grants in batches, cause they can take longer due to copying outbound grants;
+	// they can even time-out for that reason, as mentioned in a 2025 version of Snowflake its documentation.
+	// We do them one by one.
+	return DoGrantsIndividually(ctx, cnf, conn, i.getToDoOwnershipGrants(role))
 }
 
 func (i *Interface) manageAccessExclusively(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB) error {

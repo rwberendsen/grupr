@@ -4,5 +4,5 @@ package util
 // whether or not a field was quoted before parsing
 type StringWasQuoted struct {
 	S         string
-    WasQuoted bool
+	WasQuoted bool
 }

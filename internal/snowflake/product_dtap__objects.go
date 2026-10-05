@@ -5,9 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"iter"
-	"log"
 	"slices"
-	"strings"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
 	"github.com/rwberendsen/grupr/internal/util"
@@ -25,7 +23,8 @@ func (pd *ProductDTAP) refresh(ctx context.Context, semCnf *semantics.Config, cn
 	// Reset other properties of pd that depend on which objects where matched
 	pd.toRevokeFutureObjects = []FutureGrant{}
 	pd.toRevokeObjects = []Grant{}
-	pd.toTransferOwnership = []Grant{}
+	pd.ownershipOtherProductsObjects = []Grant{}
+	pd.ownershipUnmatchedObjects = []Grant{}
 	return nil
 }
 
@@ -125,60 +124,17 @@ func (pd *ProductDTAP) setGrantActionsObjectsWriteRole(ctx context.Context, cnf 
 					}
 				}
 			} else if grupinDisjointFromObject(g.Database, g.Schema, g.Object) {
-				// There will be no other product claiming ownership of this object, we need to
-				// transfer its ownership to a role that is not managed by grupr.
-				// Note that when we refreshed, toTransferOwnership was reset to an empty slice
-				pd.toTransferOwnership = append(pd.toTransferOwnership, g)
+				// Note that when we refreshed, ownershipUnmatchedObjects was reset to an empty slice
+				pd.ownershipUnmatchedObjects = append(pd.ownershipUnmatchedObjects, g)
+			} else {
+				// Some other product in our grupin YAML must be matching this object
+				// Note that when we refresh a product, we reset ownershipOtherProductsObjects to an empty slice
+				pd.ownershipOtherProductsObjects = append(pd.ownershipOtherProductsObjects, g)
 			}
-			continue // There is no revoking ownersip, so, continue either way
+			continue // There is no revoking ownership, so, continue either way
 		}
 		// If we are still here, this grant is a candidate for being revoked
 		pd.toRevokeObjects = append(pd.toRevokeObjects, g)
-	}
-	return nil
-}
-
-func (pd *ProductDTAP) setUserManagedOwnersOfObjects(semCnf *semantics.Config, cnf *Config,
-	userManagedOwners func(semantics.ProductDTAPID) map[semantics.Ident]struct{}) error {
-	pd.userManagedOwnersOfObjects = map[semantics.Ident]struct{}{}
-	for db, dbObjs := range pd.Interface.aggAccountObjects.DBs {
-		for _, schemaObjs := range dbObjs.Schemas {
-			for _, aggObjAttr := range schemaObjs.Objects {
-				if slices.Contains(cnf.SystemDefinedRoles, aggObjAttr.Owner) {
-					continue
-				}
-				if strings.HasPrefix(string(aggObjAttr.Owner), string(semCnf.Prefix)) {
-					r, err := newProductRoleFromIdent(semCnf, aggObjAttr.Owner)
-					if err != nil {
-						// In this case, it would have to be a database role, or else other roles
-						// exist sharing the grupr prefix, this would be a good reason to crash
-						if _, err = newDatabaseRoleFromIdent(semCnf, db, aggObjAttr.Owner); err != nil {
-							return err
-						}
-						// Okay, so it was a database role that owned the object. Not something sysadmins
-						// should have done. Not something grupr would do. But we'll just not add any
-						// previous user managed owning roles. Ownership of the object will be sorted out
-						// for this object cause it was matched by this product: the write role will
-						// claim ownership of it.
-					}
-					if r.Mode == ModeWrite && (r.ProductID != pd.ProductID || r.DTAP != pd.DTAP) {
-						// So, another write role owned this object before, we need to check what user managed roles
-						// have been granted this other write role; they would lose ownership of the object if we
-						// would claim it; so we need to grant our write role to those user managed roles, if any
-						//
-						// We do this as a service. It is a normal thing that can happen when people rename a product
-						// in the YAML, i.e., change it's product id. Or when an object matching expression moves
-						// from one product to another.
-						for curOwner := range userManagedOwners(semantics.ProductDTAPID{ProductID: r.ProductID, DTAP: r.DTAP}) {
-							pd.userManagedOwnersOfObjects[curOwner] = struct{}{}
-						}
-					}
-					continue
-				}
-				// It's a user managed role, we add it
-				pd.userManagedOwnersOfObjects[aggObjAttr.Owner] = struct{}{}
-			}
-		}
 	}
 	return nil
 }
@@ -191,7 +147,7 @@ func (pd *ProductDTAP) grant_(ctx context.Context, semCnf *semantics.Config, cnf
 		return err
 	}
 
-	// Write grants go first, so that we do not have to copy all the read privileges we're about to set when granting ownership.
+	// Write grants go first
 	// As with read grants, future grants go first
 	if err := pd.setGrantActionsFutureObjectsWriteRole(ctx, cnf, conn, productRoles); err != nil {
 		return err
@@ -207,29 +163,6 @@ func (pd *ProductDTAP) grant_(ctx context.Context, semCnf *semantics.Config, cnf
 	if err := DoGrants(ctx, cnf, conn, pd.getToDoGrantsObjectsWriteRole(cnf.ManagedObjTypes)); err != nil {
 		return err
 	}
-	// We do ownership separately; we don't do them in batches, cause they can take longer due to copying outbound grants;
-	// they can even time-out for that reason, as mentioned in a 2025 version of Snowflake its documentation. We do them
-	// one by one.
-	//
-	// Note that we grant objects directly to the product role, not via intermediate database roles; this is because we do
-	// not want database roles showing up as grantor, it's just confusing; objects should have a single owning actual role.
-	//
-	// Before we actually grant ownership to the write role, grant the write role itself to all the current owners of the objects
-	// of interest. This way, they will not lose ownership, in fact, they will not lose any privilege, and running grupr will
-	// not mess up any other processes that may be running.
-	// We never revoke from any role; that is the job of sysadmins: when they are done with those roles, they can drop them,
-	// or if the roles need to be retained for other purposes, they can revoke this product dtap role from that other role.
-	if err := pd.setUserManagedOwnersOfObjects(semCnf, cnf, userManagedOwners); err != nil {
-		return err
-	}
-	if err := DoGrants(ctx, cnf, conn, pd.getToDoGrantsOfWriteRoleToUserManagedRoles(semCnf, cnf)); err != nil {
-		return err
-	}
-	// Then, make a second pass over the objects, and grant ownership to the write role.
-	if err := DoGrantsIndividually(ctx, cnf, conn, pd.getToDoOwnershipGrants()); err != nil {
-		return err
-	}
-	// At this point, granting of object privileges to the write role has been taken care of
 
 	// Next, manage read privileges: we assign those to database roles.
 	// Future grants first, so that as quickly as possible newly created objects will have correct privileges granted
@@ -269,36 +202,6 @@ func (pd *ProductDTAP) revoke_(ctx context.Context, cnf *Config, conn *sql.DB) e
 	}
 	if err := DoRevokes(ctx, cnf, conn, slices.Values(pd.toRevokeObjects)); err != nil {
 		return err
-	}
-	// Now we transfer ownership of objects that should no longer be owned by Grupr-managed roles
-	// First, we check if we can unambiguously do this. If not, we log a message and do not
-	// transfer ownership; sysadmins need to make some changes in Snowflake first.
-	var newOwner semantics.Ident
-	var hasNewOwner bool
-	if len(pd.writeRoleGrantedToUserManagedRoles) == 0 {
-		// There were no user managed original owners before grupr ran, who
-		// would lose privileges if we transfered ownership, and it should be safe
-		// then to transfer ownership to SYSADMIN
-		newOwner = semantics.Ident("SYSADMIN")
-		hasNewOwner = true
-	} else if len(pd.writeRoleGrantedToUserManagedRoles) == 1 {
-		// Before grupr ran, this user managed role had OWNERSHIP indirectly over
-		// all objects owned by the product write role. If we now transfer ownership
-		// to SYSADMIN, this role would loose OWNERSHIP, potentially breaking a pipeline.
-		// Instead, we "give back" ownership to this user managed role
-		for k := range pd.writeRoleGrantedToUserManagedRoles {
-			newOwner = k
-		}
-		hasNewOwner = true
-	}
-	if hasNewOwner {
-		if err := DoGrantsIndividually(ctx, cnf, conn, pd.getTransferOwnershipGrants(newOwner)); err != nil {
-			return err
-		}
-		pd.toTransferOwnership = []Grant{}
-	}
-	if !hasNewOwner && len(pd.toTransferOwnership) > 0 {
-		log.Printf("WARN: multiple historic owners of objects that no longer should be owned by product '%s', dtap '%s', keeping ownership", pd.ProductID, pd.DTAP)
 	}
 
 	// Next, revoke read privileges from database roles
@@ -377,9 +280,9 @@ func (pd *ProductDTAP) getToDoGrantsObjectsWriteRole(mots map[ObjType]bool) iter
 	}
 }
 
-func (pd *ProductDTAP) getToDoGrantsOfWriteRoleToUserManagedRoles(semCnf *semantics.Config, cnf *Config) iter.Seq[Grant] {
+func (pd *ProductDTAP) getToDoGrantsOfWriteRoleToUserManagedRoles(currentOwners map[semantics.Ident]struct{}) iter.Seq[Grant] {
 	return func(yield func(Grant) bool) {
-		for r := range pd.userManagedOwnersOfObjects {
+		for r := range currentOwners {
 			if _, ok := pd.writeRoleGrantedToUserManagedRoles[r]; !ok {
 				if !yield(Grant{
 					Privileges:    []PrivilegeComplete{PrivilegeComplete{Privilege: PrvUsage}},
@@ -389,35 +292,6 @@ func (pd *ProductDTAP) getToDoGrantsOfWriteRoleToUserManagedRoles(semCnf *semant
 					GrantedToName: r,
 				}) {
 					return
-				}
-			}
-		}
-	}
-}
-
-func (pd *ProductDTAP) getToDoOwnershipGrants() iter.Seq[Grant] {
-	return func(yield func(Grant) bool) {
-		for db, dbObjs := range pd.Interface.aggAccountObjects.DBs {
-			for schema, schemaObjs := range dbObjs.Schemas {
-				for obj, objAttr := range schemaObjs.Objects {
-					if !objAttr.isOwnedByProductWriteRole {
-						ot := objAttr.ObjectType
-						if ot == ObjTpHybridTable {
-							// In snowflake GRANT <privileges> ..., HYBRID TABLE is not a recongnized object type
-							ot = ObjTpTable
-						}
-						if !yield(Grant{
-							Privileges:    []PrivilegeComplete{PrivilegeComplete{Privilege: PrvOwnership}},
-							GrantedOn:     objAttr.ObjectType,
-							Database:      db,
-							Schema:        schema,
-							Object:        obj,
-							GrantedTo:     ObjTpRole,
-							GrantedToName: pd.WriteRole.ID,
-						}) {
-							return
-						}
-					}
 				}
 			}
 		}
@@ -444,17 +318,6 @@ func (pd *ProductDTAP) getToDoGrantsToDBRoles() iter.Seq[Grant] {
 		}
 		for _, i := range pd.Interfaces {
 			if !i.pushToDoGrants(yield) {
-				return
-			}
-		}
-	}
-}
-
-func (pd *ProductDTAP) getTransferOwnershipGrants(newOwner semantics.Ident) iter.Seq[Grant] {
-	return func(yield func(Grant) bool) {
-		for _, g := range pd.toTransferOwnership {
-			g.GrantedToName = newOwner
-			if !yield(g) {
 				return
 			}
 		}

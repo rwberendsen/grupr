@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"log"
-	"maps"
 	"os"
 	"os/signal"
 	"syscall"
@@ -22,7 +21,7 @@ var dtapRoles stringMap = stringMap{}
 func init() {
 	flag.Var(interfaces, "interfaces", "perform action on these interfaces only")
 	flag.Var(dtaps, "dtaps", "perform action on these dtaps only")
-	flag.Var(dtapRoles, "dtapRoles", "disown by granting ownership in each dtap to mapped role")
+	flag.Var(dtapRoles, "dtapRoles", "grant ownership in each dtap to mapped role")
 }
 
 func main() {
@@ -45,21 +44,21 @@ func main() {
 		"ma":      true,
 		"mae":     true,
 		"own":     true,
-		"disown":  true,
+		"got":     true,
 		"purge":   true,
 	}
 	isProductSpecificAction := map[string]bool{
 		"archive": true,
 		"mae":     true,
 		"own":     true,
-		"disown":  true,
+		"got":     true,
 		"purge":   true,
 	}
 	isDestructiveAction := map[string]bool{
-		"mae":    true,
-		"own":    true,
-		"disown": true,
-		"purge":  true,
+		"mae":   true,
+		"own":   true,
+		"got":   true,
+		"purge": true,
 	}
 	if !isAction[action] {
 		log.Fatalf("unknown action")
@@ -102,27 +101,27 @@ func main() {
 	var actionScope semantics.ActionScope
 	if isProductSpecificAction[action] {
 		var err error
-		actionScope, err = newGrupin.ValidateAction(product, dtaps, interfaces, dtapRoles, isDestructiveAction[action])
+		actionScope, err = newGrupin.ValidateAction(product, dtaps, interfaces, isDestructiveAction[action])
 		if err != nil {
 			log.Fatalf("invalid action: %v", err)
 		}
 	}
 	// Validate for specific actions if action-specific flags are specified correctly
 	dtapRoleIdents := map[string]semantics.Ident{}
-	if action == "disown" {
+	if action == "got" {
 		if len(dtapRoles) == 0 {
-			log.Fatalf("no dtapRoles specified for disown action")
+			log.Fatalf("no dtapRoles specified for got action")
 		}
 		// check that we have a role for each dtap, and check that the roles are proper semantics.Ident values
 		for dtap := range actionScope.AllDTAPsProdFirst() {
 			if _, ok := dtapRoles[dtap]; !ok {
 				log.Fatalf("no role to grant ownership to of objects in dtap '%s'", dtap)
 			}
-			roleIdent, err := semantics.NewIdent(dtapRoles[dtap].S, dtapRoles[dtap].WasQuoted, semCnf.ValidQuotedExpr, semCnf.ValidUnquotedExpr) 
+			roleIdent, err := semantics.NewIdent(dtapRoles[dtap].S, dtapRoles[dtap].WasQuoted, semCnf.ValidQuotedExpr, semCnf.ValidUnquotedExpr)
 			if err != nil {
 				log.Fatalf("dtapRoles, dtap '%s', '%s'", dtap, err)
 			}
-			dtapRoleIdent[dtap] = roleIdent
+			dtapRoleIdents[dtap] = roleIdent
 		}
 		// also check that we did not specify any additional dtaps that we don't have
 		for dtap := range dtapRoles {
@@ -132,7 +131,7 @@ func main() {
 		}
 	} else {
 		if len(dtapRoles) > 0 {
-			log.Fatalf("dtapRoles specified without disown action")
+			log.Fatalf("dtapRoles specified without got action")
 		}
 	}
 
@@ -236,12 +235,12 @@ func main() {
 			log.Fatalf("mae: %v", err)
 		}
 		log.Printf("Owned product '%s'", product)
-	case "disown":
+	case "got":
 		// Manage access exclusively, require a product ID in this case
-		if err := snowflakeNewGrupin.Disown(ctx, semCnf, snowCnf, conn, actionScope, dtapRoleIdents); err != nil {
+		if err := snowflakeNewGrupin.GrantOwnershipTo(ctx, snowCnf, conn, actionScope, dtapRoleIdents); err != nil {
 			log.Fatalf("mae: %v", err)
 		}
-		log.Printf("Disowned product '%s'", product)
+		log.Printf("Granted ownership of objects for product '%s'", product)
 	case "purge":
 		// Purge (DROP) objects
 		if err := snowflakeNewGrupin.Purge(ctx, snowCnf, conn, actionScope); err != nil {
@@ -254,5 +253,5 @@ func main() {
 	// in the Grupr schema of the currently running run; the last thing Grupr would always try before crashing is to wipe that one; but, it'd mean from time to time ops may have
 	// to come in and delete that one; but imagine the bewilderment if two grupr processes are concurrently trying to make two different yamls the reality...
 	// ... perhaps at least, since at this time all we have is a current target yaml, just while we run, grab any kind of lock in Snowflake, which will be released if
-    // we lose the connection
+	// we lose the connection
 }

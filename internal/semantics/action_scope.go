@@ -66,10 +66,11 @@ func (a ActionScope) AllDTAPsProdFirst() iter.Seq[string] {
 	}
 }
 
-func (a ActionScopd) HasDTAP(s string) ok bool {
-	if a.Prod == s {
+func (a ActionScope) HasDTAP(s string) (ok bool) {
+	if a.DTAPs.Prod == s {
 		ok = true
 	} else {
-		_, ok = a.NonProd[s]
+		_, ok = a.DTAPs.NonProd[s]
 	}
+	return
 }

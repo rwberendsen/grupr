@@ -29,7 +29,6 @@ type ProductDTAP struct {
 	WriteWarehouses       map[semantics.Ident][3]bool // initially set to false, then to true if GRANTS (USAGE, MONITOR, OPERATE) are found in Snowflake
 
 	writeRoleGrantedToUserManagedRoles map[semantics.Ident]struct{}
-	userManagedOwnersOfObjects         map[semantics.Ident]struct{}
 	refreshCount                       int // how many times has this ProductDTAP been refreshed: populated with Snowflake objects
 	matchedAccountObjects              map[semantics.ObjExpr]*matchedAccountObjs
 
@@ -37,9 +36,10 @@ type ProductDTAP struct {
 	toRevoke []Grant
 
 	// These are reset when refreshing objects, as these grants are on objects
-	toRevokeObjects       []Grant
-	toRevokeFutureObjects []FutureGrant
-	toTransferOwnership   []Grant
+	toRevokeObjects               []Grant
+	toRevokeFutureObjects         []FutureGrant
+	ownershipOtherProductsObjects []Grant // objects "we" own that are matched by other data products
+	ownershipUnmatchedObjects     []Grant // objects "we" own that are not matched by any data product
 
 	// Used for product dtap roles that exist in Snowflake but not in the YAML
 	isZombie bool
@@ -197,6 +197,14 @@ func (pd *ProductDTAP) grant(ctx context.Context, semCnf *semantics.Config, cnf 
 			return err
 		}
 	}
+
+	// We are done, things are stable, let's emit an info log message if "we" own objects that are matched by other products,
+	// or, if we own objects that are not matched by any product.
+	if len(pd.ownershipOtherProductsObjects) > 0 || len(pd.ownershipUnmatchedObjects) > 0 {
+		log.Printf("INFO: product '%s', dtap '%s' owns %d objects matched by other products, and %d unmatched objects ", pd.ProductID, pd.DTAP,
+			len(pd.ownershipOtherProductsObjects), len(pd.ownershipUnmatchedObjects))
+	}
+	return nil
 }
 
 func (pd *ProductDTAP) getToDoDBRoleGrants(doProd bool, m map[semantics.ProductDTAPID]*ProductDTAP) iter.Seq[Grant] {
@@ -330,7 +338,7 @@ func (pd *ProductDTAP) dropProductRolesIfZombie(ctx context.Context, cnf *Config
 	if !pd.isZombie {
 		return nil
 	}
-	if len(pd.toTransferOwnership) > 0 {
+	if len(pd.ownershipOtherProductsObjects) > 0 || len(pd.ownershipUnmatchedObjects) > 0 {
 		log.Printf("WARN: product '%s', dtap '%s', has ownership of objects, not dropping product roles", pd.ProductID, pd.DTAP)
 		return nil
 	}
@@ -338,6 +346,67 @@ func (pd *ProductDTAP) dropProductRolesIfZombie(ctx context.Context, cnf *Config
 		return err
 	}
 	return pd.WriteRole.Drop(ctx, cnf, conn)
+}
+
+func (pd *ProductDTAP) grantProductWriteRoleToCurrentOwners(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, interfaces map[string]bool,
+	userManagedOwners func(semantics.ProductDTAPID) map[semantics.Ident]struct{}) error {
+	// First, get the current owners
+	currentOwners := map[semantics.Ident]struct{}{}
+
+	// No interfaces specified means: do the produdct-level one; Otherwise, do each interface if it was specified
+	if len(interfaces) == 0 {
+		if owners, err := pd.Interface.getCurrentOwners(pd.ProductID, pd.DTAP, semCnf, cnf, userManagedOwners); err != nil {
+			return err
+		} else {
+			for k := range owners {
+				currentOwners[k] = struct{}{}
+			}
+		}
+	} else {
+		for iid, i := range pd.Interfaces {
+			if interfaces[iid] {
+				if owners, err := i.getCurrentOwners(pd.ProductID, pd.DTAP, semCnf, cnf, userManagedOwners); err != nil {
+					return err
+				} else {
+					for k := range owners {
+						currentOwners[k] = struct{}{}
+					}
+				}
+			}
+		}
+	}
+
+	// Second, grant the product write role to the current owners, if that had not been done already
+	return DoGrants(ctx, cnf, conn, pd.getToDoGrantsOfWriteRoleToUserManagedRoles(currentOwners))
+}
+
+func (pd *ProductDTAP) Own(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, interfaces map[string]bool,
+	userManagedOwners func(semantics.ProductDTAPID) map[semantics.Ident]struct{}) error {
+	// Before granting ownership of objects to the product write role, grant the product write role itself to current ownwers
+	if err := pd.grantProductWriteRoleToCurrentOwners(ctx, semCnf, cnf, conn, interfaces, userManagedOwners); err != nil {
+		return err
+	}
+
+	// Now just grant ownership to the product write role
+	return pd.GrantOwnershipTo(ctx, cnf, conn, interfaces, pd.WriteRole.ID)
+}
+
+func (pd *ProductDTAP) GrantOwnershipTo(ctx context.Context, cnf *Config, conn *sql.DB, interfaces map[string]bool, role semantics.Ident) error {
+	// No interfaces specified means: do the produdct-level one; Otherwise, do each interface if it was specified
+	if len(interfaces) == 0 {
+		if err := pd.Interface.grantOwnershipTo(ctx, cnf, conn, role); err != nil {
+			return err
+		}
+	} else {
+		for iid, i := range pd.Interfaces {
+			if interfaces[iid] {
+				if err := i.grantOwnershipTo(ctx, cnf, conn, role); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func (pd *ProductDTAP) ManageAccessExclusively(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, interfaces map[string]bool) error {

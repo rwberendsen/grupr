@@ -11,7 +11,7 @@ import (
 type stringMap map[string]util.StringWasQuoted
 
 func (m stringMap) String() string {
-	return fmt.Sprintf("%v", map[string]string(m))
+	return fmt.Sprintf("%v", map[string]util.StringWasQuoted(m))
 }
 
 func (m stringMap) Set(value string) error {
@@ -36,8 +36,9 @@ func (m stringMap) Set(value string) error {
 		if _, ok := m[k]; ok {
 			return fmt.Errorf("'%s': duplicate map key", k)
 		}
-		v := util.StringWasQuoted{S: innerRecord[1],}
-		if outerField[innerReader.FieldPos(1) - 1] == '"' {
+		v := util.StringWasQuoted{S: innerRecord[1]}
+		_, start := innerReader.FieldPos(1)
+		if outerField[start-1] == '"' { // csv uses 1-indexing, so subtract 1
 			v.WasQuoted = true
 		}
 		m[k] = v

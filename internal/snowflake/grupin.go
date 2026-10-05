@@ -307,6 +307,30 @@ func (g *Grupin) ManageAccess(ctx context.Context, semCnf *semantics.Config, cnf
 	return nil
 }
 
+func (g *Grupin) Own(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB,
+	actionScope semantics.ActionScope) error {
+	for dtap := range actionScope.AllDTAPsProdFirst() {
+		pdID := semantics.ProductDTAPID{ProductID: actionScope.Product, DTAP: dtap}
+		if err := g.ProductDTAPs[pdID].Own(ctx, semCnf, cnf, conn, actionScope.Interfaces,
+			func(pdID semantics.ProductDTAPID) map[semantics.Ident]struct{} {
+				return g.ProductDTAPs[pdID].writeRoleGrantedToUserManagedRoles
+			}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (g *Grupin) GrantOwnershipTo(ctx context.Context, cnf *Config, conn *sql.DB, actionScope semantics.ActionScope, dtapRoleIdents map[string]semantics.Ident) error {
+	for dtap := range actionScope.AllDTAPsProdFirst() {
+		pdID := semantics.ProductDTAPID{ProductID: actionScope.Product, DTAP: dtap}
+		if err := g.ProductDTAPs[pdID].GrantOwnershipTo(ctx, cnf, conn, actionScope.Interfaces, dtapRoleIdents[dtap]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (g *Grupin) ManageAccessExclusively(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB,
 	actionScope semantics.ActionScope) error {
 	for dtap := range actionScope.AllDTAPsProdFirst() {
