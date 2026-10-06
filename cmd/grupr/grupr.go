@@ -14,12 +14,14 @@ import (
 
 var actionFlag = flag.String("action", "ma", "action to perform")
 var productFlag = flag.String("product", "", "product ID to perform action on")
-var dtaps stringMap = stringMap{}
-var interfaces stringMap = stringMap{}
+var dtaps stringSet = stringSet{}
+var interfaces stringSet = stringSet{}
+var dtapRoles stringMap = stringMap{}
 
 func init() {
 	flag.Var(interfaces, "interfaces", "perform action on these interfaces only")
 	flag.Var(dtaps, "dtaps", "perform action on these dtaps only")
+	flag.Var(dtapRoles, "dtapRoles", "grant ownership in each dtap to mapped role")
 }
 
 func main() {
@@ -41,15 +43,21 @@ func main() {
 		"archive": true,
 		"ma":      true,
 		"mae":     true,
+		"own":     true,
+		"got":     true,
 		"purge":   true,
 	}
 	isProductSpecificAction := map[string]bool{
 		"archive": true,
 		"mae":     true,
+		"own":     true,
+		"got":     true,
 		"purge":   true,
 	}
 	isDestructiveAction := map[string]bool{
 		"mae":   true,
+		"own":   true,
+		"got":   true,
 		"purge": true,
 	}
 	if !isAction[action] {
@@ -89,13 +97,41 @@ func main() {
 	}
 	log.Println("Deserialized YAML")
 
-	// Validate command line flags against semantic grupin
+	// Validate command line flags against semantic grupin, start with action its scope
 	var actionScope semantics.ActionScope
 	if isProductSpecificAction[action] {
 		var err error
 		actionScope, err = newGrupin.ValidateAction(product, dtaps, interfaces, isDestructiveAction[action])
 		if err != nil {
 			log.Fatalf("invalid action: %v", err)
+		}
+	}
+	// Validate for specific actions if action-specific flags are specified correctly
+	dtapRoleIdents := map[string]semantics.Ident{}
+	if action == "got" {
+		if len(dtapRoles) == 0 {
+			log.Fatalf("no dtapRoles specified for got action")
+		}
+		// check that we have a role for each dtap, and check that the roles are proper semantics.Ident values
+		for dtap := range actionScope.AllDTAPsProdFirst() {
+			if _, ok := dtapRoles[dtap]; !ok {
+				log.Fatalf("no role to grant ownership to of objects in dtap '%s'", dtap)
+			}
+			roleIdent, err := semantics.NewIdent(dtapRoles[dtap].S, dtapRoles[dtap].WasQuoted, semCnf.ValidQuotedExpr, semCnf.ValidUnquotedExpr)
+			if err != nil {
+				log.Fatalf("dtapRoles, dtap '%s', '%s'", dtap, err)
+			}
+			dtapRoleIdents[dtap] = roleIdent
+		}
+		// also check that we did not specify any additional dtaps that we don't have
+		for dtap := range dtapRoles {
+			if !actionScope.HasDTAP(dtap) {
+				log.Fatalf("dtap specified in dtapRoles that is not in action scope")
+			}
+		}
+	} else {
+		if len(dtapRoles) > 0 {
+			log.Fatalf("dtapRoles specified without got action")
 		}
 	}
 
@@ -193,6 +229,18 @@ func main() {
 			log.Fatalf("mae: %v", err)
 		}
 		log.Printf("Managed access exclusively for product '%s'", product)
+	case "own":
+		// Manage access exclusively, require a product ID in this case
+		if err := snowflakeNewGrupin.Own(ctx, semCnf, snowCnf, conn, actionScope); err != nil {
+			log.Fatalf("mae: %v", err)
+		}
+		log.Printf("Owned product '%s'", product)
+	case "got":
+		// Manage access exclusively, require a product ID in this case
+		if err := snowflakeNewGrupin.GrantOwnershipTo(ctx, snowCnf, conn, actionScope, dtapRoleIdents); err != nil {
+			log.Fatalf("mae: %v", err)
+		}
+		log.Printf("Granted ownership of objects for product '%s'", product)
 	case "purge":
 		// Purge (DROP) objects
 		if err := snowflakeNewGrupin.Purge(ctx, snowCnf, conn, actionScope); err != nil {
@@ -204,4 +252,6 @@ func main() {
 	// TODO: also think about how to guard against an error scenario in which someone triggers an old grupr run in CI/CD, e.g., we could store a UUID, or even a git hash
 	// in the Grupr schema of the currently running run; the last thing Grupr would always try before crashing is to wipe that one; but, it'd mean from time to time ops may have
 	// to come in and delete that one; but imagine the bewilderment if two grupr processes are concurrently trying to make two different yamls the reality...
+	// ... perhaps at least, since at this time all we have is a current target yaml, just while we run, grab any kind of lock in Snowflake, which will be released if
+	// we lose the connection
 }
