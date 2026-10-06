@@ -201,7 +201,7 @@ func (pd *ProductDTAP) grant(ctx context.Context, semCnf *semantics.Config, cnf 
 	// We are done, things are stable, let's emit an info log message if "we" own objects that are matched by other products,
 	// or, if we own objects that are not matched by any product.
 	if len(pd.ownershipOtherProductsObjects) > 0 || len(pd.ownershipUnmatchedObjects) > 0 {
-		log.Printf("INFO: product '%s', dtap '%s' owns %d objects matched by other products, and %d unmatched objects ", pd.ProductID, pd.DTAP,
+		log.Printf("INFO: product '%s', dtap '%s' owns %d objects matched by other products, and %d unmatched objects\n", pd.ProductID, pd.DTAP,
 			len(pd.ownershipOtherProductsObjects), len(pd.ownershipUnmatchedObjects))
 	}
 	return nil
@@ -339,7 +339,7 @@ func (pd *ProductDTAP) dropProductRolesIfZombie(ctx context.Context, cnf *Config
 		return nil
 	}
 	if len(pd.ownershipOtherProductsObjects) > 0 || len(pd.ownershipUnmatchedObjects) > 0 {
-		log.Printf("WARN: product '%s', dtap '%s', has ownership of objects, not dropping product roles", pd.ProductID, pd.DTAP)
+		log.Printf("WARN: product '%s', dtap '%s', has ownership of objects, not dropping product roles\n", pd.ProductID, pd.DTAP)
 		return nil
 	}
 	if err := pd.ReadRole.Drop(ctx, cnf, conn); err != nil {
