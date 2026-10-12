@@ -41,9 +41,15 @@ func (o SchemaObjs) hasObject(k semantics.Ident) bool {
 }
 
 func (o SchemaObjs) countByObjType(t ObjType) int {
+	objTpMapForCountingPurposes := map[ObjType]ObjType{
+		ObjTpTable:            ObjTpTable,
+		ObjTpHybridTable:      ObjTpTable,
+		ObjTpView:             ObjTpView,
+		ObjTpMaterializedView: ObjTpView,
+	}
 	r := 0
 	for _, v := range o.Objects {
-		if v.ObjectType == t {
+		if objTpMapForCountingPurposes[v.ObjectType] == t {
 			r += 1
 		}
 	}

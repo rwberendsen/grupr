@@ -189,7 +189,7 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 	}
 
 	for _, ot := range []ObjType{ObjTpMaterializedView} {
-		envStr := fmt.Sprintf("GRUPR_SNOWFLAKE_MA_%v", ot)
+		envStr := fmt.Sprintf("GRUPR_SNOWFLAKE_MA_%s", ot.RecordString())
 		if env, ok := os.LookupEnv(envStr); ok {
 			if b, err := strconv.ParseBool(env); err != nil {
 				return nil, fmt.Errorf("%s: %w", envStr, err)
