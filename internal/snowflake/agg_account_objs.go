@@ -65,37 +65,99 @@ func (o AggAccountObjs) archive(ctx context.Context, cnf *Config, conn *sql.DB, 
 				for i := range pathObj {
 					pathObj[i] = url.PathEscape(pathObj[i])
 				}
-				if pathStr, err := url.JoinPath("", pathObj...); err != nil {
+				pathStr, err := url.JoinPath("", pathObj...)
+				if err != nil {
 					return failedQueries, fmt.Errorf("archive: %w", err)
-				} else {
-					sql := fmt.Sprintf(`COPY INTO @%s.%s.%s/%s
+				} 
+
+				// Get the columns and their data types from the information schema,
+		        // and generate SQL to do the timestamp conversion.
+				cols := []semantics.Ident
+				dataTypes := []string
+				sql := fmt.Sprintf(`SELECT 
+    column_name
+  , data_type
+FROM IDENTIFIER($$%s$$)
+WHERE
+    table_schema = %s
+AND table_name   = %s
+ORDER BY ordinal_position ASC`, ObjTpView.FQN(db, semantics.Ident("information_schema"), semantics.Ident("columns"),
+				schema.SinglQuote(), obj.SingleQuote())
+				rows, err := conn.QueryContext(ctx, sql)
+				if err != nil {
+					return err
+				}
+				defer rows.Close()
+				for rows.Next() {
+					var col semantics.Ident
+					var dataType string
+					if err := rows.Scan(&col, &dataType); err != nil {
+						return err
+					}
+					cols = append(cols, col)
+					dataTypes = append(dataTypes, dataType)
+				}
+				if err = rows.Err(); err != nil {
+					return err
+				}
+
+				// Make a pass over the colums and do the type conversions
+				// Note that in the case of a TIMESTAMP_TZ we want to insert a column here with the offset.
+				colLines := []string
+				objCanBeSerialized := true
+				for i := range cols {
+					col := cols[i]
+					dataType := dataTypes[i]
+					
+					switch dataType {
+					case "TIMESTAMP_LTZ":
+						colLines = append(colLines, fmt.Sprintf("  , IDENTIFIER($$%s$$)", col))
+					case "TIMESTAMP_TZ":
+						colLines = append(colLines, fmt.Sprintf("  , IDENTIFIER($$%s$$)", col))
+						offsetCol = col + semCnf.Infix + semantics.Ident("OFFSET")
+						if slices.Contains(cols, offsetCol) {
+							return log.Printf("column %s already exists", offsetCol.SingleQuote())
+							objCanBeSerialized = false
+						} else {
+							colLines = append(colLines, fmt.Sprintf("  , IDENTIFIER($$%s$$)", col))
+						}
+					default:
+						colLines = append(colLines, fmt.Sprintf("  , IDENTIFIER($$%s$$)", col))
+					}
+				}
+				if !objCanBeSerialized {
+					failedQueries = append(failedQueries, fmt.Sprintf("NO SQL GENERATED FOR TABLE %s BECAUSE IT WOULD HAVE CREATED DUPLICATE COLUMNS, TABLE WAS SKIPPED",
+																		objAttr.ObjectType.FQN(db, schema, obj))
+				}
+
+				// Now do the actual unloading
+				sql = fmt.Sprintf(`COPY INTO @%s.%s.%s/%s
 FROM (SELECT * FROM IDENTIFIER($$%s$$))
 INCLUDE_QUERY_ID = TRUE
 DETAILED_OUTPUT = TRUE
 HEADER = TRUE`, cnf.Database, cnf.Schema, cnf.ExternalWriteStage, pathStr, objAttr.ObjectType.FQN(db, schema, obj))
-					if err := runSQL(ctx, cnf, conn, sql); err != nil {
-						if sfErr, ok := errors.AsType[*gosnowflake.SnowflakeError](err); ok {
-							log.Printf("SnowflakeError:\n")
-							log.Printf("Number:   %d\n", sfErr.Number)
-							log.Printf("SQLState: %s\n", sfErr.SQLState)
-							log.Printf("QueryID:  %s\n", sfErr.QueryID)
-							log.Printf("Message:  %s\n", sfErr.Message)
-							// For some particular error numbers we want to skip this object,
-							// continue archiving the other objects, and notify the user
-							// at the end about the failed queries, where some customization of
-							// our generic COPY INTO @location statement would be required.
-							if sfErr.Number == 100171 {
-								// Some columns contained data types not directly compatible with Parquet,
-								// i.e., we've observed Snowflake reporting this error number when
-								// complaining about TIMESTAMP_TZ or TIMESTAMP_LTZ columns that it would
-								// not convert to any Parquet data type
-								failedQueries = append(failedQueries, sql)
-							} else {
-								return failedQueries, err
-							}
+				if err := runSQL(ctx, cnf, conn, sql); err != nil {
+					if sfErr, ok := errors.AsType[*gosnowflake.SnowflakeError](err); ok {
+						log.Printf("SnowflakeError:\n")
+						log.Printf("Number:   %d\n", sfErr.Number)
+						log.Printf("SQLState: %s\n", sfErr.SQLState)
+						log.Printf("QueryID:  %s\n", sfErr.QueryID)
+						log.Printf("Message:  %s\n", sfErr.Message)
+						// For some particular error numbers we want to skip this object,
+						// continue archiving the other objects, and notify the user
+						// at the end about the failed queries, where some customization of
+						// our generic COPY INTO @location statement would be required.
+						if sfErr.Number == 100171 {
+							// Some columns contained data types not directly compatible with Parquet,
+							// i.e., we've observed Snowflake reporting this error number when
+							// complaining about TIMESTAMP_TZ or TIMESTAMP_LTZ columns that it would
+							// not convert to any Parquet data type
+							failedQueries = append(failedQueries, sql)
 						} else {
 							return failedQueries, err
 						}
+					} else {
+						return failedQueries, err
 					}
 				}
 			}
