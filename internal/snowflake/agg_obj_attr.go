@@ -105,3 +105,36 @@ func (o AggObjAttr) pushExternalGrants(ctx context.Context, semCnf *semantics.Co
 func (o AggObjAttr) purge(ctx context.Context, cnf *Config, conn *sql.DB, db, schema, obj semantics.Ident) error {
 	return runSQL(ctx, cnf, conn, fmt.Sprintf(`DROP %s IF EXISTS IDENTIFIER($$%s$$)`, o.ObjectType, o.ObjectType.FQN(db, schema, obj)))
 }
+
+func (o AggObjAttr) getColumns(ctx context.Context, conn *sql.DB, db semantics.Ident, schema semantics.Ident, obj semantics.Ident) ([]Column, error) {
+	var cols []Column
+	sql := fmt.Sprintf(`SELECT 
+column_name
+, data_type
+FROM IDENTIFIER($$%s$$)
+WHERE
+table_schema = %s
+AND table_name   = %s
+ORDER BY ordinal_position ASC`, o.ObjectType.FQN(db, semantics.Ident("INFORMATION_SCHEMA"), semantics.Ident("COLUMNS")),
+		schema.SingleQuote(), obj.SingleQuote())
+	rows, err := conn.QueryContext(ctx, sql)
+	if err != nil {
+		return cols, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var col semantics.Ident
+		var dataType string
+		if err := rows.Scan(&col, &dataType); err != nil {
+			return cols, err
+		}
+		cols = append(cols, Column{Name: col, DataType: dataType})
+	}
+	if err = rows.Err(); err != nil {
+		return cols, err
+	}
+	if len(cols) == 0 {
+		return cols, fmt.Errorf("%s has no columns", o.ObjectType.FQN(db, schema, obj))
+	}
+	return cols, nil
+}

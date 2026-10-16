@@ -431,15 +431,19 @@ func (pd *ProductDTAP) ManageAccessExclusively(ctx context.Context, semCnf *sema
 	return DoRevokesExitOnInputErrors(ctx, cnf, conn, QueryGrantsOfRoleToRoles(ctx, conn, pd.ReadRole.ID))
 }
 
-func (pd *ProductDTAP) Archive(ctx context.Context, cnf *Config, conn *sql.DB, path []string, interfaces map[string]bool) ([]string, error) {
+func (pd *ProductDTAP) Archive(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, path []string, interfaces map[string]bool) ([]string, error) {
 	failedQueries := []string{}
 	// Grant grupr role the product write role, so that grupr can both use the external stage, and have
 	// read access to the objects to be archived
 	// Note that we use the write role, even though we'll only be needing read access to the objects.
 	// This is because when using grupr, it is a common practice to always use write roles for service accounts.
 	// And the grupr user is a service account by any definition.
-	if err := runSQL(ctx, cnf, conn, `GRANT ROLE IDENTIFIER(?) TO ROLE IDENTIFIER(?)`,
-		pd.WriteRole.String(), cnf.Role.String()); err != nil {
+	//
+	// NB! even in the case of a dry run, we actually do execute this grant.
+	// This is because we have to query the information schema here, and without the grant, for now,
+	// the grupr role will not have access to the objects (until Snowflake activates the
+	// behavior change bundle where the information schema views will honor the MANAGE GRANTS privilege)
+	if _, err := conn.ExecContext(ctx, `GRANT ROLE IDENTIFIER(?) TO ROLE IDENTIFIER(?)`, pd.WriteRole.String(), cnf.Role.String()); err != nil {
 		return failedQueries, err
 	}
 
@@ -465,7 +469,7 @@ func (pd *ProductDTAP) Archive(ctx context.Context, cnf *Config, conn *sql.DB, p
 	pathProductDTAP := append(path, prodOrNot[pd.IsProd], "dtaps", pd.DTAP)
 	// No interfaces specified means: do the produdct-level one; Otherwise, do each interface if it was specified
 	if len(interfaces) == 0 {
-		if fq, err := pd.Interface.aggAccountObjects.archive(ctx, cnf, conn, pathProductDTAP, ""); err != nil {
+		if fq, err := pd.Interface.aggAccountObjects.archive(ctx, semCnf, cnf, conn, pathProductDTAP, ""); err != nil {
 			return failedQueries, err
 		} else {
 			failedQueries = slices.Concat(failedQueries, fq)
@@ -473,7 +477,7 @@ func (pd *ProductDTAP) Archive(ctx context.Context, cnf *Config, conn *sql.DB, p
 	} else {
 		for iid, i := range pd.Interfaces {
 			if interfaces[iid] {
-				if fq, err := i.aggAccountObjects.archive(ctx, cnf, conn, pathProductDTAP, iid); err != nil {
+				if fq, err := i.aggAccountObjects.archive(ctx, semCnf, cnf, conn, pathProductDTAP, iid); err != nil {
 					return failedQueries, err
 				} else {
 					failedQueries = slices.Concat(failedQueries, fq)
@@ -488,8 +492,8 @@ func (pd *ProductDTAP) Archive(ctx context.Context, cnf *Config, conn *sql.DB, p
 	}
 
 	// Revoke product write role from grupr role
-	if err := runSQL(ctx, cnf, conn, `REVOKE ROLE IDENTIFIER(?) FROM ROLE IDENTIFIER(?)`,
-		pd.WriteRole.String(), cnf.Role.String()); err != nil {
+	// NB! The revoke is also actually executed, even when doing a dry run
+	if _, err := conn.ExecContext(ctx, `REVOKE ROLE IDENTIFIER(?) FROM ROLE IDENTIFIER(?)`, pd.WriteRole.String(), cnf.Role.String()); err != nil {
 		return failedQueries, err
 	}
 

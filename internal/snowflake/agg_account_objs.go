@@ -8,6 +8,7 @@ import (
 	"iter"
 	"log"
 	"net/url"
+	"strings"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
 	"github.com/snowflakedb/gosnowflake"
@@ -52,7 +53,7 @@ func (o AggAccountObjs) getExternalGrants(ctx context.Context, semCnf *semantics
 	}
 }
 
-func (o AggAccountObjs) archive(ctx context.Context, cnf *Config, conn *sql.DB, path []string, interfaceID string) ([]string, error) {
+func (o AggAccountObjs) archive(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, path []string, interfaceID string) ([]string, error) {
 	failedQueries := []string{}
 	pathInterface := append(path)
 	if interfaceID != "" {
@@ -68,74 +69,86 @@ func (o AggAccountObjs) archive(ctx context.Context, cnf *Config, conn *sql.DB, 
 				pathStr, err := url.JoinPath("", pathObj...)
 				if err != nil {
 					return failedQueries, fmt.Errorf("archive: %w", err)
-				} 
+				}
 
 				// Get the columns and their data types from the information schema,
-		        // and generate SQL to do the timestamp conversion.
-				cols := []semantics.Ident
-				dataTypes := []string
-				sql := fmt.Sprintf(`SELECT 
-    column_name
-  , data_type
-FROM IDENTIFIER($$%s$$)
-WHERE
-    table_schema = %s
-AND table_name   = %s
-ORDER BY ordinal_position ASC`, ObjTpView.FQN(db, semantics.Ident("information_schema"), semantics.Ident("columns"),
-				schema.SinglQuote(), obj.SingleQuote())
-				rows, err := conn.QueryContext(ctx, sql)
+				// and generate SQL to do the timestamp conversion.
+				var cols []Column
+				cols, err = objAttr.getColumns(ctx, conn, db, schema, obj)
 				if err != nil {
-					return err
+					return failedQueries, err
 				}
-				defer rows.Close()
-				for rows.Next() {
-					var col semantics.Ident
-					var dataType string
-					if err := rows.Scan(&col, &dataType); err != nil {
-						return err
-					}
-					cols = append(cols, col)
-					dataTypes = append(dataTypes, dataType)
-				}
-				if err = rows.Err(); err != nil {
-					return err
+				colNames := map[semantics.Ident]bool{}
+				for _, col := range cols {
+					colNames[col.Name] = true
 				}
 
 				// Make a pass over the colums and do the type conversions
 				// Note that in the case of a TIMESTAMP_TZ we want to insert a column here with the offset.
-				colLines := []string
+				var colLines []string
 				objCanBeSerialized := true
-				for i := range cols {
-					col := cols[i]
-					dataType := dataTypes[i]
-					
-					switch dataType {
+				var blockers []string
+				for _, col := range cols {
+					switch col.DataType {
 					case "TIMESTAMP_LTZ":
-						colLines = append(colLines, fmt.Sprintf("  , IDENTIFIER($$%s$$)", col))
+						// In this case, we argue that the data does not contain an offset: the offset is only determined
+						// at read time by the active time zone in the session in Snowflake.
+						// We adopt the approach of converting to UTC.
+						// If a non UTC time zone would be required to perform some computation on the timestamps here,
+						// the consumer of this data should select the appropriate timezone.
+						colLines = append(colLines, fmt.Sprintf("CONVERT_TIMEZONE('UTC', %s))::TIMESTAMP_NTZ AS %s", col.Name, col.Name))
 					case "TIMESTAMP_TZ":
-						colLines = append(colLines, fmt.Sprintf("  , IDENTIFIER($$%s$$)", col))
-						offsetCol = col + semCnf.Infix + semantics.Ident("OFFSET")
-						if slices.Contains(cols, offsetCol) {
-							return log.Printf("column %s already exists", offsetCol.SingleQuote())
+						// In this case, the data does contain an offset. While this does not directly give us an actual
+						// time zone, it is still information we do not simply want to discard. We (attempt to) add two
+						// columns to the schema of the to-be serialized Parquet file(s).  We tell Snowflake to store the
+						// offset in the new columns, and the wall-clock time part in the original column.
+						tzHrCol := col.Name + semCnf.Infix + semantics.Ident("TZ_HR")
+						tzMinCol := col.Name + semCnf.Infix + semantics.Ident("TZ_MIN")
+						if colNames[tzHrCol] || colNames[tzMinCol] {
 							objCanBeSerialized = false
+							colLines = append(colLines, fmt.Sprintf("  , %s", col.Name))
+							if colNames[tzHrCol] {
+								blockers = append(blockers, fmt.Sprintf("column %s already exists", tzHrCol.SingleQuote()))
+							}
+							if colNames[tzMinCol] {
+								blockers = append(blockers, fmt.Sprintf("column %s already exists", tzMinCol.SingleQuote()))
+							}
 						} else {
-							colLines = append(colLines, fmt.Sprintf("  , IDENTIFIER($$%s$$)", col))
+							colLines = append(colLines, fmt.Sprintf("%s::TIMESTAMP_NTZ                AS %s", col.Name, col.Name))
+							colLines = append(colLines, fmt.Sprintf("EXTRACT(timezone_hour FROM %s)   AS %s", col.Name, tzHrCol))
+							colLines = append(colLines, fmt.Sprintf("EXTRACT(timezone_minute FROM %s) AS %s", col.Name, tzMinCol))
 						}
+					case "OBJECT", "ARRAY":
+						objCanBeSerialized = false
+						colLines = append(colLines, fmt.Sprintf("%s", col.Name))
+						blockers = append(blockers, fmt.Sprintf("column %s: unsupported data type %s", col.Name, col.DataType))
 					default:
-						colLines = append(colLines, fmt.Sprintf("  , IDENTIFIER($$%s$$)", col))
+						colLines = append(colLines, fmt.Sprintf("%s", col.Name))
 					}
 				}
-				if !objCanBeSerialized {
-					failedQueries = append(failedQueries, fmt.Sprintf("NO SQL GENERATED FOR TABLE %s BECAUSE IT WOULD HAVE CREATED DUPLICATE COLUMNS, TABLE WAS SKIPPED",
-																		objAttr.ObjectType.FQN(db, schema, obj))
-				}
 
-				// Now do the actual unloading
-				sql = fmt.Sprintf(`COPY INTO @%s.%s.%s/%s
-FROM (SELECT * FROM IDENTIFIER($$%s$$))
+				comment := "-- Unloading:\n"
+				if !objCanBeSerialized {
+					comment = "-- The query below needs customization. Blockers:\n"
+					for blocker := range blockers {
+						comment += fmt.Sprintf("-- %s\n", blocker)
+					}
+				}
+				columnClause := strings.Join(colLines, "\n  , ")
+
+				sql := fmt.Sprintf(`%sCOPY INTO @%s.%s.%s/%s
+FROM (SELECT 
+    %s
+FROM IDENTIFIER($$%s$$))
 INCLUDE_QUERY_ID = TRUE
 DETAILED_OUTPUT = TRUE
-HEADER = TRUE`, cnf.Database, cnf.Schema, cnf.ExternalWriteStage, pathStr, objAttr.ObjectType.FQN(db, schema, obj))
+HEADER = TRUE`, comment, cnf.Database, cnf.Schema, cnf.ExternalWriteStage, pathStr, columnClause, objAttr.ObjectType.FQN(db, schema, obj))
+
+				if !objCanBeSerialized {
+					failedQueries = append(failedQueries, sql)
+					continue
+				}
+
 				if err := runSQL(ctx, cnf, conn, sql); err != nil {
 					if sfErr, ok := errors.AsType[*gosnowflake.SnowflakeError](err); ok {
 						log.Printf("SnowflakeError:\n")
@@ -153,6 +166,7 @@ HEADER = TRUE`, cnf.Database, cnf.Schema, cnf.ExternalWriteStage, pathStr, objAt
 							// complaining about TIMESTAMP_TZ or TIMESTAMP_LTZ columns that it would
 							// not convert to any Parquet data type
 							failedQueries = append(failedQueries, sql)
+							continue
 						} else {
 							return failedQueries, err
 						}
