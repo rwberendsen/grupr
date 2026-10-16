@@ -96,7 +96,7 @@ func (o AggAccountObjs) archive(ctx context.Context, semCnf *semantics.Config, c
 						// We adopt the approach of converting to UTC.
 						// If a non UTC time zone would be required to perform some computation on the timestamps here,
 						// the consumer of this data should select the appropriate timezone.
-						colLines = append(colLines, fmt.Sprintf("CONVERT_TIMEZONE('UTC', %s))::TIMESTAMP_NTZ AS %s", col.Name, col.Name))
+						colLines = append(colLines, fmt.Sprintf("CONVERT_TIMEZONE('UTC', %s)::TIMESTAMP_NTZ AS %s", col.Name, col.Name))
 					case "TIMESTAMP_TZ":
 						// In this case, the data does contain an offset. While this does not directly give us an actual
 						// time zone, it is still information we do not simply want to discard. We (attempt to) add two
@@ -106,7 +106,7 @@ func (o AggAccountObjs) archive(ctx context.Context, semCnf *semantics.Config, c
 						tzMinCol := col.Name + semCnf.Infix + semantics.Ident("TZ_MIN")
 						if colNames[tzHrCol] || colNames[tzMinCol] {
 							objCanBeSerialized = false
-							colLines = append(colLines, fmt.Sprintf("  , %s", col.Name))
+							colLines = append(colLines, fmt.Sprintf("%s", col.Name))
 							if colNames[tzHrCol] {
 								blockers = append(blockers, fmt.Sprintf("column %s already exists", tzHrCol.SingleQuote()))
 							}

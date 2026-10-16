@@ -109,8 +109,8 @@ func (o AggObjAttr) purge(ctx context.Context, cnf *Config, conn *sql.DB, db, sc
 func (o AggObjAttr) getColumns(ctx context.Context, conn *sql.DB, db semantics.Ident, schema semantics.Ident, obj semantics.Ident) ([]Column, error) {
 	var cols []Column
 	sql := fmt.Sprintf(`SELECT 
-column_name
-, data_type
+    column_name
+  , data_type
 FROM IDENTIFIER($$%s$$)
 WHERE
 table_schema = %s
