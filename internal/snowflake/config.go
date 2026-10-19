@@ -36,6 +36,8 @@ type Config struct {
 	DBRolePrivileges          map[GrantTemplate]struct{}
 	ManagedObjTypes           map[ObjType]bool
 	DryRun                    bool
+	ArchiveMaxThreads         int
+	ArchiveUseProductWH       bool
 }
 
 func GetConfig(semCnf *semantics.Config) (*Config, error) {
@@ -66,7 +68,8 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 			ObjTpTable: true,
 			ObjTpView:  true,
 		},
-		DryRun: true,
+		DryRun:            true,
+		ArchiveMaxThreads: 2, // Each archive job can already be a large job that a warehouse is running with multiple concurrent threads
 	}
 
 	if user, ok := os.LookupEnv("GRUPR_SNOWFLAKE_USER"); !ok {
@@ -356,6 +359,25 @@ func GetConfig(semCnf *semantics.Config) (*Config, error) {
 			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_DRY_RUN: %w", err)
 		} else {
 			cnf.DryRun = b
+		}
+	}
+
+	if archiveMaxThreads, ok := os.LookupEnv("GRUPR_SNOWFLAKE_ARCHIVE_MAX_THREADS"); ok {
+		if i, err := strconv.Atoi(archiveMaxThreads); err != nil {
+			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_ARCHIVE_MAX_THREADS: %w", err)
+		} else {
+			if i < cnf.MaxOpenConns {
+				return nil, fmt.Errorf("GRUPR_SNOWFLAKE_ARCHIVE_MAX_THREADS should be >= GRUPR_SNOWFLAKE_MAX_OPEN_CONNECTIONS")
+			}
+			cnf.ArchiveMaxThreads = i
+		}
+	}
+
+	if archiveUseProductWH, ok := os.LookupEnv("GRUPR_SNOWFLAKE_ARCHIVE_USE_PRODUCT_WH"); ok {
+		if b, err := strconv.ParseBool(archiveUseProductWH); err != nil {
+			return nil, fmt.Errorf("GRUPR_SNOWFLAKE_ARCHIVE_USE_PRODUCT_WH: %w", err)
+		} else {
+			cnf.ArchiveUseProductWH = b
 		}
 	}
 
