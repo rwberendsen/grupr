@@ -342,7 +342,7 @@ func (g *Grupin) ManageAccessExclusively(ctx context.Context, semCnf *semantics.
 	return nil
 }
 
-func (g *Grupin) Archive(ctx context.Context, cnf *Config, conn *sql.DB, actionScope semantics.ActionScope) error {
+func (g *Grupin) Archive(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, actionScope semantics.ActionScope) error {
 	if cnf.ExternalWriteStage == semantics.Ident("") {
 		return fmt.Errorf("no stage name configured")
 	}
@@ -355,7 +355,7 @@ func (g *Grupin) Archive(ctx context.Context, cnf *Config, conn *sql.DB, actionS
 	// go ahead and archive
 	for dtap := range actionScope.AllDTAPsProdFirst() {
 		pdID := semantics.ProductDTAPID{ProductID: actionScope.Product, DTAP: dtap}
-		if fqs, err := g.ProductDTAPs[pdID].Archive(ctx, cnf, conn, path, actionScope.Interfaces); err != nil {
+		if fqs, err := g.ProductDTAPs[pdID].Archive(ctx, semCnf, cnf, conn, path, actionScope.Interfaces); err != nil {
 			return err
 		} else {
 			failedQueries = slices.Concat(failedQueries, fqs)

@@ -219,7 +219,7 @@ func main() {
 	switch action {
 	case "archive":
 		// Archive (specified interfaces of) (dtaps of) product ID
-		if err := snowflakeNewGrupin.Archive(ctx, snowCnf, conn, actionScope); err != nil {
+		if err := snowflakeNewGrupin.Archive(ctx, semCnf, snowCnf, conn, actionScope); err != nil {
 			log.Fatalf("archive: %v", err)
 		}
 		log.Printf("Archive action for product '%v' successful", product)

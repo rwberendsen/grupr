@@ -58,6 +58,11 @@ func (i Ident) Quote() string {
 	return `"` + s + `"`
 }
 
+func (i Ident) SingleQuote() string {
+	s := strings.ReplaceAll(string(i), `'`, `''`)
+	return `'` + s + `'`
+}
+
 func (i Ident) String() string {
 	return i.Quote()
 }
