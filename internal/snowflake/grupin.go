@@ -58,10 +58,12 @@ func NewGrupin(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn 
 
 	if yamlPath != "" {
 		// parse the YAML in the path, for the snowflake specific features
-		if features, err := newFeatures(yamlPath); err != nil {
+		features, err := newFeatures(yamlPath)
+		if err != nil {
 			return r, err
-		} else {
-			r.setWarehouses(semCnf, features.warehouses)
+		}
+		if err = r.setWarehouses(semCnf, features.warehouses); err != nil {
+			return r, err
 		}
 	}
 
