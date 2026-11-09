@@ -61,10 +61,10 @@ func (r ProductRole) Create(ctx context.Context, cnf *Config, conn *sql.DB) erro
 }
 
 func (r ProductRole) hasPrivileges(ctx context.Context, cnf *Config, conn *sql.DB) (bool, error) {
-	// Because we have zombie product dtaps, we should have already revoked all managed grants,
-	// and made attempts to transfer ownership. So if there is any grant left, no matter what it
-	// is, we should not drop the role. Either it is an unmanaged grant that sysadmins added,
-	// or it is ownership on an object that grupr did not yet figure out who to transfer it to.
+	// Because we have zombie product dtaps, we should have already revoked all
+	// managed grants.  So if there is any grant left, no matter what it is, we
+	// should not drop the role. Either it is an unmanaged grant that sysadmins
+	// added, or it is ownership on an object.
 	for _, err := range QueryGrantsToRoleFilteredLimit(ctx, cnf, conn, r.ID, nil, nil, 1) {
 		if err != nil {
 			return true, err
