@@ -157,9 +157,6 @@ func queryFutureGrantsToRole(ctx context.Context, conn *sql.DB, db semantics.Ide
 	return func(yield func(FutureGrant, error) bool) {
 		rows, err := conn.QueryContext(ctx, query)
 		if err != nil {
-			if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
-				err = ErrObjectNotExistOrAuthorized
-			}
 			yield(FutureGrant{}, err)
 			return
 		}

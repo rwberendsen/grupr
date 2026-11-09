@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
+	"github.com/snowflakedb/gosnowflake"
 )
 
 type DatabaseRole struct {
@@ -71,9 +72,6 @@ func QueryDatabaseRoles(ctx context.Context, semCnf *semantics.Config, cnf *Conf
 		rows, err := conn.QueryContext(ctx, fmt.Sprintf(`SHOW DATABASE ROLES IN DATABASE IDENTIFIER($$%s$$)
 	->> SELECT "name" FROM $1 WHERE "owner" = '%s'`, db, string(cnf.Role)))
 		if err != nil {
-			if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
-				err = ErrObjectNotExistOrAuthorized
-			}
 			yield(DatabaseRole{}, err)
 			return
 		}
@@ -128,9 +126,9 @@ func (r DatabaseRole) Drop(ctx context.Context, cnf *Config, conn *sql.DB) error
 	// and if so, refuse to drop, logging a line explaining the reason. Although, if the role has no unmanaged
 	// privileges, it may not be harmful to drop it anyway.
 	err := runSQL(ctx, cnf, conn, `DROP DATABASE ROLE IF EXISTS IDENTIFIER(?)`, r.String())
-	if err == ErrObjectNotExistOrAuthorized {
+	if IsErr(err, gosnowflake.ErrObjectNotExistOrAuthorized) {
 		// if the DB does not exist anymore, then neither would the database role, and our job is done
-		err = nil
+		return nil
 	}
 	return err
 }

@@ -11,6 +11,7 @@ import (
 
 	"github.com/rwberendsen/grupr/internal/semantics"
 	"github.com/rwberendsen/grupr/internal/syntax"
+	"github.com/snowflakedb/gosnowflake"
 )
 
 type ProductDTAP struct {
@@ -118,7 +119,7 @@ func (pd *ProductDTAP) createProductRoles(ctx context.Context, semCnf *semantics
 	conn *sql.DB, productRoles map[ProductRole]struct{}) error {
 	// Read role
 	pd.ReadRole = newProductRole(semCnf, pd.ProductID, pd.DTAP, ModeRead)
-	if _, ok := productRoles[pd.ReadRole]; !ok && !pd.isZombie {
+	if _, ok := productRoles[pd.ReadRole]; !ok {
 		if err := pd.ReadRole.Create(ctx, cnf, conn); err != nil {
 			return err
 		}
@@ -126,7 +127,7 @@ func (pd *ProductDTAP) createProductRoles(ctx context.Context, semCnf *semantics
 
 	// Write role, identical logic, maybe refactor
 	pd.WriteRole = newProductRole(semCnf, pd.ProductID, pd.DTAP, ModeWrite)
-	if _, ok := productRoles[pd.WriteRole]; !ok && !pd.isZombie {
+	if _, ok := productRoles[pd.WriteRole]; !ok {
 		if err := pd.WriteRole.Create(ctx, cnf, conn); err != nil {
 			return err
 		}
@@ -193,7 +194,7 @@ func (pd *ProductDTAP) grant(ctx context.Context, semCnf *semantics.Config, cnf 
 	// exist having been dropped concurrently;
 	// See product_dtap__objects.go for this method and its helper methods
 	for {
-		if err := pd.grant_(ctx, semCnf, cnf, conn, productRoles, grupinDisjointFromObject, userManagedOwners, c); err != ErrObjectNotExistOrAuthorized {
+		if err := pd.grant_(ctx, semCnf, cnf, conn, productRoles, grupinDisjointFromObject, userManagedOwners, c); !IsErr(err, gosnowflake.ErrObjectNotExistOrAuthorized) {
 			return err
 		}
 	}
@@ -324,7 +325,7 @@ func (pd *ProductDTAP) revoke(ctx context.Context, semCnf *semantics.Config, cnf
 	//   next entire Grupr run, it can save our DBAs some time if we act immediately and
 	//   refresh just this single data product-dtap.
 	err := pd.revoke_(ctx, cnf, conn)
-	for err == ErrObjectNotExistOrAuthorized {
+	for IsErr(err, gosnowflake.ErrObjectNotExistOrAuthorized) {
 		err = pd.grant_(ctx, semCnf, cnf, conn, productRoles, grupinDisjointFromObject, userManagedOwners, c)
 		if err != nil {
 			continue
@@ -339,7 +340,19 @@ func (pd *ProductDTAP) dropProductRolesIfZombie(ctx context.Context, cnf *Config
 		return nil
 	}
 	if len(pd.ownershipOtherProductsObjects) > 0 || len(pd.ownershipUnmatchedObjects) > 0 {
-		log.Printf("WARN: product '%s', dtap '%s', has ownership of objects, not dropping product roles\n", pd.ProductID, pd.DTAP)
+		log.Printf("INFO: product '%s', dtap '%s', has ownership of objects, not dropping product roles\n", pd.ProductID, pd.DTAP)
+		return nil
+	}
+	hasPrivilegesRead, err := pd.ReadRole.HasPrivileges(ctx, cnf, conn)
+	if err != nil && !IsErr(err, ErrRoleNotExistOrAuthorized) {
+		return err
+	}
+	hasPrivilegesWrite, err := pd.WriteRole.HasPrivileges(ctx, cnf, conn)
+	if err != nil && !IsErr(err, ErrRoleNotExistOrAuthorized) {
+		return err
+	}
+	if hasPrivilegesRead || hasPrivilegesWrite {
+		log.Printf("INFO: product '%s', dtap '%s', read and / or write role still have privileges, not dropping product roles\n", pd.ProductID, pd.DTAP)
 		return nil
 	}
 	if err := pd.ReadRole.Drop(ctx, cnf, conn); err != nil {

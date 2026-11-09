@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"iter"
-	"strings"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
 )
@@ -111,9 +110,6 @@ SELECT
 FROM $1
 `, db, schema, limit, fromClause, ObjTpRole.RecordString()))
 			if err != nil {
-				if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
-					err = ErrObjectNotExistOrAuthorized
-				}
 				yield(tableRec{}, err)
 				return
 			}

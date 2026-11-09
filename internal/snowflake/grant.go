@@ -11,6 +11,7 @@ import (
 
 	"github.com/rwberendsen/grupr/internal/semantics"
 	"github.com/rwberendsen/grupr/internal/util"
+	"github.com/snowflakedb/gosnowflake"
 )
 
 type Grant struct {
@@ -223,9 +224,6 @@ func queryGrantsTo(ctx context.Context, cnf *Config, conn *sql.DB, grantedTo Obj
 	return func(yield func(Grant, error) bool) {
 		rows, err := conn.QueryContext(ctx, query)
 		if err != nil {
-			if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
-				err = ErrObjectNotExistOrAuthorized
-			}
 			yield(Grant{}, err)
 			return
 		}
@@ -442,7 +440,7 @@ func doGrantsSkipErrors(ctx context.Context, cnf *Config, conn *sql.DB, grants i
 		if inputErr != nil {
 			return inputErr
 		}
-		if err := runSQL(ctx, cnf, conn, g.buildSQLGrant(revoke)); err != nil && err != ErrObjectNotExistOrAuthorized {
+		if err := runSQL(ctx, cnf, conn, g.buildSQLGrant(revoke)); err != nil && !IsErr(err, gosnowflake.ErrObjectNotExistOrAuthorized) {
 			return err
 		}
 	}

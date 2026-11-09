@@ -16,9 +16,6 @@ func runSQL(ctx context.Context, cnf *Config, conn *sql.DB, sql string, params .
 		return nil
 	}
 	if _, err := conn.ExecContext(ctx, sql, params...); err != nil {
-		if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
-			err = ErrObjectNotExistOrAuthorized
-		}
 		return err
 	}
 	return nil
@@ -31,9 +28,6 @@ func runMultipleSQL(ctx context.Context, cnf *Config, conn *sql.DB, sql string, 
 	}
 	ctx, _ = gosnowflake.WithMultiStatement(ctx, n)
 	if _, err := conn.ExecContext(ctx, sql); err != nil {
-		if strings.Contains(err.Error(), "390201") { // ErrObjectNotExistOrAuthorized; this way of testing error code is used in errors_test in the gosnowflake repo
-			err = ErrObjectNotExistOrAuthorized
-		}
 		return err
 	}
 	return nil

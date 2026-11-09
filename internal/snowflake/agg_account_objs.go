@@ -3,16 +3,13 @@ package snowflake
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"iter"
-	"log"
 	"net/url"
 	"slices"
 	"strings"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
-	"github.com/snowflakedb/gosnowflake"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -184,24 +181,17 @@ HEADER = TRUE`, comment, cnf.Database, cnf.Schema, cnf.ExternalWriteStage, pathS
 	}
 
 	if err := runSQL(ctx, cnf, conn, sql); err != nil {
-		if sfErr, ok := errors.AsType[*gosnowflake.SnowflakeError](err); ok {
-			log.Printf("SnowflakeError:\n")
-			log.Printf("Number:   %d\n", sfErr.Number)
-			log.Printf("SQLState: %s\n", sfErr.SQLState)
-			log.Printf("QueryID:  %s\n", sfErr.QueryID)
-			log.Printf("Message:  %s\n", sfErr.Message)
-			// For some particular error numbers we want to skip this object,
-			// continue archiving the other objects, and notify the user
-			// at the end about the failed queries, where some customization of
-			// our generic COPY INTO @location statement would be required.
-			if sfErr.Number == 100171 {
-				// Some columns contained data types not directly compatible with Parquet,
-				// i.e., we've observed Snowflake reporting this error number when
-				// complaining about TIMESTAMP_TZ or TIMESTAMP_LTZ columns that it would
-				// not convert to any Parquet data type
-				*failedQuery = sql
-				return nil
-			}
+		// For some particular error numbers we may want to skip this object,
+		// continue archiving the other objects, and notify the user
+		// at the end about the failed queries, where some customization of
+		// our generic COPY INTO @location statement would be required.
+		if IsErr(err, ErrParquetUnloadDataTypeMismatch) {
+			// Some columns contained data types not directly compatible with Parquet,
+			// i.e., we've observed Snowflake reporting this error number when
+			// complaining about TIMESTAMP_TZ or TIMESTAMP_LTZ columns that it would
+			// not convert to any Parquet data type
+			*failedQuery = sql
+			return nil
 		}
 		return err
 	}
