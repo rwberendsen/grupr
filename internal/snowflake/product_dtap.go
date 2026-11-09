@@ -11,6 +11,7 @@ import (
 
 	"github.com/rwberendsen/grupr/internal/semantics"
 	"github.com/rwberendsen/grupr/internal/syntax"
+	"github.com/snowflakedb/gosnowflake"
 )
 
 type ProductDTAP struct {
@@ -193,7 +194,7 @@ func (pd *ProductDTAP) grant(ctx context.Context, semCnf *semantics.Config, cnf 
 	// exist having been dropped concurrently;
 	// See product_dtap__objects.go for this method and its helper methods
 	for {
-		if err := pd.grant_(ctx, semCnf, cnf, conn, productRoles, grupinDisjointFromObject, userManagedOwners, c); err != ErrObjectNotExistOrAuthorized {
+		if err := pd.grant_(ctx, semCnf, cnf, conn, productRoles, grupinDisjointFromObject, userManagedOwners, c); !IsErr(err, gosnowflake.ErrObjectNotExistOrAuthorized) {
 			return err
 		}
 	}
@@ -324,7 +325,7 @@ func (pd *ProductDTAP) revoke(ctx context.Context, semCnf *semantics.Config, cnf
 	//   next entire Grupr run, it can save our DBAs some time if we act immediately and
 	//   refresh just this single data product-dtap.
 	err := pd.revoke_(ctx, cnf, conn)
-	for err == ErrObjectNotExistOrAuthorized {
+	for IsErr(err, gosnowflake.ErrObjectNotExistOrAuthorized) {
 		err = pd.grant_(ctx, semCnf, cnf, conn, productRoles, grupinDisjointFromObject, userManagedOwners, c)
 		if err != nil {
 			continue
@@ -351,7 +352,8 @@ func (pd *ProductDTAP) dropProductRolesIfZombie(ctx context.Context, cnf *Config
 		return err
 	}
 	if hasPrivilegesRead || hasPrivilegesWrite {
-		log.Printf("INFO: product '%s', dtap '%s', read and / or write role still have privileges, not dropping product roles")
+		log.Printf("INFO: product '%s', dtap '%s', read and / or write role still have privileges, not dropping product roles\n", pd.ProductID, pd.DTAP)
+		return nil
 	}
 	if err := pd.ReadRole.Drop(ctx, cnf, conn); err != nil {
 		return err

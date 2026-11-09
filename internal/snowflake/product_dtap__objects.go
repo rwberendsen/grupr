@@ -9,6 +9,7 @@ import (
 
 	"github.com/rwberendsen/grupr/internal/semantics"
 	"github.com/rwberendsen/grupr/internal/util"
+	"github.com/snowflakedb/gosnowflake"
 )
 
 /*
@@ -35,7 +36,7 @@ func (pd *ProductDTAP) refresh_(ctx context.Context, semCnf *semantics.Config, c
 			return fmt.Errorf("Max product refresh count reached")
 		}
 		util.SleepContext(ctx, 1<<pd.refreshCount-1) // exponential backoff
-		if err := pd.refreshObjExprs(ctx, semCnf, cnf, conn, c); err != ErrObjectNotExistOrAuthorized {
+		if err := pd.refreshObjExprs(ctx, semCnf, cnf, conn, c); !IsErr(err, gosnowflake.ErrObjectNotExistOrAuthorized) {
 			return err
 		}
 	}

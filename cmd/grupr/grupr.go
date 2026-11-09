@@ -189,7 +189,7 @@ func main() {
 
 	conn, err := snowflake.GetDB(ctx, snowCnf)
 	if err != nil {
-		log.Fatalf("error creating db connection: %v", err)
+		log.Fatalf("error creating db connection: %v", snowflake.FmtErr(err))
 	}
 	log.Println("Connected to the database")
 
@@ -199,20 +199,20 @@ func main() {
 	// in which case we would not need to pass in `conn` below at all
 	snowflakeNewGrupin, err := snowflake.NewGrupin(ctx, semCnf, snowCnf, conn, newGrupin, snowflakeYamlPath)
 	if err != nil {
-		log.Fatalf("error NewGrupin: %v", err)
+		log.Fatalf("error NewGrupin: %v", snowflake.FmtErr(err))
 	}
 	log.Println("Created snowflake.Grupin object")
 
 	// Use it now to manage access; this will also query Snowflake for which objects exist
 	if err := snowflakeNewGrupin.ManageAccess(ctx, semCnf, snowCnf, conn); err != nil {
-		log.Fatalf("ManageAccess: %v", err)
+		log.Fatalf("ManageAccess: %v", snowflake.FmtErr(err))
 	}
 	log.Println("Managed access")
 
 	// And, after managing access, which may have resulted in numerous refreshes of which objects exist,
 	// let's store the latest object counts
 	if err := snowflake.StoreObjCountsRows(ctx, snowCnf, conn, snowflakeNewGrupin.GetObjCountsRows()); err != nil {
-		log.Fatalf("StoreObjectCounts: %v", err)
+		log.Fatalf("StoreObjectCounts: %v", snowflake.FmtErr(err))
 	}
 
 	// Let's check for additional actions for specific products or interfaces
@@ -220,31 +220,31 @@ func main() {
 	case "archive":
 		// Archive (specified interfaces of) (dtaps of) product ID
 		if err := snowflakeNewGrupin.Archive(ctx, semCnf, snowCnf, conn, actionScope); err != nil {
-			log.Fatalf("archive: %v", err)
+			log.Fatalf("archive: %v", snowflake.FmtErr(err))
 		}
 		log.Printf("Archive action for product '%v' successful", product)
 	case "mae":
 		// Manage access exclusively, require a product ID in this case
 		if err := snowflakeNewGrupin.ManageAccessExclusively(ctx, semCnf, snowCnf, conn, actionScope); err != nil {
-			log.Fatalf("mae: %v", err)
+			log.Fatalf("mae: %v", snowflake.FmtErr(err))
 		}
 		log.Printf("Managed access exclusively for product '%s'", product)
 	case "own":
 		// Manage access exclusively, require a product ID in this case
 		if err := snowflakeNewGrupin.Own(ctx, semCnf, snowCnf, conn, actionScope); err != nil {
-			log.Fatalf("mae: %v", err)
+			log.Fatalf("mae: %v", snowflake.FmtErr(err))
 		}
 		log.Printf("Owned product '%s'", product)
 	case "got":
 		// Manage access exclusively, require a product ID in this case
 		if err := snowflakeNewGrupin.GrantOwnershipTo(ctx, snowCnf, conn, actionScope, dtapRoleIdents); err != nil {
-			log.Fatalf("mae: %v", err)
+			log.Fatalf("mae: %v", snowflake.FmtErr(err))
 		}
 		log.Printf("Granted ownership of objects for product '%s'", product)
 	case "purge":
 		// Purge (DROP) objects
 		if err := snowflakeNewGrupin.Purge(ctx, snowCnf, conn, actionScope); err != nil {
-			log.Fatalf("purge: %v", err)
+			log.Fatalf("purge: %v", snowflake.FmtErr(err))
 		}
 		log.Printf("Purge completed")
 	}
