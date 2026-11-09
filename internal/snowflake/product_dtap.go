@@ -339,8 +339,19 @@ func (pd *ProductDTAP) dropProductRolesIfZombie(ctx context.Context, cnf *Config
 		return nil
 	}
 	if len(pd.ownershipOtherProductsObjects) > 0 || len(pd.ownershipUnmatchedObjects) > 0 {
-		log.Printf("WARN: product '%s', dtap '%s', has ownership of objects, not dropping product roles\n", pd.ProductID, pd.DTAP)
+		log.Printf("INFO: product '%s', dtap '%s', has ownership of objects, not dropping product roles\n", pd.ProductID, pd.DTAP)
 		return nil
+	}
+	hasPrivilegesRead, err := pd.ReadRole.HasPrivileges(ctx, cnf, conn)
+	if err != nil {
+		return err
+	}
+	hasPrivilegesWrite, err := pd.WriteRole.HasPrivileges(ctx, cnf, conn)
+	if err != nil {
+		return err
+	}
+	if hasPrivilegesRead || hasPrivilegesWrite {
+		log.Printf("INFO: product '%s', dtap '%s', read and / or write role still have privileges, not dropping product roles")
 	}
 	if err := pd.ReadRole.Drop(ctx, cnf, conn); err != nil {
 		return err

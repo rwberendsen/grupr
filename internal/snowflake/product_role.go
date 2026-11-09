@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
@@ -60,7 +59,7 @@ func (r ProductRole) Create(ctx context.Context, cnf *Config, conn *sql.DB) erro
 	return nil
 }
 
-func (r ProductRole) hasPrivileges(ctx context.Context, cnf *Config, conn *sql.DB) (bool, error) {
+func (r ProductRole) HasPrivileges(ctx context.Context, cnf *Config, conn *sql.DB) (bool, error) {
 	// Because we have zombie product dtaps, we should have already revoked all
 	// managed grants.  So if there is any grant left, no matter what it is, we
 	// should not drop the role. Either it is an unmanaged grant that sysadmins
@@ -75,12 +74,6 @@ func (r ProductRole) hasPrivileges(ctx context.Context, cnf *Config, conn *sql.D
 }
 
 func (r ProductRole) Drop(ctx context.Context, cnf *Config, conn *sql.DB) error {
-	if has, err := r.hasPrivileges(ctx, cnf, conn); err != nil {
-		return err
-	} else if has {
-		log.Printf("role %v still has privileges, skipping dropping\n", r)
-		return nil
-	}
 	return runSQL(ctx, cnf, conn, `DROP ROLE IF EXISTS IDENTIFIER(?)`, r.String())
 }
 
