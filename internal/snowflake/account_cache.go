@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
+	"github.com/snowflakedb/gosnowflake"
 )
 
 // caching objects in Snowflake locally
@@ -80,7 +81,7 @@ func (c *accountCache) matchSchemas(ctx context.Context, conn *sql.DB, db semant
 	defer c.mu.RUnlock()
 	if !c.hasDB(db) {
 		// Another thread may have modified c, refreshing db's, and deleted this db.
-		return ErrObjectNotExistOrAuthorized
+		return newGruprSnowflakeError(gosnowflake.ErrObjectNotExistOrAuthorized)
 	}
 	// It could still be that o.Version < c.version
 	// I'm fine with that, as long as the db I'm interested is still there in the current version
@@ -113,12 +114,12 @@ func (c *accountCache) matchObjects(ctx context.Context, conn *sql.DB, db semant
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if !c.hasDB(db) {
-		return ErrObjectNotExistOrAuthorized
+		return newGruprSnowflakeError(gosnowflake.ErrObjectNotExistOrAuthorized)
 	}
 	c.dbs[db].mu.RLock()
 	defer c.dbs[db].mu.RUnlock()
 	if !c.dbs[db].hasSchema(schema) {
-		return ErrObjectNotExistOrAuthorized
+		return newGruprSnowflakeError(gosnowflake.ErrObjectNotExistOrAuthorized)
 	}
 	c.dbs[db].schemas[schema].mu.Lock() // get a (write) lock on this schema
 	defer c.dbs[db].schemas[schema].mu.Unlock()

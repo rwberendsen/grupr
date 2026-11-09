@@ -344,11 +344,11 @@ func (pd *ProductDTAP) dropProductRolesIfZombie(ctx context.Context, cnf *Config
 		return nil
 	}
 	hasPrivilegesRead, err := pd.ReadRole.HasPrivileges(ctx, cnf, conn)
-	if err != nil {
+	if err != nil && !IsErr(err, ErrRoleNotExistOrAuthorized) {
 		return err
 	}
 	hasPrivilegesWrite, err := pd.WriteRole.HasPrivileges(ctx, cnf, conn)
-	if err != nil {
+	if err != nil && !IsErr(err, ErrRoleNotExistOrAuthorized) {
 		return err
 	}
 	if hasPrivilegesRead || hasPrivilegesWrite {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
+	"github.com/snowflakedb/gosnowflake"
 )
 
 type AggDBObjs struct {
@@ -346,7 +347,7 @@ func (o AggDBObjs) setGrants(ctx context.Context, semCnf *semantics.Config, cnf 
 							if o.Schemas[g.Schema].Objects[g.Object].ObjectType.String() != ot.String() {
 								// A (hybrid) table may have been dropped and a (materialized) view with the same name
 								// created or vice versa A good reason to refresh the product
-								return o, ErrObjectNotExistOrAuthorized
+								return o, newGruprSnowflakeError(gosnowflake.ErrObjectNotExistOrAuthorized)
 							}
 							o.Schemas[g.Schema].Objects[g.Object] = o.Schemas[g.Schema].Objects[g.Object].setGrantTo(ModeRead, g)
 						}

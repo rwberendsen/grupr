@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/rwberendsen/grupr/internal/semantics"
+	"github.com/snowflakedb/gosnowflake"
 )
 
 type Interface struct {
@@ -112,7 +113,7 @@ func (i *Interface) setAggAccountObjects() {
 func (i *Interface) setFutureGrants(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, pID string, dtap string, iID string, c *accountCache) error {
 	for db, dbObjs := range i.aggAccountObjects.DBs {
 		if !c.hasDB(db) {
-			return ErrObjectNotExistOrAuthorized // db may have been dropped concurrently
+			return newGruprSnowflakeError(gosnowflake.ErrObjectNotExistOrAuthorized) // db may have been dropped concurrently
 		}
 		dbObjs, err := dbObjs.setFutureGrants(ctx, semCnf, cnf, conn, pID, dtap, iID, db, i.ObjectMatchers, c.dbs[db].dbRoles)
 		if err != nil {
@@ -126,7 +127,7 @@ func (i *Interface) setFutureGrants(ctx context.Context, semCnf *semantics.Confi
 func (i *Interface) setGrants(ctx context.Context, semCnf *semantics.Config, cnf *Config, conn *sql.DB, c *accountCache) error {
 	for db, dbObjs := range i.aggAccountObjects.DBs {
 		if !c.hasDB(db) {
-			return ErrObjectNotExistOrAuthorized // db may have been dropped concurrently
+			return newGruprSnowflakeError(gosnowflake.ErrObjectNotExistOrAuthorized) // db may have been dropped concurrently
 		}
 		dbObjs, err := dbObjs.setGrants(ctx, semCnf, cnf, conn, db, i.ObjectMatchers)
 		if err != nil {

@@ -15,16 +15,18 @@ type GruprSnowflakeError struct {
 	Number int
 }
 
-var (
-	ErrObjectNotExistOrAuthorized = errObjectNotExistOrAuthorized()
+const (
+	// Observed Snowflake error numbers for which they don't have error constants
+	ErrRoleNotExistOrAuthorized      = 2003
+	ErrParquetUnloadDataTypeMismatch = 100171
 )
 
 func (e *GruprSnowflakeError) Error() string {
 	return fmt.Sprintf("GruprSnowflakeError: %d", e.Number)
 }
 
-func errObjectNotExistOrAuthorized() *GruprSnowflakeError {
-	return &GruprSnowflakeError{Number: gosnowflake.ErrObjectNotExistOrAuthorized}
+func newGruprSnowflakeError(no int) *GruprSnowflakeError {
+	return &GruprSnowflakeError{Number: no}
 }
 
 func FmtErr(err error) string {

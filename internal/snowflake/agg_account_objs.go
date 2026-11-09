@@ -185,7 +185,7 @@ HEADER = TRUE`, comment, cnf.Database, cnf.Schema, cnf.ExternalWriteStage, pathS
 		// continue archiving the other objects, and notify the user
 		// at the end about the failed queries, where some customization of
 		// our generic COPY INTO @location statement would be required.
-		if IsErr(err, 100171) {
+		if IsErr(err, ErrParquetUnloadDataTypeMismatch) {
 			// Some columns contained data types not directly compatible with Parquet,
 			// i.e., we've observed Snowflake reporting this error number when
 			// complaining about TIMESTAMP_TZ or TIMESTAMP_LTZ columns that it would
